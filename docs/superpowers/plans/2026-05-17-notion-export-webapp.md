@@ -10,7 +10,71 @@
 
 **Spec:** `docs/superpowers/specs/2026-05-17-notion-export-webapp-design.md`
 
-**Branch:** trabajar en `main` (rama de docs es solo para spec/plan).
+**Branching:** ver "Branching strategy" abajo — una branch por tarea, merge a `main` al cerrar cada una.
+
+---
+
+## Branching strategy
+
+Cada tarea se desarrolla en su propia branch y se mergea a `main` al final, para mantener historial limpio y permitir revertir tareas individuales.
+
+**Naming convention:** `<tipo>/<NN>-<slug-corto>` donde:
+- `<tipo>` ∈ { `feat`, `test`, `chore`, `docs` }
+- `<NN>` = número de tarea con cero a la izquierda
+- `<slug-corto>` = identificador kebab-case
+
+**Pattern al inicio de cada tarea:**
+
+```bash
+git checkout main
+git pull origin main
+git checkout -b <tipo>/<NN>-<slug>
+```
+
+**Pattern al final de cada tarea (reemplaza el último `git commit` por esto):**
+
+```bash
+git add <archivos modificados>
+git commit -m "<mensaje>"
+git push -u origin <tipo>/<NN>-<slug>
+git checkout main
+git merge --no-ff <tipo>/<NN>-<slug> -m "Merge <tipo>/<NN>-<slug>"
+git push origin main
+git branch -d <tipo>/<NN>-<slug>          # local cleanup
+git push origin --delete <tipo>/<NN>-<slug>  # remote cleanup
+```
+
+Si prefieres revisar vía PR antes de mergear, sustituye los pasos de `git merge`/`push` por `gh pr create --base main --fill` y mergea desde GitHub.
+
+**Tabla de branches por tarea:**
+
+| Task | Branch |
+|---|---|
+| 0  | `chore/00-scaffold` |
+| 1  | `feat/01-types` |
+| 2  | `feat/02-config` |
+| 3  | `feat/03-columns` |
+| 4  | `feat/04-flatten` |
+| 5  | `feat/05-filter` |
+| 6  | `feat/06-csv` |
+| 7  | `feat/07-cron` |
+| 8  | `feat/08-auth` |
+| 9  | `feat/09-cache` |
+| 10 | `feat/10-notion` |
+| 11 | `feat/11-sync` |
+| 12 | `test/12-sync-integration` |
+| 13 | `feat/13-api-login` |
+| 14 | `feat/14-middleware` |
+| 15 | `feat/15-api-sync` |
+| 16 | `feat/16-api-sync-status` |
+| 17 | `feat/17-api-export` |
+| 18 | `feat/18-ui` |
+| 19 | `chore/19-vercel-config` |
+| 20 | `test/20-e2e-smoke` |
+| 21 | `docs/21-readme` |
+| 22 | `chore/22-final-verification` |
+
+> Las branches de docs (`spec`/`plan`) viven aparte en `origin/docs` y no se mergean a `main` mediante este flujo.
 
 ---
 
@@ -71,6 +135,8 @@ README.md                             # actualizar con instrucciones
 ---
 
 ## Task 0: Scaffolding del proyecto Next.js
+
+**Branch:** `chore/00-scaffold` (sigue el pattern de "Branching strategy" para abrir/cerrar)
 
 **Files:**
 - Create: `package.json`, `tsconfig.json`, `next.config.mjs`, `tailwind.config.ts`, `postcss.config.mjs`, `src/app/layout.tsx`, `src/app/globals.css`, `src/app/page.tsx` (placeholder), `.env.example`, `vitest.config.ts`
@@ -165,6 +231,8 @@ git commit -m "chore: scaffold Next.js + TS + Tailwind project with testing deps
 
 ## Task 1: Types compartidos (`src/lib/types.ts`)
 
+**Branch:** `feat/01-types`
+
 **Files:**
 - Create: `src/lib/types.ts`
 
@@ -210,6 +278,8 @@ git commit -m "feat(types): add domain types for cache, sync, flat rows"
 ---
 
 ## Task 2: Config tipado (`src/lib/config.ts`)
+
+**Branch:** `feat/02-config`
 
 **Files:**
 - Create: `src/lib/config.ts`
@@ -319,6 +389,8 @@ git commit -m "feat(config): typed env loading with missing-vars diagnostics"
 
 ## Task 3: Whitelist de columnas (`src/lib/columns.ts`)
 
+**Branch:** `feat/03-columns`
+
 **Files:**
 - Create: `src/lib/columns.ts`
 
@@ -363,6 +435,8 @@ git commit -m "feat(columns): scaffold whitelist module (admin will populate)"
 ---
 
 ## Task 4: Aplanado de propiedades de Notion (`src/lib/flatten.ts`)
+
+**Branch:** `feat/04-flatten`
 
 **Files:**
 - Create: `src/lib/flatten.ts`
@@ -635,6 +709,8 @@ git commit -m "feat(flatten): convert Notion properties to flat string row (whit
 
 ## Task 5: Filtro por rango de fechas (`src/lib/filter.ts`)
 
+**Branch:** `feat/05-filter`
+
 **Files:**
 - Create: `src/lib/filter.ts`
 - Create: `tests/unit/filter.test.ts`
@@ -736,6 +812,8 @@ git commit -m "feat(filter): date-range filter handling null/invalid dates"
 ---
 
 ## Task 6: CSV stream (`src/lib/csv.ts`)
+
+**Branch:** `feat/06-csv`
 
 **Files:**
 - Create: `src/lib/csv.ts`
@@ -846,6 +924,8 @@ git commit -m "feat(csv): CSV string + stream serializers with UTF-8 BOM"
 
 ## Task 7: Next-cron calculator (`src/lib/cron.ts`)
 
+**Branch:** `feat/07-cron`
+
 **Files:**
 - Create: `src/lib/cron.ts`
 - Create: `tests/unit/cron.test.ts`
@@ -900,6 +980,8 @@ git commit -m "feat(cron): nextRun() to compute next cron firing time"
 ---
 
 ## Task 8: Auth (password + sesión) (`src/lib/auth.ts`)
+
+**Branch:** `feat/08-auth`
 
 **Files:**
 - Create: `src/lib/auth.ts`
@@ -991,6 +1073,8 @@ git commit -m "feat(auth): bcrypt password verification + iron-session config"
 
 ## Task 9: Cache (Upstash wrappers) (`src/lib/cache.ts`)
 
+**Branch:** `feat/09-cache`
+
 **Files:**
 - Create: `src/lib/cache.ts`
 
@@ -1081,6 +1165,8 @@ git commit -m "feat(cache): Upstash wrappers for rows hash, meta, status, lock"
 ---
 
 ## Task 10: Cliente Notion con paginación + throttle (`src/lib/notion.ts`)
+
+**Branch:** `feat/10-notion`
 
 **Files:**
 - Create: `src/lib/notion.ts`
@@ -1190,6 +1276,8 @@ git commit -m "feat(notion): paginated query with 3 req/s throttle and retries"
 
 ## Task 11: Sync orquestador (`src/lib/sync.ts`)
 
+**Branch:** `feat/11-sync`
+
 **Files:**
 - Create: `src/lib/sync.ts`
 
@@ -1279,6 +1367,8 @@ git commit -m "feat(sync): hybrid runSync orchestrator (full with atomic promote
 ---
 
 ## Task 12: Integration test — sync incremental + full
+
+**Branch:** `test/12-sync-integration`
 
 **Files:**
 - Create: `tests/integration/sync.test.ts`
@@ -1434,6 +1524,8 @@ git commit -m "test(sync): integration tests for full + incremental + lock conte
 
 ## Task 13: API route `/api/login`
 
+**Branch:** `feat/13-api-login`
+
 **Files:**
 - Create: `src/app/api/login/route.ts`
 
@@ -1487,6 +1579,8 @@ git commit -m "feat(api): /api/login with bcrypt + iron-session + Upstash rate l
 
 ## Task 14: Middleware de auth (`src/middleware.ts`)
 
+**Branch:** `feat/14-middleware`
+
 **Files:**
 - Create: `src/middleware.ts`
 
@@ -1527,6 +1621,8 @@ git commit -m "feat(middleware): gate protected API routes with iron-session"
 ---
 
 ## Task 15: API `/api/sync` (cron o user-triggered)
+
+**Branch:** `feat/15-api-sync`
 
 **Files:**
 - Create: `src/app/api/sync/route.ts`
@@ -1577,6 +1673,8 @@ git commit -m "feat(api): /api/sync accepts cron bearer or session, runs async"
 
 ## Task 16: API `/api/sync/status`
 
+**Branch:** `feat/16-api-sync-status`
+
 **Files:**
 - Create: `src/app/api/sync/status/route.ts`
 
@@ -1616,6 +1714,8 @@ git commit -m "feat(api): /api/sync/status returns status + meta + next cron fir
 ---
 
 ## Task 17: API `/api/export`
+
+**Branch:** `feat/17-api-export`
 
 **Files:**
 - Create: `src/app/api/export/route.ts`
@@ -1681,6 +1781,8 @@ git commit -m "feat(api): /api/export streams filtered CSV, validates dates"
 ---
 
 ## Task 18: UI (`src/app/page.tsx`)
+
+**Branch:** `feat/18-ui`
 
 **Files:**
 - Modify/replace: `src/app/page.tsx`
@@ -1840,6 +1942,8 @@ git commit -m "feat(ui): login + status + download UI with live countdowns"
 
 ## Task 19: Vercel config (crons + headers)
 
+**Branch:** `chore/19-vercel-config`
+
 **Files:**
 - Create: `vercel.json`
 
@@ -1873,6 +1977,8 @@ git commit -m "chore(vercel): cron jobs (6h incremental + daily full) + security
 ---
 
 ## Task 20: Smoke E2E (Playwright)
+
+**Branch:** `test/20-e2e-smoke`
 
 **Files:**
 - Create: `playwright.config.ts`
@@ -1923,6 +2029,8 @@ git commit -m "test(e2e): smoke test for login screen"
 ---
 
 ## Task 21: README operativo
+
+**Branch:** `docs/21-readme`
 
 **Files:**
 - Modify: `README.md`
@@ -1990,6 +2098,8 @@ git commit -m "docs: README with setup, deploy, and operation instructions"
 ---
 
 ## Task 22: Verificación final
+
+**Branch:** `chore/22-final-verification` (solo si hay cambios; si todo pasa sin tocar nada, esta tarea se ejecuta directamente sobre `main`)
 
 - [ ] **Step 22.1: Todos los tests pasan**
 
