@@ -39,3 +39,19 @@ out/
 # Exportaciones locales de Notion
 exports/
 *.zip
+
+# Next.js
+/.next/
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+/coverage
+*.tsbuildinfo
+next-env.d.ts
+
+# Vercel
+.vercel
