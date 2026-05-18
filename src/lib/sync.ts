@@ -40,10 +40,17 @@ async function runFull(): Promise<void> {
     try { batch.push({ id: p.id, row: flattenPage(p) }); }
     catch { skipped++; }
   }
-  if (batch.length) await upsertRows(batch, "new");
-  await promoteNewCache();
   const now = new Date().toISOString();
-  await setMeta({ lastFullAt: now, lastIncrementalAt: now, count: await countRows() });
+  if (batch.length) {
+    await upsertRows(batch, "new");
+    await promoteNewCache();
+    await setMeta({ lastFullAt: now, lastIncrementalAt: now, count: await countRows() });
+  } else {
+    // Notion devolvió 0 páginas — no promovemos para no borrar cache previo.
+    // Sólo registramos que el poll corrió.
+    const meta = await getMeta();
+    await setMeta({ ...meta, lastFullAt: now });
+  }
   await patchStatus({ skipped });
 }
 

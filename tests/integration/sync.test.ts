@@ -44,6 +44,32 @@ describe("runSync full", () => {
   });
 });
 
+describe("runSync full (empty result)", () => {
+  it("no crashea ni borra cache previa cuando Notion devuelve 0 páginas", async () => {
+    // sembrar cache previo con un sync que sí tiene datos
+    setNotion(makeFakeClient([
+      makePage("a", "A", "2026-01-01"),
+    ]) as any);
+    await runSync("full");
+    expect(await cache.countRows()).toBe(1);
+    const metaBefore = await cache.getMeta();
+
+    // esperar para asegurar que el timestamp ISO difiera
+    await new Promise((r) => setTimeout(r, 5));
+
+    // ahora un full sync vacío
+    setNotion(makeFakeClient([]) as any);
+    const r = await runSync("full");
+    expect(r).toEqual({ ok: true });
+
+    // cache previo intacto
+    expect(await cache.countRows()).toBe(1);
+    // lastFullAt actualizado
+    const metaAfter = await cache.getMeta();
+    expect(metaAfter.lastFullAt).not.toBe(metaBefore.lastFullAt);
+  });
+});
+
 describe("runSync incremental", () => {
   it("upsert y delete por archived", async () => {
     setNotion(makeFakeClient([
