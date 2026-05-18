@@ -14,9 +14,27 @@ export interface ColumnDef {
  * El orden de esta lista determina el orden de columnas en el CSV.
  */
 export const COLUMNS: ColumnDef[] = [
-  // { notion: "Name", csv: "Nombre" },
-  // { notion: "Status" },
-  // { notion: "Created", csv: "Fecha de creación" },
+  { notion: "Breve descripción" },
+  { notion: "Empresa productiva" },
+  { notion: "Hecho por" },
+  { notion: "Hecho por (no tocar)" },
+  { notion: "Hito" },
+  { notion: "Hito (no tocar)" },
+  { notion: "Hora de creación" },
+  { notion: "Hora de finalización" },
+  { notion: "Hora de última edición" },
+  { notion: "ID" },
+  { notion: "Persona" },
+  { notion: "Proyecto" },
+  { notion: "Proyecto (no tocar)" },
+  { notion: "Registro de horas" },
+  { notion: "Subproyecto" },
+  { notion: "Subproyecto (Nombre)" },
+  { notion: "Subproyecto (no tocar)" },
+  { notion: "Tarea" },
+  { notion: "Tarea (no tocar)" },
+  { notion: "Último editor" },
+  { notion: "Validación" },
 ];
 
 export function csvHeaders(): string[] {
