@@ -167,6 +167,90 @@ cursor = String(next);
 
 No conviene para este proyecto. Vercel ejecuta Next.js nativamente, ignora el Dockerfile y los crons solo existen como feature de Vercel (`vercel.json`). Docker solo agregaría complejidad operativa sin ganancia. Tendría sentido si se migrara a Fly/Railway/k8s/self-host.
 
+## 13. Confiabilidad del sync en Vercel Hobby — full chunkado
+
+Problema observado en producción tras el deploy: el sync se quedaba "trabado" en la UI aunque el backend estaba idle. Root cause investigado:
+
+- El handler hacía `void runSync(kind)` y devolvía 202.
+- En Vercel serverless, **la función se mata al responder**. El `runSync` en background quedaba en el aire y a veces no completaba (especialmente el Full a ~70 s contra el cap de 60 s de Hobby).
+- Resultado: status `running`, pero ningún proceso trabajando. Sólo el TTL del lock (600 s) liberaba el estado.
+
+### 13.1 Primer intento (no suficiente): chunking por segmentos de 10k
+
+Se reemplazó el "void background" por:
+
+- `fetchOneFullSegment(pivot?)`: procesa un segmento DESC por `created_time` con filtro `on_or_before: pivot`. Devuelve `nextPivot` para reanudar o `null` si fue el último.
+- `runFullSegment`: una llamada = un segmento. Guarda pivote en `notion:sync:full:pivot` (TTL 24 h).
+- `POST /api/sync` **awaitea el sync inline** y devuelve `{ done: bool }`.
+- Cliente (page.tsx): repite POST hasta `done:true`, tope 20 segmentos.
+
+**Pero seguía fallando** en producción con dos bugs:
+
+1. **Sin presupuesto de tiempo**: el segmento iteraba hasta llenar 10 k o hasta `has_more=false`. Si Vercel mataba la función a los 60 s a medio segmento, no retornaba: nada se upserteaba ni se fijaba el pivote.
+2. **Borrado del `new` al reanudar**: el "primer segmento" se detectaba por ausencia de pivote. Si el primer segmento moría antes de fijar el pivote, la siguiente llamada lo trataba como "primer segmento" y borraba el `new` (perdiendo lo acumulado). Eventualmente promovía un `new` parcial → el cache vivo bajó de 18 k a 2 k.
+3. **Promote prematuro**: `nextPivot=null` se devolvía si el segmento traía < 10 k aunque la causa fuera timeout, no agotamiento. Eso disparaba la rama de "completado" y promovía datos incompletos.
+
+### 13.2 Fix final
+
+#### `fetchOneFullSegment` con presupuesto de tiempo
+
+`src/lib/notion.ts`:
+
+- Nueva opción `timeBudgetMs` (default 25 s). El loop chequea presupuesto antes de cada página y rompe limpio si lo excede.
+- `isDone` (= `nextPivot=null`) **sólo** si `has_more=false` Y `segmentCount < NOTION_QUERY_CAP` Y no se canceló. En cualquier otro caso devuelve `lastCreatedTime` como `nextPivot` para reanudar.
+- Anti-loop: si `lastCreatedTime === opts.pivot` (todos los registros del segmento compartían timestamp y no avanzamos), se marca como done para evitar bucle infinito.
+
+#### Session flag separado del pivote
+
+`src/lib/cache.ts`: nuevo key `notion:sync:full:session` (TTL 24 h).
+
+- `isFullSessionActive()`: `true` si hay un full en curso.
+- `startFullSession()`: marca la session al inicio de un full fresco.
+- `endFullSession()`: limpia al completar (o cancelar).
+
+`src/lib/sync.ts`:
+
+- `isFirstSegmentOfSession` se determina por **ausencia de session**, no por ausencia de pivote. Eso garantiza que mid-flight (segmento 1 cortado antes de fijar pivote) la próxima llamada NO borre el `new`.
+- `clearNewCache` y `clearCancel` se ejecutan SÓLO al abrir session nueva.
+- El upsert al `new` ocurre **antes** de fijar el pivote: si el proceso muere ahí, la próxima llamada re-fetchea desde el pivote anterior (HSET es idempotente, no hay duplicados).
+- `promoteNewCache` sólo se ejecuta al cerrar la sesión: cuando `nextPivot=null` (completado natural) o cuando hay `cancelled=true`. En ambos casos `endFullSession()` después.
+
+#### Cliente con presupuesto de reintentos
+
+`src/app/page.tsx`:
+
+- `trigger(kind)` itera hasta 20 segmentos. Cada uno es un POST que awaitea ~25-35 s.
+- Refresca status entre llamadas para mostrar progreso.
+
+### 13.3 Comportamiento con crons en Hobby
+
+El cron diario `full` (09:00 UTC) sólo ejecuta UN segmento. Para datasets > 10 k, el cron no completa el full por sí solo — el usuario debe abrir la UI y pulsar Full para que el cliente encadene los segmentos restantes. Alternativas:
+
+- Agregar un segundo cron a las 09:05 UTC (Hobby permite múltiples expresiones diarias, sólo limita a 1 ejecución/día por expresión).
+- Confiar en que el incremental diario (21:00 UTC) capture las ediciones; reservar el full chunkado para reconstrucciones manuales mensuales.
+- Upgradear a Pro: `maxDuration` a 300 s permite el modelo monolítico anterior.
+
+### 13.4 Procedimiento de recuperación de estado inconsistente
+
+Si el sync se reporta `running` pero está muerto, o si el cache vivo está corrupto:
+
+```bash
+node -e "
+const fs = require('fs');
+const env = fs.readFileSync('.env.local','utf8').split(/\r?\n/);
+for (const line of env) { const m = line.match(/^([A-Z_]+)=(.*)$/); if (m) process.env[m[1]] = m[2].replace(/^['\"]|['\"]$/g,''); }
+const {Redis} = require('@upstash/redis');
+const r = Redis.fromEnv();
+(async () => {
+  await r.del('notion:sync:lock','notion:sync:cancel','notion:sync:full:pivot','notion:sync:full:session','notion:cache:v1:new');
+  await r.set('notion:sync:status', {state:'idle',kind:null,done:0,total:0,startedAt:null,error:null,skipped:0});
+  console.log('reset OK');
+})();
+"
+```
+
+Luego disparar **Full** desde la UI. Si el cache vivo está corrupto, NO se restaura sin un full exitoso — el script de reset no toca `notion:cache:v1`.
+
 ## Operación: setup local
 
 1. Copiar `.env.example` → `.env.local`.
