@@ -1,0 +1,15 @@
+{
+  "crons": [
+    { "path": "/api/sync?kind=incremental", "schedule": "0 */6 * * *" },
+    { "path": "/api/sync?kind=full",        "schedule": "0 9 * * *" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "same-origin" }
+      ]
+    }
+  ]
+}
