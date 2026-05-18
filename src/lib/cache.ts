@@ -43,15 +43,15 @@ export async function deleteRows(ids: string[], target: "current" | "new" = "cur
 }
 export async function getAllRows(): Promise<FlatRow[]> {
   const rows: FlatRow[] = [];
-  let cursor: string | number = 0;
+  let cursor: string = "0";
   do {
     const [next, entries] = (await r().hscan(CACHE_KEY, cursor, { count: 500 })) as [string, unknown[]];
     for (let i = 1; i < entries.length; i += 2) {
       const v = entries[i];
       rows.push(typeof v === "string" ? JSON.parse(v) : (v as FlatRow));
     }
-    cursor = next;
-  } while (cursor !== "0" && cursor !== 0);
+    cursor = String(next);
+  } while (cursor !== "0");
   return rows;
 }
 export async function countRows(): Promise<number> {
