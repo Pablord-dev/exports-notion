@@ -70,9 +70,19 @@ export default function Home() {
     if (triggering) return;
     setTriggering(kind);
     try {
-      await fetch(`/api/sync?kind=${kind}`, { method: "POST" });
-      await loadStatus();
-    } catch { setTriggering(null); }
+      // Loop hasta que el server reporte done:true. Para incremental siempre es true en el primer call;
+      // para full cada call procesa un segmento (~35 s) y devuelve done:false si falta más.
+      // Máximo 20 segmentos (= ~200k registros) como tope defensivo.
+      for (let attempt = 0; attempt < 20; attempt++) {
+        const res = await fetch(`/api/sync?kind=${kind}`, { method: "POST" });
+        await loadStatus();
+        if (!res.ok) break;
+        const body = await res.json().catch(() => ({}));
+        if (body.done) break;
+      }
+    } finally {
+      setTriggering(null);
+    }
   }
   async function cancel() {
     if (cancelling) return;

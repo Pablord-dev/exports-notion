@@ -7,6 +7,7 @@ const META_KEY = "notion:meta";
 const STATUS_KEY = "notion:sync:status";
 const LOCK_KEY = "notion:sync:lock";
 const CANCEL_KEY = "notion:sync:cancel";
+const FULL_PIVOT_KEY = "notion:sync:full:pivot";
 
 let client: Redis | null = null;
 function r(): Redis {
@@ -57,6 +58,9 @@ export async function getAllRows(): Promise<FlatRow[]> {
 export async function countRows(): Promise<number> {
   return await r().hlen(CACHE_KEY);
 }
+export async function countRowsNew(): Promise<number> {
+  return await r().hlen(CACHE_KEY_NEW);
+}
 export async function clearNewCache() { await r().del(CACHE_KEY_NEW); }
 export async function promoteNewCache() { await r().rename(CACHE_KEY_NEW, CACHE_KEY); }
 
@@ -89,3 +93,8 @@ export async function releaseLock() { await r().del(LOCK_KEY); }
 export async function requestCancel(ttlSec = 3600) { await r().set(CANCEL_KEY, "1", { ex: ttlSec }); }
 export async function isCancelRequested(): Promise<boolean> { return (await r().get(CANCEL_KEY)) !== null; }
 export async function clearCancel() { await r().del(CANCEL_KEY); }
+
+// ---- Full sync resumption pivot ----
+export async function getFullPivot(): Promise<string | null> { return await r().get<string>(FULL_PIVOT_KEY); }
+export async function setFullPivot(p: string, ttlSec = 86_400) { await r().set(FULL_PIVOT_KEY, p, { ex: ttlSec }); }
+export async function clearFullPivot() { await r().del(FULL_PIVOT_KEY); }

@@ -38,6 +38,15 @@ export interface FetchResult {
   pages: PageObjectResponse[];
   /** Páginas archivadas detectadas (vienen con archived: true). */
   archivedIds: string[];
+  /** Sólo relevante en modo full: si el segmento llenó 10k, created_time del último page para reanudar. null si no hay más. */
+  nextPivot?: string | null;
+}
+
+export interface FullSegmentOptions {
+  /** created_time desde el cual reanudar (DESC + on_or_before). undefined = primer segmento. */
+  pivot?: string;
+  onProgress?: FetchOptions["onProgress"];
+  shouldCancel?: FetchOptions["shouldCancel"];
 }
 
 // Notion API limita CUALQUIER query a 10,000 resultados (incluso paginando con cursor).
@@ -85,6 +94,39 @@ export async function fetchPages(opts: FetchOptions = {}): Promise<FetchResult> 
     pivot = lastCreatedTime;
   }
   return { pages, archivedIds };
+}
+
+/**
+ * Procesa exactamente UN segmento del full sync. Para arquitecturas con timeout
+ * estricto (Vercel Hobby = 60 s), el caller invoca esta función múltiples veces
+ * pasando el `nextPivot` devuelto, hasta que `nextPivot` sea null.
+ */
+export async function fetchOneFullSegment(opts: FullSegmentOptions = {}): Promise<FetchResult> {
+  const dataSourceId = process.env.NOTION_DATABASE_ID!;
+  const throttle = new Throttle();
+  const pages: PageObjectResponse[] = [];
+  const archivedIds: string[] = [];
+  const seenIds = new Set<string>();
+
+  const filter = opts.pivot
+    ? { timestamp: "created_time" as const, created_time: { on_or_before: opts.pivot } }
+    : undefined;
+  const sorts = [{ timestamp: "created_time" as const, direction: "descending" as const }];
+
+  const lastCreatedTime = await fetchSegment({
+    dataSourceId, throttle, filter, sorts, pages, archivedIds, seenIds,
+    onProgress: opts.onProgress, shouldCancel: opts.shouldCancel,
+  });
+  const segmentCount = pages.length + archivedIds.length;
+  const cancelled = await opts.shouldCancel?.();
+  const reachedCap = segmentCount >= NOTION_QUERY_CAP;
+  // Si llenamos el cap y no hubo cancel, hay que reanudar. Si el lastCreatedTime
+  // es igual al pivot anterior, anti-loop: no hay más segmentos.
+  const nextPivot =
+    !cancelled && reachedCap && lastCreatedTime && lastCreatedTime !== opts.pivot
+      ? lastCreatedTime
+      : null;
+  return { pages, archivedIds, nextPivot };
 }
 
 interface SegmentArgs {
