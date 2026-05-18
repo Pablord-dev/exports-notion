@@ -8,6 +8,7 @@ const STATUS_KEY = "notion:sync:status";
 const LOCK_KEY = "notion:sync:lock";
 const CANCEL_KEY = "notion:sync:cancel";
 const FULL_PIVOT_KEY = "notion:sync:full:pivot";
+const FULL_SESSION_KEY = "notion:sync:full:session";
 
 let client: Redis | null = null;
 function r(): Redis {
@@ -98,3 +99,8 @@ export async function clearCancel() { await r().del(CANCEL_KEY); }
 export async function getFullPivot(): Promise<string | null> { return await r().get<string>(FULL_PIVOT_KEY); }
 export async function setFullPivot(p: string, ttlSec = 86_400) { await r().set(FULL_PIVOT_KEY, p, { ex: ttlSec }); }
 export async function clearFullPivot() { await r().del(FULL_PIVOT_KEY); }
+
+// ---- Full sync session (señala "hay un full en curso, no borres el new cache") ----
+export async function isFullSessionActive(): Promise<boolean> { return (await r().get(FULL_SESSION_KEY)) !== null; }
+export async function startFullSession(ttlSec = 86_400) { await r().set(FULL_SESSION_KEY, "1", { ex: ttlSec }); }
+export async function endFullSession() { await r().del(FULL_SESSION_KEY); }

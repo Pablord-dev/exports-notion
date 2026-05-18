@@ -6,6 +6,7 @@ import {
   upsertRows, deleteRows, clearNewCache, promoteNewCache,
   getMeta, setMeta, countRows, countRowsNew, clearCancel, isCancelRequested,
   getFullPivot, setFullPivot, clearFullPivot,
+  isFullSessionActive, startFullSession, endFullSession,
 } from "@/lib/cache";
 
 const OVERLAP_MS = 60_000;
@@ -20,13 +21,8 @@ export async function runSync(kind: SyncKind): Promise<SyncResult> {
   if (!locked) return { ok: false, reason: "locked" };
 
   try {
-    // No reseteamos el flag de cancel al inicio de cada segmento del full —
-    // sólo en el primer segmento (cuando no hay pivote). El cancel debe sobrevivir
-    // entre segmentos para que el usuario pueda abortar mid-flight.
     if (kind === "full") {
-      const existingPivot = await getFullPivot();
-      if (!existingPivot) await clearCancel();
-      return await runFullSegment(existingPivot);
+      return await runFullSegment();
     } else {
       await clearCancel();
       return await runIncremental();
@@ -39,14 +35,25 @@ export async function runSync(kind: SyncKind): Promise<SyncResult> {
   }
 }
 
-async function runFullSegment(existingPivot: string | null): Promise<SyncResult> {
-  const isFirstSegment = !existingPivot;
-  const startedAt = isFirstSegment ? new Date().toISOString() : null;
+async function runFullSegment(): Promise<SyncResult> {
+  // Una sesión de full puede abarcar múltiples segmentos. Para evitar borrar el `new`
+  // a la mitad si un segmento muere antes de fijar el pivote, usamos un flag de session
+  // (independiente del pivote) que sólo se limpia al completar o cancelar.
+  const sessionActive = await isFullSessionActive();
+  const existingPivot = await getFullPivot();
+  const isFirstSegmentOfSession = !sessionActive;
 
-  if (isFirstSegment) {
+  if (isFirstSegmentOfSession) {
+    // Inicio fresco: limpiar new, abrir session, limpiar cancel, marcar status.
     await clearNewCache();
-    await setStatus({ state: "running", kind: "full", done: 0, total: 0, startedAt, error: null, skipped: 0 });
+    await startFullSession();
+    await clearCancel();
+    await setStatus({
+      state: "running", kind: "full", done: 0, total: 0,
+      startedAt: new Date().toISOString(), error: null, skipped: 0,
+    });
   } else {
+    // Reanudación: NO tocamos new ni el contador done (sigue acumulando).
     await patchStatus({ state: "running", kind: "full", error: null });
   }
 
@@ -57,6 +64,8 @@ async function runFullSegment(existingPivot: string | null): Promise<SyncResult>
     shouldCancel: async () => await isCancelRequested(),
   });
 
+  // Upsert antes de fijar el pivote: si morimos justo aquí, en la próxima llamada
+  // el pivote será el viejo y se re-fetchearán algunas páginas (HSET es idempotente).
   const batch: { id: string; row: any }[] = [];
   for (const p of pages) {
     try { batch.push({ id: p.id, row: flattenPage(p) }); }
@@ -70,22 +79,22 @@ async function runFullSegment(existingPivot: string | null): Promise<SyncResult>
   if (moreSegmentsPending) {
     await setFullPivot(nextPivot!);
     await patchStatus({ skipped });
-    // Sigue "running" — el cliente verá `done:false` en la respuesta y volverá a llamar.
     return { ok: true, done: false, segmentCount: batch.length };
   }
 
-  // Completado (o cancelado): promovemos si tenemos algo.
+  // Sesión termina: cancelado por usuario, o completado natural.
   const newCount = await countRowsNew();
   const now = new Date().toISOString();
   if (newCount > 0) {
     await promoteNewCache();
     await setMeta({ lastFullAt: now, lastIncrementalAt: now, count: await countRows() });
   } else {
-    // 0 páginas en total — no promovemos, conservamos el cache previo.
+    // 0 filas — no promovemos para no destruir el cache previo.
     const meta = await getMeta();
     await setMeta({ ...meta, lastFullAt: now });
   }
   await clearFullPivot();
+  await endFullSession();
   await patchStatus({ state: "idle", kind: null, startedAt: null, skipped });
   return { ok: true, done: true };
 }
