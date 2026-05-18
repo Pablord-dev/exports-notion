@@ -30,6 +30,8 @@ export interface FetchOptions {
   since?: string | null;
   /** Callback con (procesados, totalConocido). */
   onProgress?: (done: number, total: number) => void | Promise<void>;
+  /** Si devuelve true, se aborta la paginación. Lo procesado hasta el momento se conserva. */
+  shouldCancel?: () => boolean | Promise<boolean>;
 }
 
 export interface FetchResult {
@@ -37,6 +39,12 @@ export interface FetchResult {
   /** Páginas archivadas detectadas (vienen con archived: true). */
   archivedIds: string[];
 }
+
+// Notion API limita CUALQUIER query a 10,000 resultados (incluso paginando con cursor).
+// Para datasets más grandes, full sync se segmenta por `created_time` DESC, usando el
+// created_time del último page del segmento como pivote del siguiente (filter on_or_before).
+// Dedupe vía seenIds (y el cache es HSET por page.id, así que duplicados se sobrescriben).
+const NOTION_QUERY_CAP = 10_000;
 
 export async function fetchPages(opts: FetchOptions = {}): Promise<FetchResult> {
   // NOTE: In @notionhq/client v5.x the `databases.query` endpoint was replaced by
@@ -46,37 +54,80 @@ export async function fetchPages(opts: FetchOptions = {}): Promise<FetchResult> 
   const throttle = new Throttle();
   const pages: PageObjectResponse[] = [];
   const archivedIds: string[] = [];
+  const seenIds = new Set<string>();
+
+  // Incremental: un solo segmento filtrado por last_edited_time.
+  if (opts.since) {
+    const filter = {
+      timestamp: "last_edited_time" as const,
+      last_edited_time: { after: opts.since },
+    };
+    await fetchSegment({ dataSourceId, throttle, filter, pages, archivedIds, seenIds, onProgress: opts.onProgress, shouldCancel: opts.shouldCancel });
+    return { pages, archivedIds };
+  }
+
+  // Full: segmentos DESC por created_time con pivote para superar el cap de 10k.
+  let pivot: string | undefined;
+  while (true) {
+    if (await opts.shouldCancel?.()) break;
+    const filter = pivot
+      ? { timestamp: "created_time" as const, created_time: { on_or_before: pivot } }
+      : undefined;
+    const sorts = [{ timestamp: "created_time" as const, direction: "descending" as const }];
+    const beforeCount = pages.length + archivedIds.length;
+    const lastCreatedTime = await fetchSegment({
+      dataSourceId, throttle, filter, sorts, pages, archivedIds, seenIds, onProgress: opts.onProgress, shouldCancel: opts.shouldCancel,
+    });
+    const segmentCount = pages.length + archivedIds.length - beforeCount;
+    if (segmentCount < NOTION_QUERY_CAP || !lastCreatedTime) break;
+    if (lastCreatedTime === pivot) break; // anti-loop si todos los registros comparten timestamp
+    if (await opts.shouldCancel?.()) break;
+    pivot = lastCreatedTime;
+  }
+  return { pages, archivedIds };
+}
+
+interface SegmentArgs {
+  dataSourceId: string;
+  throttle: Throttle;
+  filter?: any;
+  sorts?: any[];
+  pages: PageObjectResponse[];
+  archivedIds: string[];
+  seenIds: Set<string>;
+  onProgress?: FetchOptions["onProgress"];
+  shouldCancel?: FetchOptions["shouldCancel"];
+}
+
+/** Pagina un segmento hasta agotar el cursor. Devuelve el created_time del último page visto. */
+async function fetchSegment(a: SegmentArgs): Promise<string | undefined> {
   let cursor: string | undefined = undefined;
-  let done = 0;
-
-  const filter = opts.since
-    ? {
-        timestamp: "last_edited_time" as const,
-        last_edited_time: { after: opts.since },
-      }
-    : undefined;
-
+  let lastCreatedTime: string | undefined;
   do {
-    await throttle.wait();
+    if (await a.shouldCancel?.()) break;
+    await a.throttle.wait();
     const resp = await retry(() =>
       client().dataSources.query({
-        data_source_id: dataSourceId,
+        data_source_id: a.dataSourceId,
         start_cursor: cursor,
         page_size: PAGE_SIZE,
-        ...(filter ? { filter } : {}),
+        ...(a.filter ? { filter: a.filter } : {}),
+        ...(a.sorts ? { sorts: a.sorts } : {}),
       }),
     );
     for (const r of resp.results) {
       if (!isFullPage(r)) continue;
-      if (r.archived) archivedIds.push(r.id);
-      else pages.push(r);
+      lastCreatedTime = r.created_time;
+      if (a.seenIds.has(r.id)) continue;
+      a.seenIds.add(r.id);
+      if (r.archived) a.archivedIds.push(r.id);
+      else a.pages.push(r);
     }
-    done = pages.length + archivedIds.length;
-    await opts.onProgress?.(done, done + (resp.has_more ? PAGE_SIZE : 0));
+    const done = a.pages.length + a.archivedIds.length;
+    await a.onProgress?.(done, done + (resp.has_more ? PAGE_SIZE : 0));
     cursor = resp.has_more ? resp.next_cursor ?? undefined : undefined;
   } while (cursor);
-
-  return { pages, archivedIds };
+  return lastCreatedTime;
 }
 
 async function retry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {

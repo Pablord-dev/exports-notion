@@ -25,10 +25,12 @@ export async function GET(req: NextRequest) {
   const filtered = filterByDateRange(all, from, to, process.env.DATE_COLUMN!);
 
   // Re-resolver el nombre CSV de DATE_COLUMN para advertir si no está en whitelist
-  const dateColInWhitelist = COLUMNS.some((c) => c.notion === process.env.DATE_COLUMN);
-  if (!dateColInWhitelist) {
+  const dateCol = COLUMNS.find((c) => c.notion === process.env.DATE_COLUMN);
+  if (!dateCol) {
     return NextResponse.json({ error: "date_column_not_in_whitelist" }, { status: 500 });
   }
+  const dateKey = dateCol.csv ?? dateCol.notion;
+  filtered.sort((a, b) => String(a[dateKey] ?? "").localeCompare(String(b[dateKey] ?? "")));
 
   const stream = rowsToCSVStream(headers, filtered);
   const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 16);

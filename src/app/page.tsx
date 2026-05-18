@@ -28,9 +28,15 @@ export default function Home() {
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [password, setPassword] = useState("");
   const [loginErr, setLoginErr] = useState<string | null>(null);
+  const [loggingIn, setLoggingIn] = useState(false);
   const [status, setStatus] = useState<Status | null>(null);
   const [from, setFrom] = useState(""); const [to, setTo] = useState("");
   const [, setTick] = useState(0);
+  const [triggering, setTriggering] = useState<"incremental" | "full" | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadErr, setDownloadErr] = useState<string | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   async function loadStatus() {
     const r = await fetch("/api/sync/status");
@@ -46,22 +52,67 @@ export default function Home() {
     return () => { clearInterval(i); clearInterval(j); };
   }, [authed, status?.status.state]);
 
+  // Cuando arranca un sync nuevo (vemos state=running), dejamos de mostrar "Iniciando…".
+  useEffect(() => { if (status?.status.state === "running") setTriggering(null); }, [status?.status.state]);
+
   async function login(e: React.FormEvent) {
-    e.preventDefault(); setLoginErr(null);
-    const r = await fetch("/api/login", { method: "POST", body: JSON.stringify({ password }) });
-    if (r.ok) { setPassword(""); loadStatus(); }
-    else setLoginErr(r.status === 429 ? "Demasiados intentos, espera 15 min." : "Contraseña incorrecta.");
+    e.preventDefault();
+    if (loggingIn) return;
+    setLoginErr(null); setLoggingIn(true);
+    try {
+      const r = await fetch("/api/login", { method: "POST", body: JSON.stringify({ password }) });
+      if (r.ok) { setPassword(""); await loadStatus(); }
+      else setLoginErr(r.status === 429 ? "Demasiados intentos, espera 15 min." : "Contraseña incorrecta.");
+    } finally { setLoggingIn(false); }
   }
 
   async function trigger(kind: "incremental" | "full") {
-    await fetch(`/api/sync?kind=${kind}`, { method: "POST" });
-    loadStatus();
+    if (triggering) return;
+    setTriggering(kind);
+    try {
+      await fetch(`/api/sync?kind=${kind}`, { method: "POST" });
+      await loadStatus();
+    } catch { setTriggering(null); }
+  }
+  async function cancel() {
+    if (cancelling) return;
+    setCancelling(true);
+    try { await fetch("/api/sync", { method: "DELETE" }); }
+    finally { await loadStatus(); setCancelling(false); }
   }
 
-  function downloadHref() {
-    const p = new URLSearchParams();
-    if (from) p.set("from", from); if (to) p.set("to", to);
-    return `/api/export?${p.toString()}`;
+  async function logout() {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await fetch("/api/login", { method: "DELETE" });
+      setAuthed(false); setStatus(null);
+    } finally { setLoggingOut(false); }
+  }
+
+  async function download() {
+    if (downloading) return;
+    setDownloading(true); setDownloadErr(null);
+    try {
+      const p = new URLSearchParams();
+      if (from) p.set("from", from); if (to) p.set("to", to);
+      const res = await fetch(`/api/export?${p.toString()}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setDownloadErr(body.message ?? body.error ?? `Error ${res.status}`);
+        return;
+      }
+      const blob = await res.blob();
+      const cd = res.headers.get("Content-Disposition") ?? "";
+      const m = cd.match(/filename="?([^"]+)"?/i);
+      const fname = m?.[1] ?? `export-${new Date().toISOString().slice(0, 10)}.csv`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = fname;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: any) { setDownloadErr(e?.message ?? "Falló la descarga"); }
+    finally { setDownloading(false); }
   }
 
   if (authed === null) return <main className="p-8">Cargando…</main>;
@@ -74,7 +125,10 @@ export default function Home() {
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
                  className="w-full border rounded px-3 py-2" placeholder="Contraseña" autoFocus />
           {loginErr && <p className="text-sm text-red-600">{loginErr}</p>}
-          <button className="w-full bg-black text-white rounded py-2">Entrar</button>
+          <button disabled={loggingIn}
+                  className="w-full bg-black text-white rounded py-2 disabled:opacity-50 disabled:cursor-not-allowed">
+            {loggingIn ? "Entrando…" : "Entrar"}
+          </button>
         </form>
       </main>
     );
@@ -84,7 +138,13 @@ export default function Home() {
 
   return (
     <main className="max-w-2xl mx-auto p-8 space-y-6">
-      <h1 className="text-2xl font-semibold">ExportNotion</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">ExportNotion</h1>
+        <button onClick={logout} disabled={loggingOut}
+                className="text-sm border rounded px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed">
+          {loggingOut ? "Saliendo…" : "Cerrar sesión"}
+        </button>
+      </div>
 
       <section className="border rounded p-4 space-y-2">
         <h2 className="font-medium">Última sincronización</h2>
@@ -94,10 +154,14 @@ export default function Home() {
       </section>
 
       {running ? (
-        <section className="border rounded p-4">
-          <h2 className="font-medium mb-2">Sync en progreso ({status?.status.kind})</h2>
+        <section className="border rounded p-4 space-y-2">
+          <h2 className="font-medium">Sync en progreso ({status?.status.kind})</h2>
           <p>{status?.status.done} / {status?.status.total}</p>
           {status?.status.skipped ? <p className="text-sm text-amber-700">Omitidos: {status.status.skipped}</p> : null}
+          <button onClick={cancel} disabled={cancelling}
+                  className="border rounded px-3 py-2 disabled:opacity-50">
+            {cancelling ? "Cancelando…" : "Cancelar y guardar lo cargado"}
+          </button>
         </section>
       ) : (
         <section className="border rounded p-4 space-y-2">
@@ -105,8 +169,14 @@ export default function Home() {
           <p>Incremental en {status ? fmtCountdown(status.next.incremental) : "—"}</p>
           <p>Full en {status ? fmtCountdown(status.next.full) : "—"}</p>
           <div className="flex gap-2 pt-2">
-            <button onClick={() => trigger("incremental")} className="bg-black text-white rounded px-3 py-2">Refrescar incremental</button>
-            <button onClick={() => trigger("full")} className="border rounded px-3 py-2">Full</button>
+            <button onClick={() => trigger("incremental")} disabled={triggering !== null}
+                    className="bg-black text-white rounded px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed">
+              {triggering === "incremental" ? "Iniciando…" : "Refrescar incremental"}
+            </button>
+            <button onClick={() => trigger("full")} disabled={triggering !== null}
+                    className="border rounded px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed">
+              {triggering === "full" ? "Iniciando…" : "Full"}
+            </button>
           </div>
         </section>
       )}
@@ -121,7 +191,11 @@ export default function Home() {
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="block w-full border rounded px-2 py-1" />
           </label>
         </div>
-        <a href={downloadHref()} className="inline-block bg-black text-white rounded px-3 py-2">Descargar</a>
+        <button onClick={download} disabled={downloading}
+                className="inline-block bg-black text-white rounded px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed">
+          {downloading ? "Descargando…" : "Descargar"}
+        </button>
+        {downloadErr && <p className="text-sm text-red-600">{downloadErr}</p>}
       </section>
     </main>
   );

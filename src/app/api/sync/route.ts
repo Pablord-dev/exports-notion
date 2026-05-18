@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { getIronSession } from "iron-session";
 import { sessionOptions, type SessionData } from "@/lib/auth";
 import { runSync } from "@/lib/sync";
+import { requestCancel } from "@/lib/cache";
 import type { SyncKind } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -26,4 +27,12 @@ export async function POST(req: NextRequest) {
   // No await: dispara en background y responde 202.
   void runSync(kind);
   return NextResponse.json({ accepted: true, kind }, { status: 202 });
+}
+
+export async function DELETE(req: NextRequest) {
+  if (!(await isAuthorized(req))) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  await requestCancel();
+  return NextResponse.json({ cancelling: true });
 }

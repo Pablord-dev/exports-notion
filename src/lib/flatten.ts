@@ -55,6 +55,9 @@ function propValueToString(prop: AnyProp): string {
     case "rollup":        return rollupToString(prop.rollup);
     case "created_time":  return prop.created_time ?? "";
     case "last_edited_time": return prop.last_edited_time ?? "";
+    case "created_by":    return prop.created_by?.name ?? prop.created_by?.id ?? "";
+    case "last_edited_by": return prop.last_edited_by?.name ?? prop.last_edited_by?.id ?? "";
+    case "unique_id":     return prop.unique_id?.prefix ? `${prop.unique_id.prefix}-${prop.unique_id.number}` : (prop.unique_id?.number != null ? String(prop.unique_id.number) : "");
     default:              return "";
   }
 }

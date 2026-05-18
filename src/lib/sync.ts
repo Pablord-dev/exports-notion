@@ -4,7 +4,7 @@ import { flattenPage } from "@/lib/flatten";
 import {
   acquireLock, releaseLock, patchStatus, setStatus,
   upsertRows, deleteRows, clearNewCache, promoteNewCache,
-  getMeta, setMeta, countRows,
+  getMeta, setMeta, countRows, clearCancel, isCancelRequested,
 } from "@/lib/cache";
 
 const OVERLAP_MS = 60_000;
@@ -14,6 +14,7 @@ export async function runSync(kind: SyncKind): Promise<{ ok: true } | { ok: fals
   if (!locked) return { ok: false, reason: "locked" };
 
   const startedAt = new Date().toISOString();
+  await clearCancel();
   await setStatus({ state: "running", kind, done: 0, total: 0, startedAt, error: null, skipped: 0 });
 
   try {
@@ -34,6 +35,7 @@ async function runFull(): Promise<void> {
   let skipped = 0;
   const { pages } = await fetchPages({
     onProgress: async (done, total) => { await patchStatus({ done, total }); },
+    shouldCancel: async () => await isCancelRequested(),
   });
   const batch: { id: string; row: any }[] = [];
   for (const p of pages) {
@@ -64,6 +66,7 @@ async function runIncremental(): Promise<void> {
   const { pages, archivedIds } = await fetchPages({
     since,
     onProgress: async (done, total) => { await patchStatus({ done, total }); },
+    shouldCancel: async () => await isCancelRequested(),
   });
   const batch: { id: string; row: any }[] = [];
   for (const p of pages) {
