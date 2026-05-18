@@ -101,6 +101,72 @@ El estado "Iniciando…" de los syncs se limpia automáticamente cuando el polli
 
 El endpoint `DELETE /api/login` ya existía. Se agregó un botón "Cerrar sesión" arriba a la derecha del header.
 
+## 12. Ajustes para deploy en Vercel Hobby
+
+Al intentar el primer deploy, dos errores reales bloquearon la publicación. Quedaron resueltos:
+
+### 12.1 Frecuencia de crons incompatible con Hobby
+
+`vercel.json`: el cron `0 */6 * * *` (incremental cada 6 h) era rechazado por Vercel con `Hobby accounts are limited to daily cron jobs`. En Hobby cada expresión solo puede correr una vez al día.
+
+Cambio:
+
+- `full` → `0 9 * * *` (09:00 UTC, sin cambio).
+- `incremental` → `0 21 * * *` (21:00 UTC, 12 h después del full).
+
+Esto da dos refrescos diarios. Si se necesita un refresco puntual fuera de horario, el botón **Refrescar incremental** sigue disponible en la UI.
+
+Para volver al `*/6` (o más fino) hay que upgradear a Pro.
+
+### 12.2 Error de tipo TS en `getAllRows`
+
+`src/lib/cache.ts`: `next build` falla bajo strict TS con:
+
+```
+This comparison appears to be unintentional because the types 'string' and 'number' have no overlap.
+  } while (cursor !== "0" && cursor !== 0);
+```
+
+El cursor estaba tipado `string | number` pero se asignaba siempre a string (`cursor = next`), dejando la comparación contra `0` como inalcanzable según el flow analysis. `HSCAN` en `@upstash/redis` siempre devuelve cursor como string, así que se normaliza:
+
+```ts
+let cursor: string = "0";
+// ...
+cursor = String(next);
+} while (cursor !== "0");
+```
+
+`tsc --noEmit` pasa limpio. El build de Vercel también.
+
+## Operación: deploy en Vercel
+
+1. **Importar el repo** en `vercel.com/new`. Next.js se detecta solo.
+2. **Env vars** (scope Production, y Preview si quieres deploys de PR):
+
+   | Variable | Valor |
+   |---|---|
+   | `NOTION_TOKEN` | integration token |
+   | `NOTION_DATABASE_ID` | data source ID (no database ID) |
+   | `DATE_COLUMN` | `Hora de creación` |
+   | `APP_PASSWORD_HASH` | bcrypt — aquí **sin escapar** los `$`, la UI de Vercel no usa dotenv-expand |
+   | `SESSION_SECRET` | hex de 32 bytes |
+   | `CRON_SECRET` | hex de 32 bytes |
+   | `UPSTASH_REDIS_REST_URL` | de Upstash |
+   | `UPSTASH_REDIS_REST_TOKEN` | de Upstash |
+
+3. **Plan**: en Hobby `maxDuration` está capada a 60 s y los crons son diarios. El full de 18k tarda ~67 s, así que **en Hobby el cron del full probablemente se corta**. Mitigaciones:
+   - Bajar `maxDuration` a 60 en `src/app/api/sync/route.ts:9` si te quedas en Hobby.
+   - Disparar fulls manuales desde la UI (la UI muestra progreso y permite cancelar).
+   - Upgradear a Pro cuando empiece a doler — sube el límite a 300 s y permite crons sub-diarios.
+
+4. **Primer Full manual**: tras el primer deploy el cache está vacío y `/api/export` responde `503 no_data`. Login → botón **Full**. Tras ~70 s la descarga funciona.
+
+5. **Verificar crons** en Project Settings → Cron Jobs después del deploy.
+
+## ¿Dockerizar?
+
+No conviene para este proyecto. Vercel ejecuta Next.js nativamente, ignora el Dockerfile y los crons solo existen como feature de Vercel (`vercel.json`). Docker solo agregaría complejidad operativa sin ganancia. Tendría sentido si se migrara a Fly/Railway/k8s/self-host.
+
 ## Operación: setup local
 
 1. Copiar `.env.example` → `.env.local`.
