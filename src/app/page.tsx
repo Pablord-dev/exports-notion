@@ -1,6 +1,21 @@
 "use client";
 import { useEffect, useState } from "react";
 
+function Spinner({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      className={`animate-spin h-4 w-4 ${className}`}
+      viewBox="0 0 24 24"
+      fill="none"
+      role="status"
+      aria-label="Cargando"
+    >
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+    </svg>
+  );
+}
+
 type Status = {
   status: { state: "idle"|"running"|"error"; kind: "incremental"|"full"|null; done: number; total: number; error: string | null; skipped: number; };
   meta: { lastFullAt: string | null; lastIncrementalAt: string | null; count: number; };
@@ -125,18 +140,33 @@ export default function Home() {
     finally { setDownloading(false); }
   }
 
-  if (authed === null) return <main className="p-8">Cargando…</main>;
+  if (authed === null) {
+    return (
+      <main className="min-h-screen flex items-center justify-center gap-3 text-muted">
+        <Spinner className="text-sky" />
+        <span className="text-sm">Cargando…</span>
+      </main>
+    );
+  }
 
   if (!authed) {
     return (
-      <main className="min-h-screen flex items-center justify-center p-8">
-        <form onSubmit={login} className="w-full max-w-sm space-y-4">
-          <h1 className="text-2xl font-semibold">ExportNotion</h1>
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-                 className="w-full border rounded px-3 py-2" placeholder="Contraseña" autoFocus />
-          {loginErr && <p className="text-sm text-red-600">{loginErr}</p>}
+      <main className="min-h-screen flex items-center justify-center p-6">
+        <form onSubmit={login}
+              className="w-full max-w-sm bg-surface rounded-2xl border border-border p-8 space-y-6">
+          <div className="space-y-1">
+            <h1 className="font-display text-2xl font-bold text-fg tracking-tight">ExportNotion</h1>
+            <p className="text-sm text-muted">Exporta los datos de Notion a CSV.</p>
+          </div>
+          <div className="space-y-2">
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                   className="w-full rounded-lg border border-border bg-dark-blue px-3 py-2.5 text-fg placeholder:text-muted outline-none transition focus:border-blue focus:ring-2 focus:ring-blue/30"
+                   placeholder="Contraseña" autoFocus />
+            {loginErr && <p className="text-sm font-medium text-danger">{loginErr}</p>}
+          </div>
           <button disabled={loggingIn}
-                  className="w-full bg-black text-white rounded py-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                  className="w-full flex items-center justify-center gap-2 rounded-lg bg-blue py-2.5 text-sm font-medium text-white transition hover:brightness-110 focus-visible:ring-2 focus-visible:ring-blue/40 disabled:cursor-not-allowed disabled:opacity-60">
+            {loggingIn && <Spinner />}
             {loggingIn ? "Entrando…" : "Entrar"}
           </button>
         </form>
@@ -147,65 +177,90 @@ export default function Home() {
   const running = status?.status.state === "running";
 
   return (
-    <main className="max-w-2xl mx-auto p-8 space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">ExportNotion</h1>
+    <main className="max-w-2xl mx-auto p-6 sm:p-8 space-y-6">
+      <header className="flex items-center justify-between border-b border-border pb-5">
+        <h1 className="font-display text-xl font-bold text-fg tracking-tight">ExportNotion</h1>
         <button onClick={logout} disabled={loggingOut}
-                className="text-sm border rounded px-3 py-1 disabled:opacity-50 disabled:cursor-not-allowed">
+                className="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-muted transition hover:border-blue hover:text-blue disabled:cursor-not-allowed disabled:opacity-60">
+          {loggingOut && <Spinner className="h-3.5 w-3.5" />}
           {loggingOut ? "Saliendo…" : "Cerrar sesión"}
         </button>
-      </div>
+      </header>
 
-      <section className="border rounded p-4 space-y-2">
-        <h2 className="font-medium">Última sincronización</h2>
-        <p>Full: {fmtAgo(status?.meta.lastFullAt ?? null)}</p>
-        <p>Incremental: {fmtAgo(status?.meta.lastIncrementalAt ?? null)}</p>
-        <p>Registros en cache: {status?.meta.count ?? 0}</p>
+      <section className="rounded-xl border border-border bg-surface p-5 space-y-3">
+        <h2 className="font-display text-base font-semibold text-fg">Última sincronización</h2>
+        <dl className="grid grid-cols-3 gap-4">
+          <div>
+            <dt className="text-xs uppercase tracking-wide text-muted">Full</dt>
+            <dd className="text-sm text-fg">{fmtAgo(status?.meta.lastFullAt ?? null)}</dd>
+          </div>
+          <div>
+            <dt className="text-xs uppercase tracking-wide text-muted">Incremental</dt>
+            <dd className="text-sm text-fg">{fmtAgo(status?.meta.lastIncrementalAt ?? null)}</dd>
+          </div>
+          <div>
+            <dt className="text-xs uppercase tracking-wide text-muted">Registros</dt>
+            <dd className="font-display text-xl font-bold text-sky">{status?.meta.count ?? 0}</dd>
+          </div>
+        </dl>
       </section>
 
       {running ? (
-        <section className="border rounded p-4 space-y-2">
-          <h2 className="font-medium">Sync en progreso ({status?.status.kind})</h2>
-          <p>{status?.status.done} / {status?.status.total}</p>
-          {status?.status.skipped ? <p className="text-sm text-amber-700">Omitidos: {status.status.skipped}</p> : null}
+        <section className="rounded-xl border border-sky/40 bg-surface p-5 space-y-3">
+          <h2 className="flex items-center gap-2 font-display text-base font-semibold text-fg">
+            <Spinner className="text-sky" />
+            Sync en progreso <span className="font-sans text-sm font-normal text-muted">({status?.status.kind})</span>
+          </h2>
+          <p className="font-display text-xl font-bold text-fg">
+            {status?.status.done} <span className="text-muted">/ {status?.status.total}</span>
+          </p>
+          {status?.status.skipped ? <p className="text-sm font-medium text-warning">Omitidos: {status.status.skipped}</p> : null}
           <button onClick={cancel} disabled={cancelling}
-                  className="border rounded px-3 py-2 disabled:opacity-50">
+                  className="flex items-center gap-2 rounded-lg border border-danger px-3 py-2 text-sm font-medium text-danger transition hover:bg-danger hover:text-white disabled:cursor-not-allowed disabled:opacity-60">
+            {cancelling && <Spinner className="h-3.5 w-3.5" />}
             {cancelling ? "Cancelando…" : "Cancelar y guardar lo cargado"}
           </button>
         </section>
       ) : (
-        <section className="border rounded p-4 space-y-2">
-          <h2 className="font-medium">Próximas sincronizaciones</h2>
-          <p>Incremental en {status ? fmtCountdown(status.next.incremental) : "—"}</p>
-          <p>Full en {status ? fmtCountdown(status.next.full) : "—"}</p>
-          <div className="flex gap-2 pt-2">
+        <section className="rounded-xl border border-border bg-surface p-5 space-y-3">
+          <h2 className="font-display text-base font-semibold text-fg">Próximas sincronizaciones</h2>
+          <div className="flex gap-8">
+            <p className="text-sm text-muted">Incremental en <span className="font-medium text-fg tabular-nums">{status ? fmtCountdown(status.next.incremental) : "—"}</span></p>
+            <p className="text-sm text-muted">Full en <span className="font-medium text-fg tabular-nums">{status ? fmtCountdown(status.next.full) : "—"}</span></p>
+          </div>
+          <div className="flex gap-3 pt-1">
             <button onClick={() => trigger("incremental")} disabled={triggering !== null}
-                    className="bg-black text-white rounded px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                    className="flex items-center gap-2 rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60">
+              {triggering === "incremental" && <Spinner className="h-3.5 w-3.5" />}
               {triggering === "incremental" ? "Iniciando…" : "Refrescar incremental"}
             </button>
             <button onClick={() => trigger("full")} disabled={triggering !== null}
-                    className="border rounded px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                    className="flex items-center gap-2 rounded-lg border border-blue px-4 py-2 text-sm font-medium text-blue transition hover:bg-blue hover:text-white disabled:cursor-not-allowed disabled:opacity-60">
+              {triggering === "full" && <Spinner className="h-3.5 w-3.5" />}
               {triggering === "full" ? "Iniciando…" : "Full"}
             </button>
           </div>
         </section>
       )}
 
-      <section className="border rounded p-4 space-y-3">
-        <h2 className="font-medium">Descargar CSV</h2>
+      <section className="rounded-xl border border-border bg-surface p-5 space-y-4">
+        <h2 className="font-display text-base font-semibold text-fg">Descargar CSV</h2>
         <div className="flex gap-3">
-          <label className="flex-1">Desde
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="block w-full border rounded px-2 py-1" />
+          <label className="flex-1 text-sm text-muted">Desde
+            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)}
+                   className="mt-1 block w-full rounded-lg border border-border bg-dark-blue px-3 py-2 text-sm text-fg outline-none transition [color-scheme:dark] focus:border-blue focus:ring-2 focus:ring-blue/30" />
           </label>
-          <label className="flex-1">Hasta
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="block w-full border rounded px-2 py-1" />
+          <label className="flex-1 text-sm text-muted">Hasta
+            <input type="date" value={to} onChange={(e) => setTo(e.target.value)}
+                   className="mt-1 block w-full rounded-lg border border-border bg-dark-blue px-3 py-2 text-sm text-fg outline-none transition [color-scheme:dark] focus:border-blue focus:ring-2 focus:ring-blue/30" />
           </label>
         </div>
         <button onClick={download} disabled={downloading}
-                className="inline-block bg-black text-white rounded px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                className="flex items-center gap-2 rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60">
+          {downloading && <Spinner className="h-3.5 w-3.5" />}
           {downloading ? "Descargando…" : "Descargar"}
         </button>
-        {downloadErr && <p className="text-sm text-red-600">{downloadErr}</p>}
+        {downloadErr && <p className="text-sm font-medium text-danger">{downloadErr}</p>}
       </section>
     </main>
   );

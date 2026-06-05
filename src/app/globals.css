@@ -1,26 +1,52 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ============================================================
+   Identidad visual — iU Corporation / iU Corp · TEMA DARK (fijo)
+   Tokens consumidos por Tailwind 4 vía @theme (genera utilidades
+   como bg-blue, text-sky, border-border, bg-surface, etc.).
+   No es intercambiable: solo versión oscura.
+   ============================================================ */
+@theme {
+  /* Paleta primaria — azules iU (acentos dominantes sobre el oscuro) */
+  --color-blue: #0f40ef;        /* Unique Blue   */
+  --color-dark-blue: #051758;   /* Unique Dark Blue */
+  --color-sky: #02b5d3;         /* Unique Sky Blue */
+  --color-ink: #121212;         /* Unique Black / Dark — base del tema */
+
+  /* Superficies del tema dark (derivados azulados del Unique Dark Blue) */
+  --color-surface: #0a2468;     /* tarjetas — dark-blue elevado */
+  --color-border: #1c3c84;      /* bordes sutiles azulados */
+
+  /* Texto sobre oscuro */
+  --color-fg: #f4f4f4;          /* Unique Dark 100 — texto principal */
+  --color-muted: #9a9a9a;       /* texto secundario legible sobre dark */
+
+  /* Neutros del brandbook (referencia) */
+  --color-neutral-100: #f4f4f4;
+  --color-neutral-200: #e9e9e9;
+  --color-neutral-300: #d3d3d3;
+  --color-neutral-400: #666666;
+
+  /* Terciaria — solo acento (<20%) */
+  --color-danger: #f05347;      /* Unique Red 600 (más visible sobre dark) */
+  --color-success: #66b169;     /* Unique Green 500 */
+  --color-warning: #b57ed1;     /* Unique Purple 400 (avisos sutiles) */
+
+  /* Tipografía: principal Raleway, secundaria Poppins */
+  --font-display: var(--font-raleway), "Lato", Arial, sans-serif;
+  --font-sans: var(--font-poppins), "Lato", Arial, sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* Tema oscuro corporativo fijo: base Unique Black, texto claro, aire visual.
+   Los azules iU quedan como los elementos que más destacan. */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--color-dark-blue);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display);
 }

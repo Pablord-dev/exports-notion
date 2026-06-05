@@ -55,3 +55,7 @@ next-env.d.ts
 
 # Vercel
 .vercel
+
+# Artefactos de herramientas (Playwright)
+.playwright-cli/
+test-results/
