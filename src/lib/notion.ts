@@ -45,8 +45,6 @@ export interface FetchResult {
 export interface FullSegmentOptions {
   /** created_time desde el cual reanudar (DESC + on_or_before). undefined = primer segmento. */
   pivot?: string;
-  /** Presupuesto de tiempo en ms para esta llamada. Default 25s (cabe en los 60s de Hobby con margen). */
-  timeBudgetMs?: number;
   onProgress?: FetchOptions["onProgress"];
   shouldCancel?: FetchOptions["shouldCancel"];
 }
@@ -99,14 +97,12 @@ export async function fetchPages(opts: FetchOptions = {}): Promise<FetchResult> 
 }
 
 /**
- * Procesa un segmento del full sync con presupuesto de tiempo.
- * - Pagina DESC por created_time, con filtro `on_or_before: pivot` si hay pivot.
- * - Se detiene en: cancelación, presupuesto de tiempo agotado, o Notion responde `has_more=false`.
- * - Devuelve `nextPivot=null` SOLO cuando Notion confirma `has_more=false` y el conteo no llegó al cap de 10k (= no hay más records). En cualquier otro caso devuelve el `created_time` del último page para reanudar.
+ * Procesa exactamente UN segmento del full sync. Para arquitecturas con timeout
+ * estricto (Vercel Hobby = 60 s), el caller invoca esta función múltiples veces
+ * pasando el `nextPivot` devuelto, hasta que `nextPivot` sea null.
  */
 export async function fetchOneFullSegment(opts: FullSegmentOptions = {}): Promise<FetchResult> {
   const dataSourceId = process.env.NOTION_DATABASE_ID!;
-  const TIME_BUDGET_MS = opts.timeBudgetMs ?? 25_000;
   const throttle = new Throttle();
   const pages: PageObjectResponse[] = [];
   const archivedIds: string[] = [];
@@ -117,51 +113,19 @@ export async function fetchOneFullSegment(opts: FullSegmentOptions = {}): Promis
     : undefined;
   const sorts = [{ timestamp: "created_time" as const, direction: "descending" as const }];
 
-  const startTime = Date.now();
-  let cursor: string | undefined = undefined;
-  let lastCreatedTime: string | undefined;
-  let exhausted = false;
-
-  do {
-    if (await opts.shouldCancel?.()) break;
-    if (Date.now() - startTime > TIME_BUDGET_MS) break;
-    await throttle.wait();
-    const resp = await retry(() =>
-      client().dataSources.query({
-        data_source_id: dataSourceId,
-        start_cursor: cursor,
-        page_size: PAGE_SIZE,
-        ...(filter ? { filter } : {}),
-        sorts,
-      }),
-    );
-    for (const r of resp.results) {
-      if (!isFullPage(r)) continue;
-      lastCreatedTime = r.created_time;
-      if (seenIds.has(r.id)) continue;
-      seenIds.add(r.id);
-      if (r.archived) archivedIds.push(r.id);
-      else pages.push(r);
-    }
-    const done = pages.length + archivedIds.length;
-    await opts.onProgress?.(done, done + (resp.has_more ? PAGE_SIZE : 0));
-    if (resp.has_more) {
-      cursor = resp.next_cursor ?? undefined;
-    } else {
-      exhausted = true;
-      cursor = undefined;
-    }
-  } while (cursor);
-
+  const lastCreatedTime = await fetchSegment({
+    dataSourceId, throttle, filter, sorts, pages, archivedIds, seenIds,
+    onProgress: opts.onProgress, shouldCancel: opts.shouldCancel,
+  });
   const segmentCount = pages.length + archivedIds.length;
   const cancelled = await opts.shouldCancel?.();
-  // "Realmente terminamos" sólo si Notion confirmó has_more=false Y no rozamos el cap de 10k
-  // (si rozamos el cap, hay más records con created_time < lastCreatedTime).
-  const isDone = exhausted && segmentCount < NOTION_QUERY_CAP && !cancelled;
-  // Anti-loop: si tras un segmento completo el lastCreatedTime es igual al pivot anterior,
-  // no hicimos progreso (todos los records compartían timestamp). Marcar como done.
+  const reachedCap = segmentCount >= NOTION_QUERY_CAP;
+  // Si llenamos el cap y no hubo cancel, hay que reanudar. Si el lastCreatedTime
+  // es igual al pivot anterior, anti-loop: no hay más segmentos.
   const nextPivot =
-    !isDone && lastCreatedTime && lastCreatedTime !== opts.pivot ? lastCreatedTime : null;
+    !cancelled && reachedCap && lastCreatedTime && lastCreatedTime !== opts.pivot
+      ? lastCreatedTime
+      : null;
   return { pages, archivedIds, nextPivot };
 }
 

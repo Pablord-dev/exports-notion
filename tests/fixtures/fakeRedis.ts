@@ -22,6 +22,12 @@ export class FakeRedis {
     let n = 0; for (const f of fields) if (h.delete(f)) n++; return n;
   }
   async hvals(k: string): Promise<string[]> { return Array.from(this.hashes.get(k)?.values() ?? []); }
+  async hscan(k: string, _cursor: string, _opts?: { count?: number }): Promise<[string, string[]]> {
+    const h = this.hashes.get(k);
+    const entries: string[] = [];
+    if (h) for (const [f, v] of h.entries()) entries.push(f, v);
+    return ["0", entries];
+  }
   async hlen(k: string): Promise<number> { return this.hashes.get(k)?.size ?? 0; }
   async rename(from: string, to: string) {
     const h = this.hashes.get(from); if (!h) throw new Error("no such key");

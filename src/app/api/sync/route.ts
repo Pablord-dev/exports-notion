@@ -7,8 +7,7 @@ import { requestCancel } from "@/lib/cache";
 import type { SyncKind } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-// Vercel Hobby cap = 60 s. Cada llamada hace 1 segmento del full (~35 s) o el incremental completo.
-export const maxDuration = 60;
+export const maxDuration = 300; // 5 min (Vercel pro)
 
 async function isAuthorized(req: NextRequest): Promise<boolean> {
   const bearer = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");

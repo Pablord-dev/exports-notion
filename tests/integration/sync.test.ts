@@ -26,7 +26,7 @@ describe("runSync full", () => {
     ];
     setNotion(makeFakeClient(pages) as any);
     const r = await runSync("full");
-    expect(r).toEqual({ ok: true });
+    expect(r).toEqual({ ok: true, done: true });
     const rows = await cache.getAllRows();
     expect(rows).toHaveLength(2);
     const meta = await cache.getMeta();
@@ -60,7 +60,7 @@ describe("runSync full (empty result)", () => {
     // ahora un full sync vacío
     setNotion(makeFakeClient([]) as any);
     const r = await runSync("full");
-    expect(r).toEqual({ ok: true });
+    expect(r).toEqual({ ok: true, done: true });
 
     // cache previo intacto
     expect(await cache.countRows()).toBe(1);
@@ -84,7 +84,7 @@ describe("runSync incremental", () => {
       makePage("a", "A",  "2026-01-01", true), // archivada
     ]) as any);
     const r = await runSync("incremental");
-    expect(r).toEqual({ ok: true });
+    expect(r).toEqual({ ok: true, done: true });
 
     const rows = await cache.getAllRows();
     expect(rows).toHaveLength(2);
