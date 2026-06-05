@@ -1,0 +1,37 @@
+{
+  "fingerprint": { "commit": "5a3edd8", "date": "2026-06-04T10:13:00-06:00", "scope": "full", "generated_by": "FL-DIS-01/AG-CORE-07" },
+  "documents": [
+    { "path": "README.md", "audience": "dev", "summary": "Setup local, tests y deploy en Vercel; stack y limitaciones de Hobby.", "freshness": "vigente", "freshness_evidence": "Alineado con .env.example y package.json actuales; menciona crons diarios y sync chunkado." },
+    { "path": "CLAUDE.md", "audience": "agente-ia", "summary": "Arquitectura operativa completa: flujo de datos, endpoints, Redis keys, crons, convenciones y script de destrabe.", "freshness": "vigente", "freshness_evidence": "Actualizado en el commit HEAD (5a3edd8); refleja el chunked full final con session flags y presupuestos." },
+    { "path": "docs/MANUAL.md", "audience": "usuario", "summary": "Manual en español: login, dashboard, sync manual, cancelación, troubleshooting; referencias a 5 screenshots existentes.", "freshness": "vigente", "freshness_evidence": "Coincide con la UI implementada y los screenshots de docs/manual-screenshots/." },
+    { "path": "docs/SESSION-CHANGES.md", "audience": "dev", "summary": "Acta de sesión 2026-05-18 con 13 decisiones/cambios: whitelist, Data Source ID, cap 10k, chunking, cancelación, deploy Vercel.", "freshness": "vigente", "freshness_evidence": "Registra la evolución hasta el estado actual, incluidos los fixes de producción." },
+    { "path": "docs/superpowers/specs/2026-05-17-notion-export-webapp-design.md", "audience": "dev", "summary": "Spec de diseño original: arquitectura, modelo Redis, sync híbrido, seguridad, testing.", "freshness": "parcialmente desactualizado", "freshness_evidence": "Pre-data la implementación: dice Next 15, incremental cada 6h, sin chunking ni session flags." },
+    { "path": "docs/superpowers/plans/2026-05-17-notion-export-webapp.md", "audience": "dev", "summary": "Plan de implementación con 22 tareas y branching strategy.", "freshness": "parcialmente desactualizado", "freshness_evidence": "Truncado (~línea 1557/2148): tasks 9-22 sin escribir aunque git log confirma su ejecución; no refleja fixes post-MVP." },
+    { "path": ".env.example", "audience": "dev", "summary": "Plantilla con las 8 env vars requeridas.", "freshness": "vigente", "freshness_evidence": "Coincide exactamente con config.ts y el código que las consume." }
+  ],
+  "coverage": {
+    "setup_local": "covered — README.md (6 pasos) + CLAUDE.md (escape de $ en APP_PASSWORD_HASH)",
+    "deploy": "covered — README.md + SESSION-CHANGES.md (env vars por scope, límites Hobby, primer Full manual)",
+    "arquitectura": "covered — CLAUDE.md exhaustivo + SESSION-CHANGES.md (chunking)",
+    "operacion_troubleshooting": "covered — MANUAL.md §7 + CLAUDE.md §Operación (script de destrabe) + SESSION-CHANGES.md §13.4",
+    "api_reference": "covered — CLAUDE.md §Endpoints (4 rutas con auth, params y códigos de error)",
+    "manual_usuario": "covered — docs/MANUAL.md completo con screenshots y tabla UTC/CDMX",
+    "env_vars": "covered — .env.example + advertencias en CLAUDE.md y SESSION-CHANGES.md",
+    "decisiones_diseno": "covered — SESSION-CHANGES.md (13 decisiones justificadas) + specs §13"
+  },
+  "gaps": [
+    { "gap": "Plan de implementación truncado: tasks 9-22 no escritas (sí ejecutadas según git log).", "severity": "media", "suggestion": "Completar el plan o crear PLAN-COMPLETION.md documentando la ejecución final." },
+    { "gap": "Spec de diseño pre-data la realidad: Next 15→16, crons 6h→diarios, sin chunking/session flags.", "severity": "media", "suggestion": "Nota de 'implementación refinada post-MVP' en specs o doc de updates post-deploy." },
+    { "gap": "Flujo de estados de la cancelación sin especificación propia (solo UX en MANUAL y mención en SESSION-CHANGES §9).", "severity": "baja", "suggestion": "Sección en CLAUDE.md con tabla/diagrama de requestCancel/clearCancel/isFullSessionActive." },
+    { "gap": "Sin guía de migración de COLUMNS/DATE_COLUMN post-deploy (impacto en cache y estructura del CSV).", "severity": "baja", "suggestion": "docs/guides/changing-columns.md con pasos y análisis de impacto." },
+    { "gap": "README no documenta testing (comandos solo en CLAUDE.md).", "severity": "baja", "suggestion": "Sección Testing en README: npm test, test:e2e y requisito de UPSTASH_* reales." },
+    { "gap": "Sin checklist de security hardening (CSP, CORS, rotación de tokens).", "severity": "baja", "suggestion": "docs/SECURITY.md con checklist pre-producción." }
+  ],
+  "contradictions": [
+    { "between": ["docs/superpowers/specs/2026-05-17-notion-export-webapp-design.md", "package.json"], "detail": "Spec: Next.js 15; real: next 16.2.6." },
+    { "between": ["docs/superpowers/specs/2026-05-17-notion-export-webapp-design.md", "vercel.json"], "detail": "Spec: incremental '0 */6 * * *'; real: '0 21 * * *' diario (límite Hobby, justificado en SESSION-CHANGES §12.1)." },
+    { "between": ["docs/superpowers/specs/2026-05-17-notion-export-webapp-design.md", "CLAUDE.md"], "detail": "Spec describe RENAME simple al finalizar; real: full multi-segmento con session flags y presupuesto de tiempo." },
+    { "between": ["docs/superpowers/plans/2026-05-17-notion-export-webapp.md", "git log"], "detail": "Plan: una branch por task (22); real: commits agregados (p.ej. 'feat(mvp)') sin evidencia de las 22 branches." }
+  ],
+  "declaration": "Documentación mayormente vigente, cobertura ~85% de áreas críticas (setup, deploy, arquitectura, API, operación). Los documentos operativos (CLAUDE.md, MANUAL.md, SESSION-CHANGES.md) son excelentes y reflejan la realidad; las brechas se concentran en los artefactos de planeación originales (spec/plan del 2026-05-17, pre-MVP) y en guías de mantenimiento post-deploy."
+}
