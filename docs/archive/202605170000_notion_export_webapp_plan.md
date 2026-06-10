@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js 15, TypeScript, Tailwind, `@notionhq/client`, `@upstash/redis`, `@upstash/ratelimit`, `iron-session`, `bcryptjs`, `cron-parser`, `csv-stringify`, Vitest, MSW, Playwright.
 
-**Spec:** `docs/superpowers/specs/2026-05-17-notion-export-webapp-design.md`
+**Spec:** `docs/archive/202605170000_notion_export_webapp_design_spec.md` (ruta original: `docs/superpowers/specs/2026-05-17-notion-export-webapp-design.md`)
 
 **Branching:** ver "Branching strategy" abajo — una branch por tarea, merge a `main` al cerrar cada una.
 
