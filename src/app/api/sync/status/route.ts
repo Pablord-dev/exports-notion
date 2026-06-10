@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { getStatus, getMeta } from "@/lib/cache";
-import { nextRun } from "@/lib/cron";
+import { nextRun, cronSchedule } from "@/lib/cron";
 
 export const dynamic = "force-dynamic";
 
-const CRON_INCREMENTAL = "0 */6 * * *";
-const CRON_FULL = "0 9 * * *";
+const CRON_INCREMENTAL = cronSchedule("incremental");
+const CRON_FULL = cronSchedule("full");
 
 export async function GET() {
   const now = new Date();

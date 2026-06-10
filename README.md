@@ -40,8 +40,8 @@ npm run test:e2e        # Playwright smoke (requiere env vars de Upstash o el se
 
 ## Operación
 
-- **Cron incremental**: cada 6h (`0 */6 * * *` UTC).
-- **Cron full**: diario 09:00 UTC (03:00 CDMX).
+- **Cron incremental**: diario 21:00 UTC (15:00 CDMX) — `0 21 * * *`. En Vercel Hobby cada expresión cron solo permite una corrida diaria.
+- **Cron full**: diario 09:00 UTC (03:00 CDMX) — `0 9 * * *`.
 - **Botón "Full"**: usa cuando sospeches drift (borrados no detectados).
 - **Estado y errores de sync**: visibles en la UI (último sync, próximo cron, progreso, último error).
 
@@ -54,6 +54,6 @@ npm run test:e2e        # Playwright smoke (requiere env vars de Upstash o el se
 
 ## Notas técnicas
 
-- **Vercel free tier**: `maxDuration` está en 60s (export) y 300s (sync). El sync incremental siempre cabe; el full tarda ~40s para 11k registros. Si el full no termina, el lock libera por TTL (10 min) y el siguiente cron retoma — pero se recomienda plan Pro para mayor margen.
+- **Límites de Vercel**: `maxDuration` declarado es 60s (export) y 300s (sync), pero **los 300s solo aplican con plan Pro — en Hobby toda función se capa a 60s**. El sync incremental siempre cabe; un segmento full de 10k registros puede no caber en 60s y morir a mitad (sin session flag, si muere antes de fijar el pivote el siguiente intento reinicia el full desde cero — ver CLAUDE.md §Límites de plataforma). Para datasets >10k en Hobby, considerar plan Pro.
 - **Empty data source en primer sync**: `runFull` ya maneja correctamente el caso de 0 páginas (no borra el cache previo, sólo actualiza `lastFullAt`).
 - **Deprecation Next 16**: el archivo `src/middleware.ts` emite un warning sugiriendo renombrar a `src/proxy.ts`. Funciona igual; cambiar cuando se decida cortar compatibilidad.
