@@ -1,0 +1,40 @@
+{
+  "fingerprint": { "commit": "d39da8d", "date": "2026-06-10T13:35:00-06:00", "scope": "full", "generated_by": "FL-DIS-01/AG-CORE-07" },
+  "documents": [
+    { "path": "README.md", "audience": "dev", "summary": "Setup local (6 pasos, Data Source ID), tests, deploy en Vercel, operación y seguridad.", "freshness": "parcialmente desactualizado", "freshness_evidence": "L43 dice cron incremental 'cada 6h (0 */6 * * *)' pero vercel.json programa '0 21 * * *' diario; L57 dice 'Vercel free tier... 300s (sync)' pero 300s requiere plan Pro (Hobby capa a 60s, ver CLAUDE.md §Límites)." },
+    { "path": "CLAUDE.md", "audience": "agente-ia", "summary": "Arquitectura operativa completa: flujo de datos, endpoints, Redis keys, crons, límites de plataforma, convenciones, script de destrabe y modo de trabajo orchestrator.", "freshness": "vigente", "freshness_evidence": "Refleja el estado post-revert 4298895 (full segmentado por cap de 10k, sin presupuesto de tiempo ni session flag) y advierte el riesgo en Hobby." },
+    { "path": "docs/guides/manual-usuario.md", "audience": "usuario", "summary": "Manual en español: login, dashboard, descarga CSV, sync manual, cancelación; 5 screenshots referenciados.", "freshness": "vigente", "freshness_evidence": "Coincide con la UI implementada (page.tsx) y los crons reales de vercel.json (incremental 21:00 UTC, full 09:00 UTC); screenshots presentes en docs/guides/manual-screenshots/." },
+    { "path": "docs/brief/202606101335_project_brief.md", "audience": "agente-ia/dev", "summary": "Brief de discovery vigente, fingerprint d39da8d (rebuild 2026-06-10).", "freshness": "vigente", "freshness_evidence": "Generado contra HEAD actual con verificación de código por agente explorador." },
+    { "path": "docs/archive/202605181515_session_changes.md", "audience": "dev", "summary": "Acta de sesión 2026-05-18: 13 decisiones del MVP (whitelist 21 columnas, Data Source ID, cap 10k, chunking, cancelación, deploy).", "freshness": "instantánea congelada", "freshness_evidence": "Documento histórico fechado; no se actualiza por diseño." },
+    { "path": "docs/archive/202606051159_session_changes.md", "audience": "dev", "summary": "Acta de sesión 2026-06-05: recuperación de sync trabado y reversión del presupuesto de tiempo/session flag (commit 4298895).", "freshness": "instantánea congelada", "freshness_evidence": "Documento histórico fechado; registra la decisión que invalidó el brief 202606041013." },
+    { "path": "docs/archive/202605170000_notion_export_webapp_design_spec.md", "audience": "dev", "summary": "Spec de diseño original pre-implementación (2026-05-17): arquitectura, modelo Redis, sync híbrido, seguridad, testing.", "freshness": "desactualizado (archivado)", "freshness_evidence": "Pre-data la implementación: dice Next 15, incremental cada 6h, RENAME simple sin chunking." },
+    { "path": "docs/archive/202605170000_notion_export_webapp_plan.md", "audience": "dev", "summary": "Plan de implementación original con 22 tareas y branching strategy; truncado (tasks 9-22 sin escribir).", "freshness": "desactualizado (archivado)", "freshness_evidence": "Truncado ~línea 1557/2148; git log confirma ejecución con commits agregados, no 22 branches." },
+    { "path": "docs/archive/202606041013_project_brief.md", "audience": "agente-ia/dev", "summary": "Brief anterior (fingerprint 5a3edd8) con sus JSONs hermanos; describía presupuesto 25s y session flag hoy inexistentes.", "freshness": "reemplazado (archivado)", "freshness_evidence": "Superseded por 202606101335 tras el revert 4298895." },
+    { "path": ".env.example", "audience": "dev", "summary": "Plantilla con las 8 env vars requeridas.", "freshness": "vigente", "freshness_evidence": "Coincide con config.ts y el código que las consume." }
+  ],
+  "coverage": {
+    "setup_local": "covered — README.md (6 pasos) + CLAUDE.md (escape de $ en APP_PASSWORD_HASH)",
+    "deploy": "covered — README.md + acta 202605181515 (env vars por scope, primer Full manual)",
+    "arquitectura": "covered — CLAUDE.md exhaustivo + brief vigente 202606101335",
+    "operacion_troubleshooting": "covered — manual-usuario.md + CLAUDE.md §Operación (script de destrabe) + acta 202606051159 (recuperación de sync trabado)",
+    "api_reference": "covered — CLAUDE.md §Endpoints (4 rutas con auth, params y códigos de error)",
+    "manual_usuario": "covered — docs/guides/manual-usuario.md completo con screenshots",
+    "env_vars": "covered — .env.example + advertencias en CLAUDE.md",
+    "decisiones_diseno": "partial — actas de sesión congeladas en archive/; sin carpeta docs/architecture/adr/ con decisiones numeradas vivas"
+  },
+  "gaps": [
+    { "gap": "README desactualizado en 2 puntos: frecuencia del cron incremental (dice 6h, real diario 21:00 UTC) y maxDuration en free tier (dice 300s disponibles, real Hobby capa a 60s).", "severity": "alta", "suggestion": "Corregir README §Operación y §Notas técnicas contra vercel.json y CLAUDE.md §Límites." },
+    { "gap": "Bug código-vs-código: CRON_INCREMENTAL '0 */6 * * *' en src/app/api/sync/status/route.ts:7 vs vercel.json '0 21 * * *' — la UI muestra un countdown a una corrida que no ocurrirá.", "severity": "alta", "suggestion": "Unificar la constante con vercel.json (o leerla de config compartida)." },
+    { "gap": "Sin ADRs numerados: las decisiones viven en actas de sesión congeladas, difíciles de consultar por tema.", "severity": "media", "suggestion": "Crear docs/architecture/adr/ extrayendo las ~15 decisiones clave de las actas." },
+    { "gap": "Sin guía de migración de COLUMNS/DATE_COLUMN post-deploy (impacto en cache y estructura del CSV).", "severity": "baja", "suggestion": "docs/guides/cambiar-columnas.md con pasos y análisis de impacto." },
+    { "gap": "README no documenta los comandos de testing (solo CLAUDE.md los tiene).", "severity": "baja", "suggestion": "Sección Testing en README con npm test / test:e2e y el requisito de UPSTASH_* reales." },
+    { "gap": "loadConfig() valida env vars pero ningún código de runtime la invoca — la validación documentada no ocurre en la práctica.", "severity": "media", "suggestion": "Invocarla en el arranque (instrumentation o layout server-side) o documentar que es solo para tests." }
+  ],
+  "contradictions": [
+    { "between": ["README.md:L43", "vercel.json"], "detail": "README: incremental 'cada 6h (0 */6 * * *)'; real: '0 21 * * *' diario.", "severity": "high" },
+    { "between": ["src/app/api/sync/status/route.ts:L7", "vercel.json"], "detail": "UI calcula countdown del incremental con '0 */6 * * *'; el cron real es '0 21 * * *'.", "severity": "high" },
+    { "between": ["README.md:L57", "CLAUDE.md §Límites de plataforma"], "detail": "README: 'Vercel free tier: maxDuration... 300s (sync)'; CLAUDE.md: en Hobby maxDuration está capado a 60s y 300s requiere Pro.", "severity": "medium" },
+    { "between": ["docs/archive/202606041013_project_brief.md", "src/lib/sync.ts"], "detail": "Brief anterior describe presupuesto de 25s, session flag y clave notion:sync:full:session; el código post-4298895 no tiene ninguno (archivado, severidad informativa).", "severity": "low" }
+  ],
+  "declaration": "Documentación reorganizada el 2026-06-10 bajo docs/ estándar (00-index, brief/, guides/, reports/, archive/). Cobertura alta (~85%) y trazable; los dos hallazgos de severidad alta son la desactualización del README sobre el cron incremental y el countdown de la UI calculado con una expresión cron que no coincide con vercel.json."
+}

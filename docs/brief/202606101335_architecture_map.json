@@ -1,0 +1,67 @@
+{
+  "fingerprint": { "commit": "d39da8d", "date": "2026-06-10T13:35:00-06:00", "scope": "full", "files_count": 60, "generated_by": "FL-DIS-01/AG-CORE-06" },
+  "components": [
+    { "name": "RootLayout", "path": "src/app/layout.tsx", "layer": "ui", "responsibility": "HTML root con metadata (lang=es), fuentes Google (Raleway display, Poppins sans) y estilos globales", "depends_on": [] },
+    { "name": "HomePage (Client)", "path": "src/app/page.tsx", "layer": "ui", "responsibility": "UI principal: login, estado del sync con polling adaptativo (2s/30s), triggers incremental/full/cancel, export CSV por rango; encadena segmentos del full (máx 20 iteraciones, L91)", "depends_on": ["/api/login", "/api/sync", "/api/sync/status", "/api/export"] },
+    { "name": "globals.css (@theme)", "path": "src/app/globals.css", "layer": "ui", "responsibility": "Design tokens brandbook iU Corp: blue #0f40ef, dark-blue #051758, sky #02b5d3, surface #0a2468, border #1c3c84, danger #f05347, warning #b57ed1, success #66b169; fuentes Raleway/Poppins", "depends_on": [] },
+    { "name": "middleware", "path": "src/middleware.ts", "layer": "infra", "responsibility": "Protege /api/export/:path* y /api/sync/status validando iron-session", "depends_on": ["src/lib/session.ts"] },
+    { "name": "POST /api/login", "path": "src/app/api/login/route.ts", "layer": "api", "responsibility": "Auth por password con rate-limit (5/15min por IP, sliding window), crea sesión iron-session tras verificación bcrypt", "depends_on": ["src/lib/auth.ts", "Upstash Ratelimit"] },
+    { "name": "DELETE /api/login", "path": "src/app/api/login/route.ts", "layer": "api", "responsibility": "Destruye la sesión (logout)", "depends_on": ["src/lib/auth.ts"] },
+    { "name": "POST /api/sync", "path": "src/app/api/sync/route.ts", "layer": "api", "responsibility": "Auth dual (sesión OR Bearer CRON_SECRET), despacha runSync(kind) con espera inline; 409 si hay lock; maxDuration=300s", "depends_on": ["src/lib/sync.ts", "src/lib/cache.ts", "src/lib/auth.ts"] },
+    { "name": "DELETE /api/sync", "path": "src/app/api/sync/route.ts", "layer": "api", "responsibility": "Setea flag de cancel para el sync en curso", "depends_on": ["src/lib/cache.ts"] },
+    { "name": "GET /api/sync/status", "path": "src/app/api/sync/status/route.ts", "layer": "api", "responsibility": "Devuelve status + meta + próximas corridas de cron. ⚠️ CRON_INCREMENTAL hardcodeado '0 */6 * * *' (L7) difiere de vercel.json ('0 21 * * *')", "depends_on": ["src/lib/cache.ts", "src/lib/cron.ts"] },
+    { "name": "GET /api/export", "path": "src/app/api/export/route.ts", "layer": "api", "responsibility": "CSV stream con filtro opcional de fechas; valida ISO, ordena por DATE_COLUMN, 503 no_data si cache vacío; maxDuration=60s", "depends_on": ["src/lib/cache.ts", "src/lib/filter.ts", "src/lib/csv.ts", "src/lib/columns.ts"] },
+    { "name": "runSync()", "path": "src/lib/sync.ts", "layer": "domain", "responsibility": "Orquestador: adquiere lock (TTL 600s), despacha full/incremental, actualiza status y meta, maneja cancel y reanudación por pivote", "depends_on": ["src/lib/notion.ts", "src/lib/flatten.ts", "src/lib/cache.ts"] },
+    { "name": "runFullSegment()", "path": "src/lib/sync.ts", "layer": "domain", "responsibility": "UN segmento del full por llamada (hasta cap 10k, SIN presupuesto de tiempo ni session flag desde commit 4298895). Primer segmento = !existingPivot (L43) → clearNewCache. Acumula en :new; promueve con RENAME al cerrar (último segmento o cancelación con datos)", "depends_on": ["src/lib/notion.ts", "src/lib/flatten.ts", "src/lib/cache.ts"] },
+    { "name": "runIncremental()", "path": "src/lib/sync.ts", "layer": "domain", "responsibility": "Sync incremental (L93-118): páginas modificadas desde lastIncrementalAt − 60s (OVERLAP_MS), upsert directo al cache vivo + delete de archivadas, setMeta", "depends_on": ["src/lib/notion.ts", "src/lib/flatten.ts", "src/lib/cache.ts"] },
+    { "name": "fetchPages()", "path": "src/lib/notion.ts", "layer": "domain", "responsibility": "Query a Notion (filtro last_edited_time opcional), paginación con cursor, dedup por page id, detección de archivadas, throttle 3 req/s", "depends_on": ["@notionhq/client (dataSources.query)"] },
+    { "name": "fetchOneFullSegment()", "path": "src/lib/notion.ts", "layer": "domain", "responsibility": "Un segmento del full (L104-130): DESC por created_time con on_or_before:pivot, pagina hasta agotar o cap 10k; nextPivot solo si rozó el cap, no canceló y el pivote avanza (anti-loop L92)", "depends_on": ["@notionhq/client (dataSources.query)"] },
+    { "name": "flattenPage()", "path": "src/lib/flatten.ts", "layer": "domain", "responsibility": "PageObjectResponse → FlatRow vía whitelist COLUMNS (title, rich_text, number, select/status/multi_select, date con rango, checkbox, url/email/phone, people, relation, files, formula, rollup, created/last_edited_time, created_by/last_edited_by, unique_id)", "depends_on": ["src/lib/columns.ts"] },
+    { "name": "Redis Cache Layer", "path": "src/lib/cache.ts", "layer": "infra", "responsibility": "CRUD de filas (HSET/HDEL chunkeado a 500), meta, status, lock, cancel, pivote — vía Upstash REST. getAllRows con HSCAN (count 500). __setClient para tests. SIN clave session (revertida)", "depends_on": ["@upstash/redis"] },
+    { "name": "verifyPassword()", "path": "src/lib/auth.ts", "layer": "infra", "responsibility": "Compara password contra APP_PASSWORD_HASH con bcryptjs; exporta sessionOptions (duplicado con session.ts)", "depends_on": ["bcryptjs"] },
+    { "name": "sessionOptions", "path": "src/lib/session.ts", "layer": "infra", "responsibility": "Config iron-session: cookie export-notion-session, httpOnly, secure en prod, maxAge 7d, SameSite lax", "depends_on": [] },
+    { "name": "rowsToCSVString()/rowsToCSVStream()", "path": "src/lib/csv.ts", "layer": "domain", "responsibility": "FlatRow[] → CSV con csv-stringify, BOM UTF-8, variante streaming", "depends_on": ["csv-stringify"] },
+    { "name": "filterByDateRange()", "path": "src/lib/filter.ts", "layer": "domain", "responsibility": "Filtra filas por dateColumn en [from, to]; parsea ISO antes del separador '→'", "depends_on": [] },
+    { "name": "nextRun()", "path": "src/lib/cron.ts", "layer": "infra", "responsibility": "Próxima ejecución de una expresión cron en UTC (cron-parser)", "depends_on": ["cron-parser"] },
+    { "name": "COLUMNS whitelist", "path": "src/lib/columns.ts", "layer": "domain", "responsibility": "21 propiedades de Notion (en español) exportables; orden = orden de columnas del CSV; csvHeaders()", "depends_on": [] },
+    { "name": "loadConfig()", "path": "src/lib/config.ts", "layer": "infra", "responsibility": "Valida presencia de las 8 env vars obligatorias. ⚠️ No se invoca desde el código de runtime actual", "depends_on": [] }
+  ],
+  "data_flows": [
+    { "name": "Autenticación", "steps": ["Form en page.tsx", "POST /api/login valida rate-limit por IP", "bcrypt.compare contra APP_PASSWORD_HASH", "iron-session escribe cookie", "UI pasa a dashboard con polling", "DELETE /api/login destruye sesión"], "trigger": "Submit del form de login" },
+    { "name": "Incremental sync", "steps": ["Botón o cron 21:00 UTC", "POST /api/sync?kind=incremental adquiere lock", "fetchPages(since = lastIncrementalAt − 60s)", "flattenPage por whitelist", "upsertRows al cache vivo + deleteRows de archivadas", "setMeta + status idle"], "trigger": "Manual o cron 0 21 * * * UTC" },
+    { "name": "Full sync segmentado (reanudable)", "steps": ["Botón o cron 09:00 UTC", "Sin pivote ⇒ primer segmento: clearNewCache + clearCancel", "fetchOneFullSegment(pivot) DESC por created_time hasta cap 10k", "flatten + upsert al hash :new", "Si nextPivot: setFullPivot (TTL 24h), done:false → cliente re-llama (máx 20 segmentos)", "Último segmento o cancel con datos: RENAME :new → cache vivo, setMeta, clearFullPivot", "0 páginas en total: no promueve"], "trigger": "Manual o cron 0 9 * * * UTC (cron solo dispara 1 segmento)" },
+    { "name": "Export CSV", "steps": ["GET /api/export?from&to (middleware auth)", "Valida formatos ISO y from ≤ to", "getAllRows (HSCAN paginado)", "filterByDateRange por DATE_COLUMN", "Sort asc en memoria", "Stream CSV con BOM y filename timestampeado"], "trigger": "Botón Descargar con rango opcional" },
+    { "name": "Polling de status (UI)", "steps": ["loadStatus al montar", "GET /api/sync/status → {status, meta, next}", "Intervalos: 2s si running, 30s si idle", "Muestra progreso done/total, botón Cancelar, próximos crons (⚠️ incremental calculado con cron erróneo 0 */6)"], "trigger": "Sesión autenticada, continuo hasta logout" }
+  ],
+  "external_integrations": [
+    { "service": "Notion API", "client_lib": "@notionhq/client ^5.21 (dataSources.query)", "usage": "Query de páginas con filtros last_edited_time/created_time, paginación, extracción de propiedades", "limits_handled": "Cap 10k por query → segmentación por created_time; throttle 3 req/s; backoff exponencial 3 intentos; retry-after respetado; 401/404 fail-fast" },
+    { "service": "Upstash Redis", "client_lib": "@upstash/redis ^1.38 (REST)", "usage": "Cache de filas (hash), meta, status, lock distribuido, cancel, pivote", "limits_handled": "Chunks de 500 fields por request; TTLs: lock 600s, cancel 1h, pivote 24h" },
+    { "service": "Upstash Ratelimit", "client_lib": "@upstash/ratelimit ^2.0.8", "usage": "Protege /api/login: 5 intentos/15min por IP (sliding window)", "limits_handled": "429 con mensaje a la UI" },
+    { "service": "Vercel Cron", "client_lib": "plataforma (vercel.json)", "usage": "full 09:00 UTC, incremental 21:00 UTC, con Bearer CRON_SECRET", "limits_handled": "Hobby: 1 corrida diaria por expresión; maxDuration declarado 300s (sync) requiere Pro — Hobby capa a 60s" }
+  ],
+  "entry_points": [
+    { "route_or_file": "GET /", "method": "GET", "auth": "ninguna (la UI decide por /api/sync/status)", "purpose": "Login o dashboard" },
+    { "route_or_file": "POST /api/login", "method": "POST", "auth": "rate-limit por IP", "purpose": "Autenticación" },
+    { "route_or_file": "DELETE /api/login", "method": "DELETE", "auth": "cookie", "purpose": "Logout" },
+    { "route_or_file": "POST /api/sync", "method": "POST", "auth": "cookie OR Bearer CRON_SECRET", "purpose": "Disparar sync (kind=incremental|full)" },
+    { "route_or_file": "DELETE /api/sync", "method": "DELETE", "auth": "cookie OR Bearer CRON_SECRET", "purpose": "Cancelar sync" },
+    { "route_or_file": "GET /api/sync/status", "method": "GET", "auth": "cookie (middleware)", "purpose": "Estado para polling" },
+    { "route_or_file": "GET /api/export", "method": "GET", "auth": "cookie (middleware)", "purpose": "Descarga CSV" }
+  ],
+  "state_storage": [
+    { "key": "notion:cache:v1", "type": "hash", "purpose": "Cache vivo: field=page id, value=JSON de fila plana" },
+    { "key": "notion:cache:v1:new", "type": "hash", "purpose": "Cache en construcción durante full; se promueve por RENAME" },
+    { "key": "notion:meta", "type": "string(JSON)", "purpose": "{lastFullAt, lastIncrementalAt, count}" },
+    { "key": "notion:sync:status", "type": "string(JSON)", "purpose": "{state, kind, done, total, startedAt, error, skipped}" },
+    { "key": "notion:sync:lock", "type": "string", "purpose": "Lock TTL 600s contra syncs concurrentes" },
+    { "key": "notion:sync:cancel", "type": "string", "purpose": "Flag TTL 1h para abortar sync en curso" },
+    { "key": "notion:sync:full:pivot", "type": "string", "purpose": "created_time del último page del segmento previo (reanudación), TTL 24h" }
+  ],
+  "env_vars": ["NOTION_TOKEN", "NOTION_DATABASE_ID (Data Source ID)", "DATE_COLUMN", "APP_PASSWORD_HASH", "SESSION_SECRET", "CRON_SECRET", "UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"],
+  "tests": {
+    "unit": ["tests/unit/auth.test.ts", "tests/unit/config.test.ts", "tests/unit/cron.test.ts", "tests/unit/csv.test.ts", "tests/unit/filter.test.ts", "tests/unit/flatten.test.ts"],
+    "integration": ["tests/integration/sync.test.ts (fakeNotion + fakeRedis vía __setClient)"],
+    "e2e": ["tests/e2e/smoke.spec.ts (Playwright, requiere UPSTASH_* reales)"],
+    "fixtures": ["tests/fixtures/fakeNotion.ts", "tests/fixtures/fakeRedis.ts", "tests/fixtures/notion-pages/sample.ts"]
+  }
+}

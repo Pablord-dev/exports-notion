@@ -72,7 +72,7 @@ Notion ──(cron sync)──► Upstash hash `notion:cache:v1` ──(GET /api
 ### Límites de plataforma
 
 - **`maxDuration`: `/api/sync` = 300s (requiere Vercel Pro), `/api/export` = 60s.** El full segmenta por el **cap de 10k de Notion, no por tiempo**: cada segmento pagina hasta 10k registros de una sola pasada.
-- ⚠️ **En Vercel Hobby `maxDuration` está capado a 60s**, así que un segmento de 10k puede no caber y la función morir a mitad. Peor: como **no hay session flag**, si la función muere ANTES de fijar el pivote, el siguiente intento reinicia como "primer segmento" y **borra el `new` acumulado**. Para correr en Hobby de forma confiable habría que reintroducir un presupuesto de tiempo por segmento (esto fue removido a propósito en esta sesión — ver el doc de session changes con prefijo de fecha en `docs/session-changes/`).
+- ⚠️ **En Vercel Hobby `maxDuration` está capado a 60s**, así que un segmento de 10k puede no caber y la función morir a mitad. Peor: como **no hay session flag**, si la función muere ANTES de fijar el pivote, el siguiente intento reinicia como "primer segmento" y **borra el `new` acumulado**. Para correr en Hobby de forma confiable habría que reintroducir un presupuesto de tiempo por segmento (esto fue removido a propósito en esta sesión — ver el acta de sesión `docs/archive/202606051159_session_changes.md`).
 - **Cold start** puede ser 5-15s en Hobby.
 - **Notion API rate limit**: 3 req/s oficial. Throttle local lo respeta. 429 con `retry-after` se respeta.
 - **Notion query cap**: 10,000 resultados por query, incluso paginando con cursor. Razón del chunking.
