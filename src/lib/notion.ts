@@ -38,23 +38,30 @@ export interface FetchResult {
   pages: PageObjectResponse[];
   /** Páginas archivadas detectadas (vienen con archived: true). */
   archivedIds: string[];
-  /** Sólo relevante en modo full: si el segmento llenó 10k, created_time del último page para reanudar. null si no hay más. */
-  nextPivot?: string | null;
-}
-
-export interface FullSegmentOptions {
-  /** created_time desde el cual reanudar (DESC + on_or_before). undefined = primer segmento. */
-  pivot?: string;
-  onProgress?: FetchOptions["onProgress"];
-  shouldCancel?: FetchOptions["shouldCancel"];
 }
 
 // Notion API limita CUALQUIER query a 10,000 resultados (incluso paginando con cursor).
 // Para datasets más grandes, full sync se segmenta por `created_time` DESC, usando el
 // created_time del último page del segmento como pivote del siguiente (filter on_or_before).
-// Dedupe vía seenIds (y el cache es HSET por page.id, así que duplicados se sobrescriben).
+// El cache es HSET por page.id, así que el solape entre segmentos se sobrescribe idempotente.
 const NOTION_QUERY_CAP = 10_000;
 
+// Respuesta mínima que necesitamos de la query cruda de papelera.
+interface RawQueryResponse {
+  results: Array<{ object: string; id: string; archived?: boolean }>;
+  has_more: boolean;
+  next_cursor: string | null;
+}
+
+/**
+ * Fetch incremental: DOS queries filtradas por last_edited_time (FX-001).
+ * En el API real (Notion-Version 2025-09-03) `is_archived` PARTICIONA los resultados:
+ * omitido/false = sólo vivas; true = sólo papelera. NO existe un flag para "incluir
+ * ambas" (`in_trash`/`archived` en el body → validation_error 400, verificado
+ * empíricamente el 2026-07-06). Por eso: query 1 = vivas (upsert), query 2 = papelera
+ * (ids a borrar). La query 2 va por `client().request()` crudo porque el SDK v5.21
+ * descarta `is_archived` de su whitelist interna de body params y lo perdería en silencio.
+ */
 export async function fetchPages(opts: FetchOptions = {}): Promise<FetchResult> {
   // NOTE: In @notionhq/client v5.x the `databases.query` endpoint was replaced by
   // `dataSources.query`. We keep the existing `NOTION_DATABASE_ID` env var name for
@@ -63,113 +70,134 @@ export async function fetchPages(opts: FetchOptions = {}): Promise<FetchResult> 
   const throttle = new Throttle();
   const pages: PageObjectResponse[] = [];
   const archivedIds: string[] = [];
-  const seenIds = new Set<string>();
 
-  // Incremental: un solo segmento filtrado por last_edited_time.
-  if (opts.since) {
-    const filter = {
-      timestamp: "last_edited_time" as const,
-      last_edited_time: { after: opts.since },
-    };
-    await fetchSegment({ dataSourceId, throttle, filter, pages, archivedIds, seenIds, onProgress: opts.onProgress, shouldCancel: opts.shouldCancel });
-    return { pages, archivedIds };
-  }
-
-  // Full: segmentos DESC por created_time con pivote para superar el cap de 10k.
-  let pivot: string | undefined;
-  while (true) {
-    if (await opts.shouldCancel?.()) break;
-    const filter = pivot
-      ? { timestamp: "created_time" as const, created_time: { on_or_before: pivot } }
-      : undefined;
-    const sorts = [{ timestamp: "created_time" as const, direction: "descending" as const }];
-    const beforeCount = pages.length + archivedIds.length;
-    const lastCreatedTime = await fetchSegment({
-      dataSourceId, throttle, filter, sorts, pages, archivedIds, seenIds, onProgress: opts.onProgress, shouldCancel: opts.shouldCancel,
-    });
-    const segmentCount = pages.length + archivedIds.length - beforeCount;
-    if (segmentCount < NOTION_QUERY_CAP || !lastCreatedTime) break;
-    if (lastCreatedTime === pivot) break; // anti-loop si todos los registros comparten timestamp
-    if (await opts.shouldCancel?.()) break;
-    pivot = lastCreatedTime;
-  }
-  return { pages, archivedIds };
-}
-
-/**
- * Procesa exactamente UN segmento del full sync. Para arquitecturas con timeout
- * estricto (Vercel Hobby = 60 s), el caller invoca esta función múltiples veces
- * pasando el `nextPivot` devuelto, hasta que `nextPivot` sea null.
- */
-export async function fetchOneFullSegment(opts: FullSegmentOptions = {}): Promise<FetchResult> {
-  const dataSourceId = process.env.NOTION_DATABASE_ID!;
-  const throttle = new Throttle();
-  const pages: PageObjectResponse[] = [];
-  const archivedIds: string[] = [];
-  const seenIds = new Set<string>();
-
-  const filter = opts.pivot
-    ? { timestamp: "created_time" as const, created_time: { on_or_before: opts.pivot } }
+  const filter = opts.since
+    ? { timestamp: "last_edited_time" as const, last_edited_time: { after: opts.since } }
     : undefined;
-  const sorts = [{ timestamp: "created_time" as const, direction: "descending" as const }];
 
-  const lastCreatedTime = await fetchSegment({
-    dataSourceId, throttle, filter, sorts, pages, archivedIds, seenIds,
-    onProgress: opts.onProgress, shouldCancel: opts.shouldCancel,
-  });
-  const segmentCount = pages.length + archivedIds.length;
-  const cancelled = await opts.shouldCancel?.();
-  const reachedCap = segmentCount >= NOTION_QUERY_CAP;
-  // Si llenamos el cap y no hubo cancel, hay que reanudar. Si el lastCreatedTime
-  // es igual al pivot anterior, anti-loop: no hay más segmentos.
-  const nextPivot =
-    !cancelled && reachedCap && lastCreatedTime && lastCreatedTime !== opts.pivot
-      ? lastCreatedTime
-      : null;
-  return { pages, archivedIds, nextPivot };
-}
+  const progress = async (hasMore: boolean) => {
+    const done = pages.length + archivedIds.length;
+    await opts.onProgress?.(done, done + (hasMore ? PAGE_SIZE : 0));
+  };
 
-interface SegmentArgs {
-  dataSourceId: string;
-  throttle: Throttle;
-  filter?: any;
-  sorts?: any[];
-  pages: PageObjectResponse[];
-  archivedIds: string[];
-  seenIds: Set<string>;
-  onProgress?: FetchOptions["onProgress"];
-  shouldCancel?: FetchOptions["shouldCancel"];
-}
-
-/** Pagina un segmento hasta agotar el cursor. Devuelve el created_time del último page visto. */
-async function fetchSegment(a: SegmentArgs): Promise<string | undefined> {
+  // 1) Vivas editadas en la ventana → upsert.
   let cursor: string | undefined = undefined;
-  let lastCreatedTime: string | undefined;
   do {
-    if (await a.shouldCancel?.()) break;
-    await a.throttle.wait();
+    await throttle.wait();
     const resp = await retry(() =>
       client().dataSources.query({
-        data_source_id: a.dataSourceId,
+        data_source_id: dataSourceId,
         start_cursor: cursor,
         page_size: PAGE_SIZE,
-        ...(a.filter ? { filter: a.filter } : {}),
-        ...(a.sorts ? { sorts: a.sorts } : {}),
+        ...(filter ? { filter } : {}),
       }),
     );
     for (const r of resp.results) {
-      if (!isFullPage(r)) continue;
-      lastCreatedTime = r.created_time;
-      if (a.seenIds.has(r.id)) continue;
-      a.seenIds.add(r.id);
-      if (r.archived) a.archivedIds.push(r.id);
-      else a.pages.push(r);
+      if (isFullPage(r)) pages.push(r);
     }
-    const done = a.pages.length + a.archivedIds.length;
-    await a.onProgress?.(done, done + (resp.has_more ? PAGE_SIZE : 0));
     cursor = resp.has_more ? resp.next_cursor ?? undefined : undefined;
+    await progress(Boolean(cursor));
+    if (cursor && (await opts.shouldCancel?.())) break;
   } while (cursor);
-  return lastCreatedTime;
+
+  // 2) Papelera editada en la ventana → ids a borrar del cache.
+  if (!(await opts.shouldCancel?.())) {
+    cursor = undefined;
+    do {
+      await throttle.wait();
+      const resp = (await retry(() =>
+        client().request({
+          path: `data_sources/${dataSourceId}/query`,
+          method: "post",
+          body: {
+            page_size: PAGE_SIZE,
+            is_archived: true,
+            ...(cursor ? { start_cursor: cursor } : {}),
+            ...(filter ? { filter } : {}),
+          },
+        }),
+      )) as RawQueryResponse;
+      for (const r of resp.results) {
+        if (r.object === "page") archivedIds.push(r.id);
+      }
+      cursor = resp.has_more ? resp.next_cursor ?? undefined : undefined;
+      await progress(Boolean(cursor));
+      if (cursor && (await opts.shouldCancel?.())) break;
+    } while (cursor);
+  }
+
+  return { pages, archivedIds };
+}
+
+export interface FullBatchesOptions {
+  /** created_time desde el cual reanudar (DESC + on_or_before). undefined = desde el inicio. */
+  pivot?: string;
+  /**
+   * Invocado tras CADA página de cursor (≤100 registros) con el created_time del último
+   * page visto y si el segmento tiene más resultados. Aquí el caller persiste el batch
+   * y fija su checkpoint — si la función muere después, no se pierde este avance.
+   */
+  onBatch: (pages: PageObjectResponse[], lastCreatedTime: string | undefined, hasMore: boolean) => void | Promise<void>;
+  shouldCancel?: () => boolean | Promise<boolean>;
+  /** Evaluado tras cada batch: true = cortar la corrida (presupuesto de tiempo agotado). */
+  budgetExhausted?: () => boolean;
+}
+
+export interface FullBatchesResult {
+  /** true si se agotó el dataset; false si se cortó por cancel o presupuesto. */
+  completed: boolean;
+  cancelled: boolean;
+}
+
+/**
+ * Fetch del full sync entregando batch por batch. Encadena internamente los segmentos
+ * del cap de 10k (query nueva con pivote on_or_before) hasta agotar el dataset, salvo
+ * que `shouldCancel` o `budgetExhausted` corten antes. La papelera queda fuera por
+ * defecto (sin `in_trash`), que es exactamente lo que un snapshot completo necesita.
+ */
+export async function fetchFullBatches(opts: FullBatchesOptions): Promise<FullBatchesResult> {
+  const dataSourceId = process.env.NOTION_DATABASE_ID!;
+  const throttle = new Throttle();
+  const sorts = [{ timestamp: "created_time" as const, direction: "descending" as const }];
+  let pivot = opts.pivot;
+
+  // Cada iteración externa = una query (un "segmento") que la API capa a 10k resultados.
+  while (true) {
+    let cursor: string | undefined = undefined;
+    let segmentCount = 0;
+    let lastCreatedTime: string | undefined;
+    do {
+      await throttle.wait();
+      const resp = await retry(() =>
+        client().dataSources.query({
+          data_source_id: dataSourceId,
+          start_cursor: cursor,
+          page_size: PAGE_SIZE,
+          ...(pivot ? { filter: { timestamp: "created_time" as const, created_time: { on_or_before: pivot } } } : {}),
+          sorts,
+        }),
+      );
+      const batch: PageObjectResponse[] = [];
+      for (const r of resp.results) {
+        if (!isFullPage(r)) continue;
+        lastCreatedTime = r.created_time;
+        segmentCount++;
+        batch.push(r);
+      }
+      cursor = resp.has_more ? resp.next_cursor ?? undefined : undefined;
+      await opts.onBatch(batch, lastCreatedTime, Boolean(cursor));
+      if (!cursor) break; // segmento agotado — abajo se decide si el dataset terminó
+      if (await opts.shouldCancel?.()) return { completed: false, cancelled: true };
+      if (opts.budgetExhausted?.()) return { completed: false, cancelled: false };
+    } while (true);
+
+    // Segmento agotado sin rozar el cap → no quedan registros más antiguos.
+    if (segmentCount < NOTION_QUERY_CAP || !lastCreatedTime) return { completed: true, cancelled: false };
+    if (lastCreatedTime === pivot) return { completed: true, cancelled: false }; // anti-loop: timestamps idénticos
+    pivot = lastCreatedTime;
+    if (await opts.shouldCancel?.()) return { completed: false, cancelled: true };
+    if (opts.budgetExhausted?.()) return { completed: false, cancelled: false };
+  }
 }
 
 async function retry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
@@ -180,7 +208,8 @@ async function retry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
     } catch (e: any) {
       lastErr = e;
       const code = e?.status ?? e?.code;
-      if (code === 401 || code === 404) throw e;
+      // 400 (validation), 401 y 404 son errores permanentes: reintentar sólo quema tiempo.
+      if (code === 400 || code === 401 || code === 404) throw e;
       // 429 con Retry-After
       const retryAfter = Number(e?.headers?.["retry-after"] ?? 0);
       const backoff = retryAfter > 0 ? retryAfter * 1000 : 1000 * 2 ** i;

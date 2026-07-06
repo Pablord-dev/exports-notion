@@ -10,6 +10,15 @@ export interface CacheMeta {
 export type SyncState = "idle" | "running" | "error";
 export type SyncKind = "incremental" | "full";
 
+/** Resumen del último sync terminado (FX-003): qué corrió y cuánto procesó. */
+export interface SyncLastResult {
+  kind: SyncKind;
+  upserted: number;
+  deleted: number;
+  skipped: number;
+  finishedAt: string; // ISO
+}
+
 export interface SyncStatus {
   state: SyncState;
   kind: SyncKind | null;
@@ -18,6 +27,7 @@ export interface SyncStatus {
   startedAt: string | null;
   error: string | null;
   skipped: number;
+  lastResult?: SyncLastResult | null;
 }
 
 export interface SyncStatusResponse {

@@ -16,8 +16,15 @@ function Spinner({ className = "" }: { className?: string }) {
   );
 }
 
+type LastResult = {
+  kind: "incremental" | "full";
+  upserted: number;
+  deleted: number;
+  skipped: number;
+  finishedAt: string;
+};
 type Status = {
-  status: { state: "idle"|"running"|"error"; kind: "incremental"|"full"|null; done: number; total: number; error: string | null; skipped: number; };
+  status: { state: "idle"|"running"|"error"; kind: "incremental"|"full"|null; done: number; total: number; error: string | null; skipped: number; lastResult?: LastResult | null; };
   meta: { lastFullAt: string | null; lastIncrementalAt: string | null; count: number; };
   next: { incremental: string; full: string; };
 };
@@ -203,6 +210,17 @@ export default function Home() {
             <dd className="font-display text-xl font-bold text-sky">{status?.meta.count ?? 0}</dd>
           </div>
         </dl>
+        {status?.status.lastResult && (
+          <p className="border-t border-border pt-3 text-sm text-muted">
+            Último sync ({status.status.lastResult.kind}, {fmtAgo(status.status.lastResult.finishedAt)}):{" "}
+            <span className="font-medium text-fg">{status.status.lastResult.upserted} actualizados</span>
+            {" · "}
+            <span className="font-medium text-fg">{status.status.lastResult.deleted} eliminados</span>
+            {status.status.lastResult.skipped ? (
+              <> · <span className="font-medium text-warning">{status.status.lastResult.skipped} omitidos</span></>
+            ) : null}
+          </p>
+        )}
       </section>
 
       {running ? (

@@ -8,6 +8,7 @@ const STATUS_KEY = "notion:sync:status";
 const LOCK_KEY = "notion:sync:lock";
 const CANCEL_KEY = "notion:sync:cancel";
 const FULL_PIVOT_KEY = "notion:sync:full:pivot";
+const FULL_ACTIVE_KEY = "notion:sync:full:active";
 
 let client: Redis | null = null;
 function r(): Redis {
@@ -98,3 +99,12 @@ export async function clearCancel() { await r().del(CANCEL_KEY); }
 export async function getFullPivot(): Promise<string | null> { return await r().get<string>(FULL_PIVOT_KEY); }
 export async function setFullPivot(p: string, ttlSec = 86_400) { await r().set(FULL_PIVOT_KEY, p, { ex: ttlSec }); }
 export async function clearFullPivot() { await r().del(FULL_PIVOT_KEY); }
+
+// ---- Full sync session flag ----
+// Presente = hay una sesión de full en curso (aunque la función haya muerto).
+// Valor = startedAt ISO de la sesión; se usa como lastIncrementalAt al promover.
+// Su AUSENCIA (no la del pivote) es lo que define "primer segmento": así una muerte
+// antes de fijar pivote ya no hace que el siguiente intento borre el :new acumulado.
+export async function getFullActive(): Promise<string | null> { return await r().get<string>(FULL_ACTIVE_KEY); }
+export async function setFullActive(startedAt: string, ttlSec = 86_400) { await r().set(FULL_ACTIVE_KEY, startedAt, { ex: ttlSec }); }
+export async function clearFullActive() { await r().del(FULL_ACTIVE_KEY); }
