@@ -26,10 +26,11 @@ Next.js 16 (App Router, TS) · React 19 · Tailwind v4 · Upstash Redis · `@not
 
 ```bash
 npm test                # unit + integration (Vitest)
-npm run test:e2e        # Playwright smoke (requiere env vars de Upstash o el server se cae al hacer rate limit)
+npm run test:e2e        # Playwright smoke — corre con stubs en memoria, sin Upstash/Notion reales
+E2E_REAL=1 npm run test:e2e   # modo original: contra el server real del puerto 3000 (.env.local)
 ```
 
-> El smoke E2E asume que `/api/login` puede responder. En dev local sin Upstash, `Redis.fromEnv()` falla al intentar la primera request y el handler crashea — el test fallará. Configura Upstash o usa stubs para correrlo localmente.
+> Por defecto el E2E levanta su propio server (`next build` + `next start`, puerto 3100) con `E2E_STUBS=1`: Redis y rate-limit en memoria y password fijo `e2e-password`. No choca con un dev server abierto ni gasta el rate limit real.
 
 ## Deploy a Vercel
 

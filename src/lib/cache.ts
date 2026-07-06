@@ -1,4 +1,5 @@
 import { Redis } from "@upstash/redis";
+import { memoryRedis } from "@/lib/memory-redis";
 import type { FlatRow, CacheMeta, SyncStatus } from "@/lib/types";
 
 const CACHE_KEY = "notion:cache:v1";
@@ -13,10 +14,13 @@ const FULL_ACTIVE_KEY = "notion:sync:full:active";
 let client: Redis | null = null;
 function r(): Redis {
   if (!client) {
-    client = new Redis({
-      url: process.env.UPSTASH_REDIS_REST_URL!,
-      token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-    });
+    // E2E_STUBS=1 → Redis en memoria (Playwright local sin Upstash real).
+    client = process.env.E2E_STUBS === "1"
+      ? (memoryRedis() as unknown as Redis)
+      : new Redis({
+          url: process.env.UPSTASH_REDIS_REST_URL!,
+          token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+        });
   }
   return client;
 }

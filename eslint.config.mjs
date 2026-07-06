@@ -13,14 +13,16 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  // Convención global: args no usados con prefijo _ (firmas que imitan APIs reales).
+  {
+    rules: {
+      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
+    },
+  },
   // Los fakes/tests modelan payloads del API de Notion y Redis duck-typed.
   {
     files: ["tests/**"],
-    rules: {
-      "@typescript-eslint/no-explicit-any": "off",
-      // Convención: args no usados con prefijo _ (firmas que imitan la API real).
-      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
-    },
+    rules: { "@typescript-eslint/no-explicit-any": "off" },
   },
   // Los scripts operativos son CommonJS a propósito (node directo, sin build).
   {

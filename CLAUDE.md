@@ -12,10 +12,11 @@ npm test                 # vitest run (unit + integration; lleva --passWithNoTes
 npm run test:watch       # vitest watch
 npx vitest run tests/unit/flatten.test.ts   # un solo archivo
 npx vitest run -t "nombre del test"          # filtrar por nombre
-npm run test:e2e         # Playwright smoke (requiere Upstash real o stubs)
+npm run test:e2e         # Playwright smoke — por defecto con stubs en memoria (E2E_STUBS=1), sin Upstash/Notion reales
+E2E_REAL=1 npm run test:e2e   # contra el server real del puerto 3000 con .env.local
 ```
 
-> El E2E falla en local sin `UPSTASH_*` reales: `Redis.fromEnv()`/`new Redis({url,token})` revienta en la primera request y tira el handler.
+> El E2E stub levanta su propio server (`next build` + `next start`, puerto 3100; `next dev` tiene lock por proyecto en Next 16). Stubs: `src/lib/memory-redis.ts` (Redis + rate-limit en memoria, activados por `E2E_STUBS=1` en `cache.ts` y la route de login) y password fijo `e2e-password` en `verifyPassword`. ⚠️ El password E2E NO va por env var: `next start` (16.2.6) pisa el `process.env` heredado con `.env.local` (verificado empíricamente 2026-07-06, contra lo que dice la doc) — sólo pasan limpias las vars que `.env.local` no define, como `E2E_STUBS`.
 
 ## Arquitectura
 

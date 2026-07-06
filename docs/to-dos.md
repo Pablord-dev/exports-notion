@@ -29,7 +29,7 @@ El orden interno viene del plan de fixes del incident report (tests primero, blo
 - [x] **UP-06** — `loadConfig()` se invoca al boot vía `src/instrumentation.ts` (fail-fast; el build queda exento con guard de `NEXT_PHASE`). Verificado: sin `.env.local` el server no arranca y lista las 8 vars. *(2026-07-06)*
 - [x] Consolidar `src/lib/auth.ts` y `src/lib/session.ts` — verificado que ya estaba consolidado (`auth.ts` re-exporta de `session.ts`, única definición); además se eliminó el fallback inseguro de `SESSION_SECRET` (cubierto por el fail-fast). *(2026-07-06)*
 - [x] Renombrar `src/middleware.ts` → `src/proxy.ts` (convención Next 16, export `proxy`, runtime nodejs). Verificado: build OK y 401 sin cookie en `/api/export` y `/api/sync/status`. *(2026-07-06)*
-- [ ] Hacer el E2E corrible en local sin Upstash real (inyectar fakes donde hoy `Redis.fromEnv()` revienta el handler en la primera request).
+- [x] Hacer el E2E corrible en local sin Upstash real: stubs en memoria (`src/lib/memory-redis.ts`) activados por `E2E_STUBS=1`; Playwright levanta server propio (build+start, puerto 3100) y agrega un test de login exitoso. `E2E_REAL=1` conserva el modo contra el server real. 2/2 en verde. *(2026-07-06; hallazgo: `next start` pisa el env heredado con `.env.local` — documentado en CLAUDE.md.)*
 
 ## 4. Documentación y DX (baja prioridad)
 
