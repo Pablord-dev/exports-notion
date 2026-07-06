@@ -205,13 +205,14 @@ async function retry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
   for (let i = 0; i < attempts; i++) {
     try {
       return await fn();
-    } catch (e: any) {
+    } catch (e) {
       lastErr = e;
-      const code = e?.status ?? e?.code;
+      const err = e as { status?: number; code?: number | string; headers?: Record<string, string> };
+      const code = err?.status ?? err?.code;
       // 400 (validation), 401 y 404 son errores permanentes: reintentar sólo quema tiempo.
       if (code === 400 || code === 401 || code === 404) throw e;
       // 429 con Retry-After
-      const retryAfter = Number(e?.headers?.["retry-after"] ?? 0);
+      const retryAfter = Number(err?.headers?.["retry-after"] ?? 0);
       const backoff = retryAfter > 0 ? retryAfter * 1000 : 1000 * 2 ** i;
       await new Promise((r) => setTimeout(r, backoff));
     }

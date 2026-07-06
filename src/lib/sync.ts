@@ -31,9 +31,10 @@ export async function runSync(kind: SyncKind): Promise<SyncResult> {
     }
     await clearCancel();
     return await runIncremental();
-  } catch (e: any) {
-    await patchStatus({ state: "error", error: e?.message ?? String(e) });
-    return { ok: false, reason: e?.message ?? String(e) };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await patchStatus({ state: "error", error: msg });
+    return { ok: false, reason: msg };
   } finally {
     await releaseLock();
   }

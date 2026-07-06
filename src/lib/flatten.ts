@@ -1,3 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- los payloads de propiedades
+   de Notion se manejan duck-typed a propósito: el switch valida `type` antes de
+   acceder y los tipos del SDK (uniones profundas, distintas para rollup.array)
+   no aportan seguridad real aquí. */
 import { COLUMNS } from "@/lib/columns";
 import type { FlatRow } from "@/lib/types";
 

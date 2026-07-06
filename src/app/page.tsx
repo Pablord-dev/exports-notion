@@ -64,18 +64,21 @@ export default function Home() {
     const r = await fetch("/api/sync/status");
     if (r.status === 401) { setAuthed(false); return; }
     setAuthed(true);
-    setStatus(await r.json());
+    const s: Status = await r.json();
+    setStatus(s);
+    // Cuando arranca un sync nuevo (vemos state=running), dejamos de mostrar "Iniciando…".
+    if (s.status.state === "running") setTriggering(null);
   }
-  useEffect(() => { loadStatus(); }, []);
+  // Fetch inicial del status al montar: el setState ocurre tras el await (async),
+  // no sincrónicamente — la regla no distingue ese caso.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void loadStatus(); }, []);
   useEffect(() => {
     if (!authed) return;
     const i = setInterval(() => setTick((x) => x + 1), 1000);
     const j = setInterval(() => loadStatus(), status?.status.state === "running" ? 2000 : 30000);
     return () => { clearInterval(i); clearInterval(j); };
   }, [authed, status?.status.state]);
-
-  // Cuando arranca un sync nuevo (vemos state=running), dejamos de mostrar "Iniciando…".
-  useEffect(() => { if (status?.status.state === "running") setTriggering(null); }, [status?.status.state]);
 
   async function login(e: React.FormEvent) {
     e.preventDefault();
@@ -143,7 +146,7 @@ export default function Home() {
       a.href = url; a.download = fname;
       document.body.appendChild(a); a.click(); a.remove();
       URL.revokeObjectURL(url);
-    } catch (e: any) { setDownloadErr(e?.message ?? "Falló la descarga"); }
+    } catch (e) { setDownloadErr(e instanceof Error ? e.message : "Falló la descarga"); }
     finally { setDownloading(false); }
   }
 
