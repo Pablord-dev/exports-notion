@@ -57,3 +57,11 @@ npm run test:e2e        # Playwright smoke (requiere env vars de Upstash o el se
 - **Límites de Vercel**: `maxDuration` declarado es 60s (export) y 300s (sync), pero **los 300s solo aplican con plan Pro — en Hobby toda función se capa a 60s**. El sync incremental siempre cabe; un segmento full de 10k registros puede no caber en 60s y morir a mitad (sin session flag, si muere antes de fijar el pivote el siguiente intento reinicia el full desde cero — ver CLAUDE.md §Límites de plataforma). Para datasets >10k en Hobby, considerar plan Pro.
 - **Empty data source en primer sync**: `runFull` ya maneja correctamente el caso de 0 páginas (no borra el cache previo, sólo actualiza `lastFullAt`).
 - **Deprecation Next 16**: el archivo `src/middleware.ts` emite un warning sugiriendo renombrar a `src/proxy.ts`. Funciona igual; cambiar cuando se decida cortar compatibilidad.
+
+## Documentación
+
+Índice completo en [docs/00-index.md](docs/00-index.md). Atajos:
+
+- [Manual de usuario](docs/guides/manual-usuario.md) — con screenshots (login, sync, descarga).
+- [CLAUDE.md](CLAUDE.md) — arquitectura, claves Redis, límites de plataforma.
+- [scripts/](scripts/) — herramientas operativas (destrabar sync, detectar drift del cache).
