@@ -37,21 +37,20 @@ Notion ──(cron sync)──► Upstash hash `notion:cache:v1` ──(GET /api
 - **`src/lib/cache.ts`** abstrae todo Redis. Cliente lazy + `__setClient()` para tests. Estructura: hash de filas, KV de meta, KV de status, KV de lock, KV de cancel, KV de pivote del full. `upsertRows`/`deleteRows` chunkean a 500 fields por request. `getAllRows` usa `HSCAN` paginado.
 - **`src/lib/flatten.ts`** convierte `PageObjectResponse` → fila plana **respetando la whitelist** de `COLUMNS`. Soporta title, rich_text, number, select/status/multi_select, date (con rango `start → end`), checkbox, url/email/phone, people, relation, files, formula, rollup, created_time/last_edited_time, **created_by, last_edited_by, unique_id** (`<prefix>-<number>`). Tipos no listados → string vacío.
 - **`src/lib/columns.ts`** es la **whitelist server-side** de propiedades exportables. El cliente nunca puede pedir columnas fuera de aquí. El orden determina el orden de columnas del CSV. **Editar esta lista** es parte normal del setup por proyecto.
-- **`src/lib/config.ts`** — `loadConfig()` exige las **8 env vars** (`NOTION_TOKEN`, `NOTION_DATABASE_ID`, `DATE_COLUMN`, `APP_PASSWORD_HASH`, `SESSION_SECRET`, `CRON_SECRET`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`) y lanza error listando las faltantes. No hay defaults.
+- **`src/lib/config.ts`** — `loadConfig()` exige las **8 env vars** (`NOTION_TOKEN`, `NOTION_DATABASE_ID`, `DATE_COLUMN`, `APP_PASSWORD_HASH`, `SESSION_SECRET`, `CRON_SECRET`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`) y lanza error listando las faltantes. No hay defaults. **`src/instrumentation.ts` la invoca al boot** (fail-fast: el server no arranca con vars faltantes; el build no la exige — guard por `NEXT_PHASE`).
 - **`src/lib/cron.ts`** — deriva los schedules **importando `vercel.json`** (única fuente de verdad); la UI calcula la próxima corrida con `cron-parser` desde ahí. Cambiar un cron = editar solo `vercel.json`.
 
 ### Endpoints
 
 - `POST /api/login` — bcrypt + iron-session, rate-limit 5/15min por IP (Upstash Ratelimit). `DELETE /api/login` destruye la sesión (logout).
 - `POST /api/sync?kind=incremental|full` — acepta **cookie de usuario** OR `Authorization: Bearer $CRON_SECRET`. **Espera inline** (no es 202 background — patrón "void runSync()" no es confiable en Vercel serverless porque la función muere al responder). Responde 200 con `{ok:true, done:true, upserted, deleted}` o `{ok:true, done:false, segmentCount}` (full con `SYNC_BUDGET_MS` agotado — el cliente debe volver a llamar para continuar). Devuelve 409 si hay otra sync corriendo (lock). `DELETE /api/sync` setea flag de cancel.
-- `GET /api/sync/status` — estado actual (protegido por middleware).
+- `GET /api/sync/status` — estado actual (protegido por el proxy).
 - `GET /api/export?from=YYYY-MM-DD&to=YYYY-MM-DD` — valida fechas ISO, filtra por `DATE_COLUMN`, ordena ascendente por `DATE_COLUMN` en memoria (el hash de Redis no preserva orden) y stream CSV. Devuelve **503 `no_data`** si el cache está vacío (necesita primer sync manual). Devuelve **500 `date_column_not_in_whitelist`** si `DATE_COLUMN` no está en `COLUMNS`.
 
 ### Auth
 
-- **`src/middleware.ts`** protege `/api/export/*` y `/api/sync/status` con iron-session. **`/api/sync` no está en el matcher** — su auth (cookie OR cron bearer) la maneja la route handler.
-- Hay **dos archivos de sesión**: `src/lib/auth.ts` y `src/lib/session.ts`. El middleware importa de `session.ts`, las routes de `auth.ts`. Si tocas opciones de sesión, revisa que ambos coincidan o consolida.
-- Next 16 sugiere renombrar `middleware.ts` → `proxy.ts`; pendiente.
+- **`src/proxy.ts`** (convención Next 16, ex-`middleware.ts`; runtime nodejs) protege `/api/export/*` y `/api/sync/status` con iron-session. **`/api/sync` no está en el matcher** — su auth (cookie OR cron bearer) la maneja la route handler.
+- **Única definición de sesión**: `src/lib/session.ts` (opciones + tipo). `src/lib/auth.ts` sólo la re-exporta y agrega `verifyPassword` (bcrypt) — no pueden divergir. `SESSION_SECRET` no tiene fallback: si falta, el fail-fast de `instrumentation.ts` impide arrancar.
 
 ### Crons (Vercel)
 

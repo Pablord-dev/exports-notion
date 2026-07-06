@@ -5,7 +5,10 @@ export interface SessionData {
 }
 
 export const sessionOptions: SessionOptions = {
-  password: process.env.SESSION_SECRET || "dev-only-do-not-use-in-prod-32-chars!",
+  // Sin fallback a propósito: instrumentation.ts valida SESSION_SECRET al boot
+  // (fail-fast); si faltara, iron-session rechaza el password vacío en vez de
+  // firmar cookies con un secreto conocido.
+  password: process.env.SESSION_SECRET ?? "",
   cookieName: "export-notion-session",
   cookieOptions: {
     httpOnly: true,

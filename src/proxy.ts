@@ -4,7 +4,7 @@ import { sessionOptions, type SessionData } from "@/lib/session";
 
 const PROTECTED = ["/api/export", "/api/sync/status"];
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // /api/sync acepta cookie de usuario O Bearer del cron — manejado en la route.

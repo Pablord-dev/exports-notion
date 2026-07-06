@@ -26,9 +26,9 @@ El orden interno viene del plan de fixes del incident report (tests primero, blo
 ## 3. Robustez (todo verificable en local)
 
 - [ ] Corrida local de punta a punta contra datos reales: full completo (encadenando segmentos), incremental con ediciones/borrados en Notion, cancelación, y export CSV con rango de fechas.
-- [ ] **UP-06** — Resolver `loadConfig()`: invocarla en el arranque (fail-fast con env vars faltantes) o documentar que es solo apoyo de tests.
-- [ ] Consolidar `src/lib/auth.ts` y `src/lib/session.ts` (dos fuentes de opciones de sesión que pueden divergir; middleware importa de una, routes de la otra).
-- [ ] Renombrar `src/middleware.ts` → `src/proxy.ts` (deprecation Next 16).
+- [x] **UP-06** — `loadConfig()` se invoca al boot vía `src/instrumentation.ts` (fail-fast; el build queda exento con guard de `NEXT_PHASE`). Verificado: sin `.env.local` el server no arranca y lista las 8 vars. *(2026-07-06)*
+- [x] Consolidar `src/lib/auth.ts` y `src/lib/session.ts` — verificado que ya estaba consolidado (`auth.ts` re-exporta de `session.ts`, única definición); además se eliminó el fallback inseguro de `SESSION_SECRET` (cubierto por el fail-fast). *(2026-07-06)*
+- [x] Renombrar `src/middleware.ts` → `src/proxy.ts` (convención Next 16, export `proxy`, runtime nodejs). Verificado: build OK y 401 sin cookie en `/api/export` y `/api/sync/status`. *(2026-07-06)*
 - [ ] Hacer el E2E corrible en local sin Upstash real (inyectar fakes donde hoy `Redis.fromEnv()` revienta el handler en la primera request).
 
 ## 4. Documentación y DX (baja prioridad)
