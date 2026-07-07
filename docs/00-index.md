@@ -7,6 +7,7 @@
 - **Vas a usar la app** → [guides/manual-usuario.md](guides/manual-usuario.md).
 - **Vas a desarrollar** → [README.md](../README.md) (setup) y luego [CLAUDE.md](../CLAUDE.md) (arquitectura y límites).
 - **Quieres el estado actual del proyecto** → [brief/](#brief--discovery-vigente-capa-1-reutilizable-por-flows) y el incident report vigente en [reports/](#reports--entregables-fechados-vigentes).
+- **Buscas el porqué de una decisión** → [architecture/adr/](architecture/adr/README.md) — decisiones destiladas; la evidencia completa vive en archive/.
 - **Buscas historia o decisiones pasadas** → [archive/](#archive--instantáneas-congeladas-no-se-actualizan).
 - **Quieres saber qué sigue** → [to-dos.md](to-dos.md) — pendientes en orden cronológico de ejecución.
 
@@ -14,7 +15,12 @@
 
 - [README.md](../README.md) — setup local, tests, deploy a Vercel y notas operativas (audiencia: dev).
 - [CLAUDE.md](../CLAUDE.md) — arquitectura operativa, endpoints, claves Redis, límites de plataforma y modo de trabajo (audiencia: agentes IA / dev).
+- [CONTRIBUTING.md](../CONTRIBUTING.md) — convención de commits, verificación requerida y reglas del proyecto.
 - [scripts/](../scripts/) — herramientas operativas: `reset-sync-state.cjs` (destrabar un sync trancado) y `check-cache-drift.cjs` (detectar cache desactualizado vs. Notion).
+
+## architecture/ — decisiones vivas
+
+- [adr/README.md](architecture/adr/README.md) — índice de ADRs: whitelist (0001), Data Source ID (0002), segmentación 10k (0003), espera inline (0004), presupuesto opcional (0005).
 
 ## brief/ — discovery vigente (Capa 1, reutilizable por flows)
 
@@ -25,6 +31,7 @@
 ## guides/ — how-to
 
 - [manual-usuario.md](guides/manual-usuario.md) — manual de usuario en español con screenshots (login, dashboard, sync, descarga CSV).
+- [cambiar-columnas.md](guides/cambiar-columnas.md) — cómo agregar/quitar/renombrar columnas exportadas y cambiar `DATE_COLUMN` (impacto en cache/CSV, cuándo hace falta Full).
 
 ## reports/ — entregables fechados vigentes
 

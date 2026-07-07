@@ -33,9 +33,9 @@ El orden interno viene del plan de fixes del incident report (tests primero, blo
 
 ## 4. Documentación y DX (baja prioridad)
 
-- [ ] **UP-05** — Extraer ADRs numerados de las actas archivadas (whitelist, Data Source ID, cap 10k → segmentación, espera inline, revert del presupuesto) a `docs/architecture/adr/`.
-- [ ] **UP-07** — Guía `docs/guides/cambiar-columnas.md`: migración de `COLUMNS`/`DATE_COLUMN` (impacto en cache/CSV).
-- [ ] **UP-08** — `CONTRIBUTING.md` mínimo (convención de commits, tests requeridos).
+- [x] **UP-05** — ADRs 0001–0005 extraídos de las actas a `docs/architecture/adr/` (whitelist, Data Source ID, segmentación 10k, espera inline, presupuesto opcional — el 0005 documenta revert + reintroducción vía FX-004). *(2026-07-07)*
+- [x] **UP-07** — Guía `docs/guides/cambiar-columnas.md`: agregar/quitar/renombrar columnas y cambiar `DATE_COLUMN`, con la regla clave (columna nueva/renombrada sale vacía hasta un Full). *(2026-07-07)*
+- [x] **UP-08** — `CONTRIBUTING.md` mínimo: convención de commits del repo, verificación requerida y reglas (fakes fieles, sin defaults, docs). *(2026-07-07)*
 
 ## 5. ⏸️ Diferido — despliegue (retomar cuando lo local esté perfecto)
 

@@ -175,8 +175,9 @@ Estructura actual de la documentación **del proyecto** (no de los agentes):
 ```
 docs/
 ├── 00-index.md        # índice maestro (1 línea por documento) — mantenerlo al agregar docs
+├── architecture/adr/  # ADRs numerados (nombre estable, sin timestamp) — decisiones destiladas de las actas
 ├── brief/             # brief vigente del proyecto (project_brief + architecture_map + doc_coverage), con fingerprint de commit
-├── guides/            # how-to (manual de usuario + screenshots)
+├── guides/            # how-to (manual de usuario + screenshots, cambiar columnas)
 ├── reports/           # reportes fechados (gap reports, incident reports, planes)
 └── archive/           # versiones congeladas y actas de sesión con prefijo de timestamp
 ```
