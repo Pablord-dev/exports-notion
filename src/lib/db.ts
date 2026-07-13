@@ -3,64 +3,31 @@
 // El "store" es inyectable (__setStore) igual que el __setClient de cache.ts;
 // el fake de tests y el stub E2E implementan la interfaz Store completa.
 import postgres from "postgres";
-// Import circular sólo en apariencia: memory-store importa de aquí únicamente
-// el tipo Store (type-only, se borra en runtime).
 import { memoryStore } from "@/lib/memory-store";
 import type { FlatRow, CacheMeta, SyncStatus } from "@/lib/types";
+import {
+  HOURS_COL, REPORT_PROPS, dateCol, toHours, toTimestamp, toExclusiveEndUtc,
+  encodeDetailCursor, decodeDetailCursor,
+  type Store, type ReportFilters,
+} from "@/lib/store-shared";
+
+// Tipos, mapeo de propiedades y helpers compartidos viven en store-shared.ts
+// (memory-store también los usa; tenerlos aquí crearía un ciclo de módulos).
+export * from "@/lib/store-shared";
 
 type Sql = ReturnType<typeof postgres>;
 
-// ---- Mapeo fila plana → columnas tipadas ----
+// ---- Mapeo fila plana → columnas tipadas (sólo las usa el upsert de Postgres) ----
 // Parte del setup por proyecto, igual que columns.ts: si estas propiedades
 // cambian de nombre en Notion, actualizar aquí (y correr un Full).
-const HOURS_COL = "Registro de horas";
 const PERSON_ID_COL = "Hecho por (no tocar)";
 const SUBPROJECT_ID_COL = "Subproyecto (no tocar)";
 const PROJECT_ID_COL = "Proyecto (no tocar)";
 const COMPANY_COL = "Empresa productiva";
 const LAST_EDITED_COL = "Hora de última edición";
-const dateCol = () => process.env.DATE_COLUMN ?? "Hora de creación";
 
-function toHours(v: string | undefined): number {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
-}
-function toTimestamp(v: string | undefined): string | null {
-  if (!v) return null;
-  // Las propiedades tipo date pueden venir como rango "start → end": se toma el inicio.
-  const start = v.split(" → ")[0];
-  return Number.isNaN(Date.parse(start)) ? null : start;
-}
 function toId(v: string | undefined): string | null {
   return v || null;
-}
-
-// ---- Interfaz del store (la que fakes y stubs deben implementar) ----
-export interface Store {
-  upsertRows(rows: { id: string; row: FlatRow }[], target?: "current" | "new"): Promise<void>;
-  deleteRows(ids: string[], target?: "current" | "new"): Promise<void>;
-  getAllRows(): Promise<FlatRow[]>;
-  countRows(): Promise<number>;
-  countRowsNew(): Promise<number>;
-  clearNewCache(): Promise<void>;
-  promoteNewCache(): Promise<void>;
-  getMeta(): Promise<CacheMeta>;
-  setMeta(meta: CacheMeta): Promise<void>;
-  getStatus(): Promise<SyncStatus>;
-  setStatus(s: SyncStatus): Promise<void>;
-  acquireLock(ttlSec?: number): Promise<boolean>;
-  releaseLock(): Promise<void>;
-  requestCancel(ttlSec?: number): Promise<void>;
-  isCancelRequested(): Promise<boolean>;
-  clearCancel(): Promise<void>;
-  getFullPivot(): Promise<string | null>;
-  setFullPivot(p: string, ttlSec?: number): Promise<void>;
-  clearFullPivot(): Promise<void>;
-  getFullActive(): Promise<string | null>;
-  setFullActive(startedAt: string, ttlSec?: number): Promise<void>;
-  clearFullActive(): Promise<void>;
-  /** Rate-limit del login: ventana FIJA por IP (sucesor del sliding window de Upstash). */
-  rateLimitLogin(ip: string, limit?: number, windowSec?: number): Promise<boolean>;
 }
 
 // ---- Implementación Postgres ----
@@ -85,6 +52,17 @@ async function kvSet(sql: Sql, key: string, value: unknown, ttlSec?: number) {
 }
 async function kvDel(sql: Sql, key: string) {
   await sql`delete from sync_state where key = ${key}`;
+}
+
+// WHERE común de reportes: rango [from, to] inclusivo en UTC + filtros por nombre.
+function reportWhere(sql: Sql, f: ReportFilters) {
+  return sql`
+    created_at >= ${`${f.from}T00:00:00Z`}::timestamptz
+    and created_at < ${toExclusiveEndUtc(f.to)}::timestamptz
+    ${f.people?.length ? sql`and trim(coalesce(row->>${REPORT_PROPS.person}, '')) = any(${f.people})` : sql``}
+    ${f.subprojects?.length ? sql`and trim(coalesce(row->>${REPORT_PROPS.subproject}, '')) = any(${f.subprojects})` : sql``}
+    ${f.projects?.length ? sql`and trim(coalesce(row->>${REPORT_PROPS.project}, '')) = any(${f.projects})` : sql``}
+    ${f.companies?.length ? sql`and trim(coalesce(row->>${REPORT_PROPS.company}, '')) = any(${f.companies})` : sql``}`;
 }
 
 function pgStore(sql: Sql): Store {
@@ -194,6 +172,73 @@ function pgStore(sql: Sql): Store {
     async setFullActive(startedAt, ttlSec = 86_400) { await kvSet(sql, "full:active", startedAt, ttlSec); },
     async clearFullActive() { await kvDel(sql, "full:active"); },
 
+    // ---- Reportes: GROUP BY al momento (21k filas ⇒ milisegundos). Las
+    // dimensiones salen del jsonb con trim; ver nota en ReportFilters. ----
+    async reportByPerson(f) {
+      const rs = await sql`
+        select trim(coalesce(row->>${REPORT_PROPS.person}, '')) as person,
+               sum(hours)::float8 as hours, count(*)::int as count
+        from pages
+        where ${reportWhere(sql, f)}
+        group by 1
+        order by 2 desc, 1 asc`;
+      return rs.map((r) => ({ person: r.person as string, hours: r.hours as number, count: r.count as number }));
+    },
+    async reportBySubproject(f) {
+      const rs = await sql`
+        select nullif(trim(coalesce(row->>${REPORT_PROPS.subproject}, '')), '') as subproject,
+               max(nullif(trim(coalesce(row->>${REPORT_PROPS.project}, '')), '')) as project,
+               max(nullif(trim(coalesce(row->>${REPORT_PROPS.company}, '')), '')) as company,
+               sum(hours)::float8 as hours, count(*)::int as count
+        from pages
+        where ${reportWhere(sql, f)}
+        group by 1
+        order by 4 desc, 1 asc nulls last`;
+      return rs.map((r) => ({
+        subproject: r.subproject as string | null, project: r.project as string | null,
+        company: r.company as string | null, hours: r.hours as number, count: r.count as number,
+      }));
+    },
+    async reportTimeline(f, granularity) {
+      // date_trunc('week') en Postgres es ISO-8601 (inicia lunes) — lo que pide el spec.
+      const rs = await sql`
+        select to_char(date_trunc(${granularity}, created_at at time zone 'UTC'), 'YYYY-MM-DD') as bucket,
+               sum(hours)::float8 as hours, count(*)::int as count
+        from pages
+        where ${reportWhere(sql, f)}
+        group by 1
+        order by 1 asc`;
+      return rs.map((r) => ({ bucket: r.bucket as string, hours: r.hours as number, count: r.count as number }));
+    },
+    async reportDetail(f, cursor, limit = 50) {
+      const cur = decodeDetailCursor(cursor);
+      const rs = await sql`
+        select id, created_at, row from pages
+        where ${reportWhere(sql, f)}
+        ${cur ? sql`and (created_at, id) < (${cur.createdAt}::timestamptz, ${cur.id})` : sql``}
+        order by created_at desc, id desc
+        limit ${limit + 1}`;
+      const page = rs.slice(0, limit);
+      const nextCursor = rs.length > limit
+        ? encodeDetailCursor({ createdAt: (page[page.length - 1].created_at as Date).toISOString(), id: page[page.length - 1].id as string })
+        : null;
+      return { rows: page.map((r) => r.row as FlatRow), nextCursor };
+    },
+    async reportFilters() {
+      const dim = async (prop: string) => {
+        const rs = await sql`
+          select distinct trim(row->>${prop}) as v from pages
+          where coalesce(trim(row->>${prop}), '') <> '' order by 1`;
+        return rs.map((r) => r.v as string);
+      };
+      return {
+        people: await dim(REPORT_PROPS.person),
+        subprojects: await dim(REPORT_PROPS.subproject),
+        projects: await dim(REPORT_PROPS.project),
+        companies: await dim(REPORT_PROPS.company),
+      };
+    },
+
     // Ventana fija por IP: la fila (ip, inicio de ventana) acumula intentos.
     // El CTE purga ventanas viejas de paso (tabla chica, tráfico de login bajo).
     async rateLimitLogin(ip, limit = 5, windowSec = 900) {
@@ -265,3 +310,8 @@ export const getFullActive: Store["getFullActive"] = () => s().getFullActive();
 export const setFullActive: Store["setFullActive"] = (v, ttl) => s().setFullActive(v, ttl);
 export const clearFullActive: Store["clearFullActive"] = () => s().clearFullActive();
 export const rateLimitLogin: Store["rateLimitLogin"] = (ip, limit, win) => s().rateLimitLogin(ip, limit, win);
+export const reportByPerson: Store["reportByPerson"] = (f) => s().reportByPerson(f);
+export const reportBySubproject: Store["reportBySubproject"] = (f) => s().reportBySubproject(f);
+export const reportTimeline: Store["reportTimeline"] = (f, g) => s().reportTimeline(f, g);
+export const reportDetail: Store["reportDetail"] = (f, c, l) => s().reportDetail(f, c, l);
+export const reportFilters: Store["reportFilters"] = () => s().reportFilters();

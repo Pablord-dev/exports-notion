@@ -1,13 +1,23 @@
 // Test de integración de db.ts contra el Postgres local de Supabase.
-// Gated: sólo corre con PG_TEST=1 (requiere `supabase start` y el esquema aplicado).
+// Gated: sólo corre con PG_TEST=1 (requiere `supabase start`).
 //   PG_TEST=1 npx vitest run tests/integration/db.pg.test.ts
 // Verifica el SQL real (unnest/upsert, swap transaccional, KV con TTL) — lo que
 // el fake en memoria no puede cubrir.
+//
+// ⚠️ Corre contra una BASE DEDICADA (`exportnotion_test`) que se recrea desde la
+// migración en cada corrida — NUNCA contra la base del app: este test TRUNCA
+// tablas en beforeEach y una corrida contra la base real borró el snapshot de
+// 21k filas (2026-07-13). No "simplificar" apuntándolo a DATABASE_URL.
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import postgres from "postgres";
+import fs from "node:fs";
+import path from "node:path";
+import { runReportAssertions } from "../fixtures/reportCases";
 
 const RUN = process.env.PG_TEST === "1";
-const URL = process.env.DATABASE_URL ?? "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
+const ADMIN_URL = "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
+const TEST_DB = "exportnotion_test";
+const URL = `postgresql://postgres:postgres@127.0.0.1:54322/${TEST_DB}`;
 
 const row = (id: string, extra: Record<string, string> = {}) => ({
   id,
@@ -30,10 +40,19 @@ describe.runIf(RUN)("db.ts contra Postgres real", () => {
   let sql: ReturnType<typeof postgres>;
 
   beforeAll(async () => {
+    // Recrear la base de test desde cero y aplicar las migraciones del repo.
+    const admin = postgres(ADMIN_URL);
+    await admin.unsafe(`drop database if exists ${TEST_DB} with (force)`);
+    await admin.unsafe(`create database ${TEST_DB}`);
+    await admin.end();
+    sql = postgres(URL);
+    const dir = path.resolve(__dirname, "../../supabase/migrations");
+    for (const f of fs.readdirSync(dir).sort()) {
+      await sql.unsafe(fs.readFileSync(path.join(dir, f), "utf8"));
+    }
     process.env.DATABASE_URL = URL;
     process.env.DATE_COLUMN = "Hora de creación";
     db = await import("@/lib/db");
-    sql = postgres(URL);
   });
   afterAll(async () => {
     await db.closeDb();
@@ -129,6 +148,10 @@ describe.runIf(RUN)("db.ts contra Postgres real", () => {
     expect(await db.getFullActive()).toBe("2026-07-08T09:00:00.000Z");
     await db.clearFullActive();
     expect(await db.getFullActive()).toBeNull();
+  });
+
+  it("reportes: pasa los casos compartidos contra el SQL real", async () => {
+    await runReportAssertions(db);
   });
 
   it("rateLimitLogin: 5 intentos pasan, el 6º se bloquea; otra IP no se afecta", async () => {

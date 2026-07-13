@@ -8,7 +8,12 @@
 // Singleton en globalThis: en dev cada route puede compilar su propio module
 // graph y un module-scope normal no compartiría estado entre handlers.
 import type { FlatRow, CacheMeta, SyncStatus } from "@/lib/types";
-import type { Store } from "@/lib/db";
+import {
+  HOURS_COL, REPORT_PROPS, dateCol, toHours, toTimestamp, toExclusiveEndUtc,
+  encodeDetailCursor, decodeDetailCursor,
+  type Store, type ReportFilters, type PersonTotal, type SubprojectTotal,
+  type TimelineBucket, type DetailPage, type FilterOptions,
+} from "@/lib/store-shared";
 
 interface KvEntry { value: unknown; expiresAt: number | null; }
 
@@ -76,6 +81,108 @@ class MemoryStore implements Store {
   async getFullActive() { return this.kvGet<string>("full:active"); }
   async setFullActive(startedAt: string, ttlSec = 86_400) { this.kvSet("full:active", startedAt, ttlSec); }
   async clearFullActive() { this.kv.delete("full:active"); }
+
+  // ---- Reportes: misma semántica que el SQL de pgStore (trim, rango UTC
+  // inclusivo, semana ISO lunes, keyset (created_at, id) desc). ----
+  private norm(v: string | undefined): string { return (v ?? "").trim(); }
+  private matching(f: ReportFilters): { id: string; row: FlatRow; created: number }[] {
+    const from = Date.parse(`${f.from}T00:00:00Z`);
+    const toEx = Date.parse(toExclusiveEndUtc(f.to));
+    const out: { id: string; row: FlatRow; created: number }[] = [];
+    for (const [id, row] of this.pages) {
+      const ts = toTimestamp(row[dateCol()]);
+      if (ts === null) continue;
+      const created = Date.parse(ts);
+      if (created < from || created >= toEx) continue;
+      if (f.people?.length && !f.people.includes(this.norm(row[REPORT_PROPS.person]))) continue;
+      if (f.subprojects?.length && !f.subprojects.includes(this.norm(row[REPORT_PROPS.subproject]))) continue;
+      if (f.projects?.length && !f.projects.includes(this.norm(row[REPORT_PROPS.project]))) continue;
+      if (f.companies?.length && !f.companies.includes(this.norm(row[REPORT_PROPS.company]))) continue;
+      out.push({ id, row, created });
+    }
+    return out;
+  }
+
+  async reportByPerson(f: ReportFilters): Promise<PersonTotal[]> {
+    const acc = new Map<string, { hours: number; count: number }>();
+    for (const { row } of this.matching(f)) {
+      const key = this.norm(row[REPORT_PROPS.person]);
+      const g = acc.get(key) ?? { hours: 0, count: 0 };
+      g.hours += toHours(row[HOURS_COL]); g.count++;
+      acc.set(key, g);
+    }
+    return [...acc.entries()]
+      .map(([person, g]) => ({ person, ...g }))
+      .sort((a, b) => b.hours - a.hours || a.person.localeCompare(b.person));
+  }
+
+  async reportBySubproject(f: ReportFilters): Promise<SubprojectTotal[]> {
+    const acc = new Map<string, SubprojectTotal>();
+    for (const { row } of this.matching(f)) {
+      const key = this.norm(row[REPORT_PROPS.subproject]) || null;
+      const g = acc.get(key ?? "") ?? { subproject: key, project: null, company: null, hours: 0, count: 0 };
+      const project = this.norm(row[REPORT_PROPS.project]) || null;
+      const company = this.norm(row[REPORT_PROPS.company]) || null;
+      // max() del grupo, como el SQL
+      if (project && (!g.project || project > g.project)) g.project = project;
+      if (company && (!g.company || company > g.company)) g.company = company;
+      g.hours += toHours(row[HOURS_COL]); g.count++;
+      acc.set(key ?? "", g);
+    }
+    return [...acc.values()].sort((a, b) =>
+      b.hours - a.hours
+      || (a.subproject === null ? 1 : b.subproject === null ? -1 : a.subproject.localeCompare(b.subproject)));
+  }
+
+  async reportTimeline(f: ReportFilters, granularity: "month" | "week"): Promise<TimelineBucket[]> {
+    const acc = new Map<string, { hours: number; count: number }>();
+    for (const { row, created } of this.matching(f)) {
+      const d = new Date(created);
+      let bucket: string;
+      if (granularity === "month") {
+        bucket = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)).toISOString().slice(0, 10);
+      } else {
+        const dayFromMonday = (d.getUTCDay() + 6) % 7; // ISO: lunes = 0
+        const monday = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - dayFromMonday * 86_400_000;
+        bucket = new Date(monday).toISOString().slice(0, 10);
+      }
+      const g = acc.get(bucket) ?? { hours: 0, count: 0 };
+      g.hours += toHours(row[HOURS_COL]); g.count++;
+      acc.set(bucket, g);
+    }
+    return [...acc.entries()].map(([bucket, g]) => ({ bucket, ...g })).sort((a, b) => a.bucket.localeCompare(b.bucket));
+  }
+
+  async reportDetail(f: ReportFilters, cursor: string | null, limit = 50): Promise<DetailPage> {
+    const cur = decodeDetailCursor(cursor);
+    let rows = this.matching(f).sort((a, b) => b.created - a.created || b.id.localeCompare(a.id));
+    if (cur) {
+      const c = Date.parse(cur.createdAt);
+      rows = rows.filter((r) => r.created < c || (r.created === c && r.id < cur.id));
+    }
+    const page = rows.slice(0, limit);
+    const nextCursor = rows.length > limit && page.length
+      ? encodeDetailCursor({ createdAt: new Date(page[page.length - 1].created).toISOString(), id: page[page.length - 1].id })
+      : null;
+    return { rows: page.map((r) => r.row), nextCursor };
+  }
+
+  async reportFilters(): Promise<FilterOptions> {
+    const dim = (prop: string) => {
+      const set = new Set<string>();
+      for (const row of this.pages.values()) {
+        const v = this.norm(row[prop]);
+        if (v) set.add(v);
+      }
+      return [...set].sort((a, b) => a.localeCompare(b));
+    };
+    return {
+      people: dim(REPORT_PROPS.person),
+      subprojects: dim(REPORT_PROPS.subproject),
+      projects: dim(REPORT_PROPS.project),
+      companies: dim(REPORT_PROPS.company),
+    };
+  }
 
   private loginHits = new Map<string, { windowStart: number; count: number }>();
   async rateLimitLogin(ip: string, limit = 5, windowSec = 900) {

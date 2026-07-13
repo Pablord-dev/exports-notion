@@ -67,7 +67,11 @@ El orden interno viene del plan de fixes del incident report (tests primero, blo
 
 ### Fase D — Reportes (el objetivo de todo esto)
 
-- [ ] **SB-12** — Endpoints `GET /api/reports/*` según SB-01: queries SQL parametrizadas, filtros validados, protegidos por `src/proxy.ts`.
+- [x] **SB-12** — Endpoints `GET /api/reports/*` implementados y verificados en vivo contra las 21k filas *(2026-07-13)*:
+  - 5 routes (`by-person`, `by-subproject`, `timeline`, `detail`, `filters`) protegidas por el proxy (401 verificado), validación estricta de params (`report-params.ts`), agregación SQL al momento (~70ms sobre 21k filas), detail con paginación keyset `(created_at, id)`.
+  - **Cambio vs spec (addendum en el spec):** se agrupa/filtra por **nombre normalizado**, no por IDs de relación — los IDs faltan en 18-29% de filas con nombre presente y partirían los grupos.
+  - Interfaz `Store` + tipos compartidos movidos a `store-shared.ts` (evita ciclo db↔memory-store). Casos de test **compartidos** (`tests/fixtures/reportCases.ts`) corren idénticos contra Postgres real y memory-store → fidelidad por construcción. 53/53 en verde.
+  - ⚠️ Incidente resuelto: la primera versión de `db.pg.test.ts` truncaba la base del app y borró el snapshot (se restauró con un full de 21,155 filas). Ahora los tests PG corren contra la base dedicada **`exportnotion_test`**, recreada desde las migraciones en cada corrida.
 - [ ] **SB-13** — UI de reportes (filtros + tablas/agregados, siguiendo el brandbook iU).
 - [ ] **SB-14** — Tests de reportes + actualizar `docs/guides/manual-usuario.md`.
 
