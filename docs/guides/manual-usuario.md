@@ -140,7 +140,35 @@ Si un Full está corriendo y necesitas detenerlo sin perder lo que ya descargó,
 
 ---
 
-## 6. Cerrar sesión
+## 6. Consultar reportes
+
+Desde el dashboard, pulsa **Reportes** (arriba a la derecha) para abrir la vista de análisis de horas:
+
+![Página de reportes](./manual-screenshots/06-reportes.png)
+
+**Qué muestra:**
+
+- **Totales del rango** — horas registradas, número de registros y personas activas con los filtros aplicados.
+- **Evolución de horas** — gráfica por **Semana** o **Mes** (botones arriba a la derecha de la gráfica). Pasa el mouse sobre una barra para ver el detalle del periodo.
+- **Horas por persona** y **Horas por subproyecto** — tablas ordenadas de mayor a menor.
+
+**Filtros (se combinan entre sí):**
+
+1. **Desde / Hasta** — rango de fechas; al abrir viene el mes en curso.
+2. **Persona, Subproyecto, Proyecto, Empresa** — cada botón abre una lista con buscador donde puedes marcar varias opciones. El número azul indica cuántas hay seleccionadas; "Limpiar selección" las quita.
+
+**Ver los registros detrás de un número (drill-down):**
+
+- Haz click en una **fila** de cualquiera de las dos tablas, o en una **barra** de la gráfica.
+- Se abre un panel con los registros individuales (ID, fecha, persona, tarea, descripción y horas). Si hay más de 50, aparece **Cargar más** al final.
+
+![Detalle de registros](./manual-screenshots/07-reporte-detalle.png)
+
+> 💡 La fila *(sin subproyecto)* agrupa los registros que no tienen subproyecto en Notion; por ahora no tiene detalle clickeable.
+
+---
+
+## 7. Cerrar sesión
 
 Pulsa el botón **Cerrar sesión** (arriba a la derecha). El botón muestra "Saliendo…" mientras procesa y luego te regresa a la pantalla de login.
 
@@ -148,11 +176,11 @@ Pulsa el botón **Cerrar sesión** (arriba a la derecha). El botón muestra "Sal
 
 ---
 
-## 7. Problemas comunes
+## 8. Problemas comunes
 
 | Síntoma | Causa probable | Qué hacer |
 |---|---|---|
-| "Contraseña incorrecta" tras intentos válidos | Demasiados intentos: estás rate-limited (5 / 15 min por IP) | Esperar 15 minutos o pedir al admin que limpie el rate-limit en Upstash |
+| "Contraseña incorrecta" tras intentos válidos | Demasiados intentos: estás rate-limited (5 / 15 min por IP) | Esperar 15 minutos o pedir al admin que limpie la tabla `login_attempts` en Postgres |
 | Botón Descargar → "Error 503: Aún no hay datos. Corre el primer sync." | Cache vacío | Pulsa **Full** y espera ~2 min |
 | `Registros en cache: 0` justo después de cancelar un sync | Cancelaste antes de que se descargara la primera página | Vuelve a disparar **Full** y déjalo correr |
 | Descarga vacía con un rango de fechas | No hay registros en ese rango | Quita las fechas o amplía el rango |
@@ -163,7 +191,7 @@ Si nada de lo anterior funciona, contacta al administrador con un screenshot del
 
 ---
 
-## 8. Calendario de sincronizaciones automáticas
+## 9. Calendario de sincronizaciones automáticas
 
 | Tipo | Horario UTC | Horario CDMX (UTC−6) | Qué hace |
 |---|---|---|---|

@@ -76,7 +76,7 @@ El orden interno viene del plan de fixes del incident report (tests primero, blo
   - Filtros en una fila: rango de fechas + 4 multiselects con búsqueda (persona/subproyecto/proyecto/empresa); tiles de totales; gráfica SVG propia de evolución (semana/mes, tooltip al hover, serie en sky `#02B5D3` — validado contraste sobre surface; blue queda para acciones); tablas por persona y por subproyecto con drill-down; modal de detalle con "Cargar más" (cursor keyset).
   - Verificado visualmente con screenshots (desktop + móvil) contra los datos reales; fixes aplicados: fechas formateadas en UTC (evita el corrimiento de un día en CDMX), códigos largos de subproyecto con `overflow-wrap:anywhere`, error no-401 del catálogo no rompe la página.
   - La fila "(sin subproyecto)" no tiene drill-down (no hay valor por el cual filtrar el detalle) — limitación conocida de v1.
-- [ ] **SB-14** — Tests de reportes + actualizar `docs/guides/manual-usuario.md`.
+- [x] **SB-14** — Tests + manual *(2026-07-13)*: E2E nuevo (login → `/reports` → filtros y estados vacíos visibles, 3/3 en verde) sumado a los casos compartidos PG/memoria de SB-12 y al unit del parser de params; manual de usuario con sección **"6. Consultar reportes"** (filtros, gráfica, drill-down) + 2 screenshots reales y la fila de rate-limit actualizada a Postgres.
 
 ## 6. ⏸️ Diferido — despliegue (retomar cuando lo local esté perfecto)
 
