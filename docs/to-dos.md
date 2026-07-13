@@ -1,6 +1,6 @@
 # To-dos — ExportNotion
 
-> Pendientes para mejorar la app, en **orden cronológico de ejecución**. Fuentes: incident report [202606101520](reports/202606101520_incident_report_sync_incremental.md) (FX-xx), update plan [202606101335](reports/202606101335_update_plan.md) (UP-xx) y pendientes registrados en `CLAUDE.md`/`README.md`. Marcar al completar; cuando una sección entera cierre, moverla al final como histórico.
+> Pendientes para mejorar la app, en **orden cronológico de ejecución**. Fuentes: incident report [202606101520](reports/202606101520_incident_report_sync_incremental.md) (FX-xx), update plan [202606101335](reports/202606101335_update_plan.md) (UP-xx), migración a Supabase (SB-xx, decisión 2026-07-08) y pendientes registrados en `CLAUDE.md`/`README.md`. Marcar al completar; cuando una sección entera cierre, moverla al final como histórico.
 >
 > **Criterio vigente (2026-07-06):** primero que todo funcione a la perfección **en local**; las tareas de despliegue (Vercel u otra plataforma) quedan diferidas hasta entonces — ver sección 5.
 
@@ -37,9 +37,43 @@ El orden interno viene del plan de fixes del incident report (tests primero, blo
 - [x] **UP-07** — Guía `docs/guides/cambiar-columnas.md`: agregar/quitar/renombrar columnas y cambiar `DATE_COLUMN`, con la regla clave (columna nueva/renombrada sale vacía hasta un Full). *(2026-07-07)*
 - [x] **UP-08** — `CONTRIBUTING.md` mínimo: convención de commits del repo, verificación requerida y reglas (fakes fieles, sin defaults, docs). *(2026-07-07)*
 
-## 5. ⏸️ Diferido — despliegue (retomar cuando lo local esté perfecto)
+## 5. Migración a Supabase + reportes consultables (decisión 2026-07-08)
 
-> La plataforma sigue abierta (Vercel u otra); no invertir aquí todavía.
+> **Por qué:** la plataforma pasa de "exportar CSV" a "consultar reportes", y el hash de Redis no tiene índices, filtros ni agregaciones — cada reporte sería un full scan en memoria. El snapshot migra de Upstash Redis a **Postgres (Supabase)**. La migración es acotada porque `src/lib/cache.ts` es la única capa que habla con Redis; `sync.ts`, `notion.ts`, `flatten.ts` y `columns.ts` quedan casi intactos.
+
+### Fase A — Alcance y diseño (bloquea el resto)
+
+- [x] **SB-01** — Definir los **reportes v1** con el usuario: qué vistas, filtros y agregaciones se necesitan. Esto determina qué propiedades requieren columna tipada en el esquema. *(2026-07-08: spec aprobado en [reports/202607081002_reportes_v1_spec.md](reports/202607081002_reportes_v1_spec.md) — horas por persona, horas por **subproyecto** (dimensión principal; proyecto es secundario/nullable) y evolución temporal mes/semana; drill-down a detalle paginado; filtros por ID; agregación SQL por request.)*
+- [x] **SB-02** — **ADR 0006** escrito y aceptado: motor Postgres (Supabase), cliente **driver directo `postgres.js`** (sin `supabase-js` ni ORM), migraciones con Supabase CLI, esquema `pages` (columnas tipadas + `row` jsonb) / `pages_new` (staging + swap transaccional) / `sync_state` (KV con `expires_at`) / `login_attempts`. Ver [architecture/adr/0006](architecture/adr/0006-migracion-snapshot-a-postgres-supabase.md). *(2026-07-08)*
+- [x] **SB-03** — Tipado real: resuelto en el ADR 0006 — `flatten.ts` **no cambia** (la fila plana string sigue siendo el formato del CSV y del `row` jsonb); el parse a tipos (`hours` numeric, `created_at`/`last_edited_at` timestamptz, IDs) vive en el upsert de la nueva capa `db.ts`, punto único y testeable. Verificado contra fila real del cache: `Registro de horas` es string numérico y las fechas de `created_time` son ISO planas (sin rango `→`). *(2026-07-08)*
+
+### Fase B — Infraestructura y capa de datos
+
+- [x] **SB-04** — Entorno local listo: `supabase init` + migración inicial [supabase/migrations/20260708161911_esquema_inicial.sql](../supabase/migrations/20260708161911_esquema_inicial.sql) (tablas `pages`/`pages_new`/`sync_state`/`login_attempts` + índices) + stack corriendo (`supabase start`, DB en `127.0.0.1:54322`). `DATABASE_URL` agregada como **9ª env var obligatoria** (las `UPSTASH_*` se quedan hasta SB-11); docs y test de config actualizados. Nota operativa: el primer `supabase start` se colgó porque el daemon de Docker Desktop dejó de responder — se resolvió reiniciando Docker Desktop (`wsl --shutdown` incluido). *(2026-07-08/09)*
+- [x] **SB-05** — [src/lib/db.ts](../src/lib/db.ts): misma interfaz que `cache.ts` sobre postgres.js (upsert masivo vía `unnest` con parse de columnas tipadas, promote = swap transaccional TRUNCATE+INSERT, KV `sync_state` con TTL por `expires_at`, lock NX retomable al vencer, `__setStore` para tests). Verificada contra Postgres real: 8/8 en [tests/integration/db.pg.test.ts](../tests/integration/db.pg.test.ts) (gated `PG_TEST=1`). Hallazgo clave: con cast `::jsonb`/`::jsonb[]` postgres.js ya serializa — hacer `JSON.stringify` manual produce doble encoding (documentado en el código). `sync.ts` y las 3 routes ya importan de `db.ts`. *(2026-07-09)*
+- [x] **SB-06** — Rate-limit del login sobre Postgres: `rateLimitLogin(ip)` en la interfaz `Store` (ventana **fija** 5/15min vía `login_attempts` con `date_bin` + purga oportunista en CTE; antes era sliding window de Upstash — cambio documentado). La route de login ya no importa `@upstash/ratelimit` ni `memory-redis`. Cubierto en el test PG (6º intento bloqueado, IPs independientes, ventana nueva resetea) y E2E 2/2. *(2026-07-09)*
+- [x] **SB-07** — [src/lib/memory-store.ts](../src/lib/memory-store.ts): implementación en memoria de la interfaz `Store` (fiel al pgStore: TTL vencido = ausente, promote = reemplazo + vaciado, lock NX retomable). `tests/integration/sync.test.ts` migrado a `__setStore(newMemoryStore())` — 37/37 en verde sin cambios de comportamiento. `fakeRedis.ts` y `cache.ts` quedan vivos sólo para la prueba de paridad (SB-10); se retiran en SB-11. *(2026-07-09)*
+- [x] **SB-08** — E2E: con `E2E_STUBS=1`, `db.ts` usa `memory-store.ts` (mismo patrón de singleton en `globalThis` que memory-redis). Playwright 2/2 en verde sin servicios reales. `memory-redis.ts` sólo queda vivo para el rate-limit del login (se retira con SB-06/SB-11). *(2026-07-09)*
+- [x] **SB-09** — Scripts operativos portados a Postgres: `reset-sync-state.cjs` (borra keys de control en `sync_state`, trunca `pages_new`, status idle — probado contra el Postgres local) y `check-cache-drift.cjs` (compara Notion vs `pages.row`; validación con datos reales pendiente para SB-10). *(2026-07-09)*
+
+### Fase C — Corte
+
+- [x] **SB-10** — Corte ejecutado con datos reales *(2026-07-13)*:
+  - Full real: **21,146 filas** upserteadas y promovidas (la base creció desde las ~19.6k documentadas), cruzando el cap de 10k con pivote sin incidencias, en una sola invocación inline.
+  - Paridad Redis↔Postgres: **795/795 filas comparables idénticas** byte a byte; 5 diferían sólo porque el subproyecto relacionado fue renombrado en Notion post-snapshot (renombrar una relación no toca `last_edited_time`) — Postgres tiene la versión más fresca.
+  - ⚠️ Hallazgo: el cache vivo de Upstash sólo tenía **800 filas** (degradado desde antes de la migración) — los exports recientes desde Redis estaban incompletos; el snapshot completo vive ahora en Postgres.
+  - Incremental real: doble query OK, 9 páginas nuevas upserteadas; `check-cache-drift` (ya sobre Postgres): 18/18 frescas, 0 desactualizadas, 0 ausentes.
+- [ ] **SB-11** — Retirar Upstash: eliminar `cache.ts`/`memory-redis.ts` y las deps `@upstash/*`; actualizar `CLAUDE.md` (la tabla de claves de Redis → esquema de tablas), `README.md` y guías.
+
+### Fase D — Reportes (el objetivo de todo esto)
+
+- [ ] **SB-12** — Endpoints `GET /api/reports/*` según SB-01: queries SQL parametrizadas, filtros validados, protegidos por `src/proxy.ts`.
+- [ ] **SB-13** — UI de reportes (filtros + tablas/agregados, siguiendo el brandbook iU).
+- [ ] **SB-14** — Tests de reportes + actualizar `docs/guides/manual-usuario.md`.
+
+## 6. ⏸️ Diferido — despliegue (retomar cuando lo local esté perfecto)
+
+> La plataforma sigue abierta (Vercel u otra); no invertir aquí todavía. Supabase no condiciona esta decisión: funciona igual desde cualquier plataforma.
 
 - [ ] Decidir plataforma de despliegue. Si es Vercel: Hobby vs Pro (`maxDuration` 60s vs 300s).
 - [ ] Si Vercel Hobby: activar `SYNC_BUDGET_MS` (queda listo con FX-004) y evaluar un segundo cron que encadene los segmentos del full (hoy con >10k filas requiere pulsar Full en la UI).

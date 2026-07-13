@@ -57,7 +57,7 @@ E2E_REAL=1 npm run test:e2e   # modo original: contra el server real del puerto 
 
 - **Límites de Vercel**: `maxDuration` declarado es 60s (export) y 300s (sync), pero **los 300s solo aplican con plan Pro — en Hobby toda función se capa a 60s**. El sync incremental siempre cabe; una invocación del full puede morir a mitad, pero desde el fix FX-004 (2026-07-06) **no pierde avance**: checkpoint por batch + flag de sesión hacen que el siguiente intento reanude. Para cortes limpios definir `SYNC_BUDGET_MS` — ver CLAUDE.md §Límites de plataforma.
 - **Empty data source en primer sync**: `runFull` ya maneja correctamente el caso de 0 páginas (no borra el cache previo, sólo actualiza `lastFullAt`).
-- **Convención Next 16**: la protección de rutas vive en `src/proxy.ts` (ex-`middleware.ts`, renombrado 2026-07-06; el warning de deprecación desapareció). Además `src/instrumentation.ts` valida las 8 env vars al arrancar el server (fail-fast): con vars faltantes el server no levanta y lista cuáles faltan.
+- **Convención Next 16**: la protección de rutas vive en `src/proxy.ts` (ex-`middleware.ts`, renombrado 2026-07-06; el warning de deprecación desapareció). Además `src/instrumentation.ts` valida las 9 env vars al arrancar el server (fail-fast): con vars faltantes el server no levanta y lista cuáles faltan.
 
 ## Documentación
 

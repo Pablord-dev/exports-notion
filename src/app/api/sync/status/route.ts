@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getStatus, getMeta } from "@/lib/cache";
+import { getStatus, getMeta } from "@/lib/db";
 import { nextRun, cronSchedule } from "@/lib/cron";
 
 export const dynamic = "force-dynamic";

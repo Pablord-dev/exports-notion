@@ -11,6 +11,7 @@ const required = [
   "CRON_SECRET",
   "UPSTASH_REDIS_REST_URL",
   "UPSTASH_REDIS_REST_TOKEN",
+  "DATABASE_URL",
 ];
 
 describe("loadConfig", () => {

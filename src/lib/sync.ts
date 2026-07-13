@@ -7,7 +7,7 @@ import {
   getMeta, setMeta, countRows, countRowsNew, clearCancel, isCancelRequested,
   getFullPivot, setFullPivot, clearFullPivot,
   getFullActive, setFullActive, clearFullActive,
-} from "@/lib/cache";
+} from "@/lib/db";
 
 const OVERLAP_MS = 60_000;
 // Eco del page_size de notion.ts, sólo para estimar `total` en el status.

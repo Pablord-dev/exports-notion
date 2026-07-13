@@ -1,6 +1,6 @@
 // Verificador de drift (solo lectura): compara páginas editadas recientemente en Notion
-// contra la fila cacheada en el hash vivo. Si la fila cacheada tiene "Hora de última
-// edición" anterior a la real → el cache quedó con datos viejos (snapshot desactualizado).
+// contra la fila del snapshot vivo en Postgres. Si la fila guardada tiene "Hora de última
+// edición" anterior a la real → el snapshot quedó con datos viejos (desactualizado).
 // Origen: repro del incident report docs/reports/202606101520_incident_report_sync_incremental.md
 //
 // Uso: node scripts/check-cache-drift.cjs [sinceISO]
@@ -12,9 +12,9 @@ for (const line of env) {
   if (m) process.env[m[1]] = m[2].replace(/^['"]|['"]$/g, "");
 }
 const { Client } = require("@notionhq/client");
-const { Redis } = require("@upstash/redis");
+const postgres = require("postgres");
 const notion = new Client({ auth: process.env.NOTION_TOKEN });
-const redis = Redis.fromEnv();
+const sql = postgres(process.env.DATABASE_URL);
 
 (async () => {
   const ds = process.env.NOTION_DATABASE_ID;
@@ -37,9 +37,9 @@ const redis = Redis.fromEnv();
   let stale = 0, fresh = 0, missing = 0;
   const ejemplos = [];
   for (const p of editadas) {
-    const row = await redis.hget("notion:cache:v1", p.id);
-    if (!row) { missing++; continue; }
-    const cachedEdit = row["Hora de última edición"];
+    const rs = await sql`select row from pages where id = ${p.id}`;
+    if (!rs.length) { missing++; continue; }
+    const cachedEdit = rs[0].row["Hora de última edición"];
     const realEdit = p.last_edited_time;
     if (cachedEdit && new Date(cachedEdit).getTime() < new Date(realEdit).getTime()) {
       stale++;
@@ -48,8 +48,9 @@ const redis = Redis.fromEnv();
       fresh++;
     }
   }
-  console.log(`Resultado → frescas: ${fresh} | DESACTUALIZADAS en cache: ${stale} | no presentes en cache: ${missing}`);
+  console.log(`Resultado → frescas: ${fresh} | DESACTUALIZADAS en snapshot: ${stale} | no presentes en snapshot: ${missing}`);
   console.log("Ejemplos de filas desactualizadas:", JSON.stringify(ejemplos, null, 2));
+  await sql.end();
 })().catch((e) => {
   console.error("ERROR", e.status ?? e.code, e.message);
   process.exit(1);

@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { getIronSession } from "iron-session";
 import { sessionOptions, type SessionData } from "@/lib/auth";
 import { runSync } from "@/lib/sync";
-import { requestCancel } from "@/lib/cache";
+import { requestCancel } from "@/lib/db";
 import type { SyncKind } from "@/lib/types";
 
 export const dynamic = "force-dynamic";

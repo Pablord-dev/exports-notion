@@ -5,12 +5,12 @@ vi.mock("@/lib/columns", () => ({
   csvHeaders: () => ["Nombre", "When"],
 }));
 
-import { FakeRedis } from "../fixtures/fakeRedis";
 import { makeFakeClient, makePage } from "../fixtures/fakeNotion";
-import { __setClient as setRedis } from "@/lib/cache";
+import { newMemoryStore } from "@/lib/memory-store";
+import { __setStore } from "@/lib/db";
 import { __setClient as setNotion } from "@/lib/notion";
 import { runSync } from "@/lib/sync";
-import * as cache from "@/lib/cache";
+import * as cache from "@/lib/db";
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 /** last_edited_time posterior a cualquier `since` calculado durante el test. */
@@ -22,7 +22,7 @@ beforeEach(() => {
   process.env.NOTION_DATABASE_ID = "db-test";
   process.env.NOTION_TOKEN = "tok";
   delete process.env.SYNC_BUDGET_MS;
-  setRedis(new FakeRedis() as any);
+  __setStore(newMemoryStore());
 });
 
 describe("runSync full", () => {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAllRows, countRows } from "@/lib/cache";
+import { getAllRows, countRows } from "@/lib/db";
 import { filterByDateRange } from "@/lib/filter";
 import { rowsToCSVStream } from "@/lib/csv";
 import { csvHeaders, COLUMNS } from "@/lib/columns";

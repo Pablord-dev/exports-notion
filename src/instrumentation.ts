@@ -1,5 +1,5 @@
 // src/instrumentation.ts
-// Fail-fast (UP-06): valida las 8 env vars al arrancar el server, antes de
+// Fail-fast (UP-06): valida las 9 env vars al arrancar el server, antes de
 // atender requests. Sin esto, una env var faltante sólo explota en la primera
 // request que la usa (p. ej. Redis.fromEnv() tirando el handler de login).
 export async function register() {

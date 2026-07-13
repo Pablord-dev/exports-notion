@@ -8,6 +8,8 @@ export interface AppConfig {
   cronSecret: string;
   upstashUrl: string;
   upstashToken: string;
+  /** Postgres (Supabase) — ADR 0006. Las UPSTASH_* se retiran al completar SB-11. */
+  databaseUrl: string;
 }
 
 const KEYS: Record<keyof AppConfig, string> = {
@@ -19,6 +21,7 @@ const KEYS: Record<keyof AppConfig, string> = {
   cronSecret: "CRON_SECRET",
   upstashUrl: "UPSTASH_REDIS_REST_URL",
   upstashToken: "UPSTASH_REDIS_REST_TOKEN",
+  databaseUrl: "DATABASE_URL",
 };
 
 export function loadConfig(): AppConfig {
