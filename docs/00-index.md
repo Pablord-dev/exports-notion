@@ -20,7 +20,7 @@
 
 ## architecture/ — decisiones vivas
 
-- [adr/README.md](architecture/adr/README.md) — índice de ADRs: whitelist (0001), Data Source ID (0002), segmentación 10k (0003), espera inline (0004), presupuesto opcional (0005).
+- [adr/README.md](architecture/adr/README.md) — índice de ADRs: whitelist (0001), Data Source ID (0002), segmentación 10k (0003), espera inline (0004), presupuesto opcional (0005), migración a Postgres/Supabase (0006).
 
 ## brief/ — discovery vigente (Capa 1, reutilizable por flows)
 
@@ -37,6 +37,7 @@
 
 > Cuando un reporte queda superado (plan ejecutado, incidente cerrado), se mueve a `archive/`.
 
+- [202607081002_reportes_v1_spec.md](reports/202607081002_reportes_v1_spec.md) — **vigente, alimenta la migración a Supabase (SB-xx)**: spec aprobado de los reportes v1 (horas por persona/subproyecto, evolución temporal, drill-down, API y esquema implicado).
 - [202606101520_incident_report_sync_incremental.md](reports/202606101520_incident_report_sync_incremental.md) — **vigente, alimenta la rama `fix/incremental-sync`**: defectos D1–D3 del sync (papelera nunca borrada, `lastIncrementalAt` tardío, full no reanudable) y plan de fixes FX-001…FX-005.
 - [202606101335_doc_gap_report.md](reports/202606101335_doc_gap_report.md) — auditoría documental FL-DOC-01: cobertura, gaps y contradicciones.
 - [202606101335_update_plan.md](reports/202606101335_update_plan.md) — plan priorizado de actualización documental (UP-01…UP-08 pendientes).
