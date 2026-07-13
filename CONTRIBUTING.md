@@ -30,6 +30,6 @@ npm run test:e2e   # si tocaste rutas, auth o UI (corre con stubs, sin Upstash r
 
 - **Fakes fieles**: los tests usan `__setClient(fake)` (exportado por `notion.ts` y `cache.ts`) con los fakes de `tests/fixtures/`. Si cambias el comportamiento frente a la API real, **actualiza el fake para que siga siendo fiel** — un fake infiel ya ocultó un bug real en producción (ver D1/FX-005 en `docs/reports/202606101520_incident_report_sync_incremental.md`).
 - **Verifica contra la API real antes de asumir**: los tipos del SDK de Notion declaran parámetros que el servidor rechaza (ver ADR-0002 y el addendum del incident report). Una query de solo lectura vale más que la documentación.
-- **Env vars**: las 9 son obligatorias (fail-fast al boot). No introduzcas defaults silenciosos.
+- **Env vars**: las 8 son obligatorias (fail-fast al boot). No introduzcas defaults silenciosos.
 - **Documentación**: los docs viven en `docs/` con índice en `docs/00-index.md` — actualízalo al agregar documentos. Entregables fechados llevan prefijo `AAAAMMDDHHMM_`; los de nombre estable (README, ADRs, guías) no. Los pendientes se registran en `docs/to-dos.md`.
 - Path alias `@/*` → `src/*`.

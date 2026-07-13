@@ -63,7 +63,7 @@ El orden interno viene del plan de fixes del incident report (tests primero, blo
   - Paridad Redis↔Postgres: **795/795 filas comparables idénticas** byte a byte; 5 diferían sólo porque el subproyecto relacionado fue renombrado en Notion post-snapshot (renombrar una relación no toca `last_edited_time`) — Postgres tiene la versión más fresca.
   - ⚠️ Hallazgo: el cache vivo de Upstash sólo tenía **800 filas** (degradado desde antes de la migración) — los exports recientes desde Redis estaban incompletos; el snapshot completo vive ahora en Postgres.
   - Incremental real: doble query OK, 9 páginas nuevas upserteadas; `check-cache-drift` (ya sobre Postgres): 18/18 frescas, 0 desactualizadas, 0 ausentes.
-- [ ] **SB-11** — Retirar Upstash: eliminar `cache.ts`/`memory-redis.ts` y las deps `@upstash/*`; actualizar `CLAUDE.md` (la tabla de claves de Redis → esquema de tablas), `README.md` y guías.
+- [x] **SB-11** — Upstash retirado por completo: eliminados `cache.ts`, `memory-redis.ts`, `fakeRedis.ts` y las deps `@upstash/*`; `config.ts` vuelve a 8 env vars (`DATABASE_URL` reemplaza a las dos `UPSTASH_*`); `CLAUDE.md` reescrito (flujo, `db.ts`, esquema de tablas + keys de `sync_state`, convenciones de fakes) y `README.md`/`CONTRIBUTING.md`/`.env.example` actualizados. Verificación: typecheck, lint, 46/46 (incl. PG), E2E 2/2. Las líneas `UPSTASH_*` de tu `.env.local` ya no se usan (borrarlas cuando quieras). *(2026-07-13)*
 
 ### Fase D — Reportes (el objetivo de todo esto)
 

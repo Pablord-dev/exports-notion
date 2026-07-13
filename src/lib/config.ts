@@ -6,9 +6,7 @@ export interface AppConfig {
   appPasswordHash: string;
   sessionSecret: string;
   cronSecret: string;
-  upstashUrl: string;
-  upstashToken: string;
-  /** Postgres (Supabase) — ADR 0006. Las UPSTASH_* se retiran al completar SB-11. */
+  /** Postgres (Supabase) — ADR 0006. */
   databaseUrl: string;
 }
 
@@ -19,8 +17,6 @@ const KEYS: Record<keyof AppConfig, string> = {
   appPasswordHash: "APP_PASSWORD_HASH",
   sessionSecret: "SESSION_SECRET",
   cronSecret: "CRON_SECRET",
-  upstashUrl: "UPSTASH_REDIS_REST_URL",
-  upstashToken: "UPSTASH_REDIS_REST_TOKEN",
   databaseUrl: "DATABASE_URL",
 };
 
