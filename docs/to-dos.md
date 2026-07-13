@@ -72,7 +72,10 @@ El orden interno viene del plan de fixes del incident report (tests primero, blo
   - **Cambio vs spec (addendum en el spec):** se agrupa/filtra por **nombre normalizado**, no por IDs de relación — los IDs faltan en 18-29% de filas con nombre presente y partirían los grupos.
   - Interfaz `Store` + tipos compartidos movidos a `store-shared.ts` (evita ciclo db↔memory-store). Casos de test **compartidos** (`tests/fixtures/reportCases.ts`) corren idénticos contra Postgres real y memory-store → fidelidad por construcción. 53/53 en verde.
   - ⚠️ Incidente resuelto: la primera versión de `db.pg.test.ts` truncaba la base del app y borró el snapshot (se restauró con un full de 21,155 filas). Ahora los tests PG corren contra la base dedicada **`exportnotion_test`**, recreada desde las migraciones en cada corrida.
-- [ ] **SB-13** — UI de reportes (filtros + tablas/agregados, siguiendo el brandbook iU).
+- [x] **SB-13** — UI de reportes en `/reports` (link desde el dashboard), brandbook iU dark *(2026-07-13)*:
+  - Filtros en una fila: rango de fechas + 4 multiselects con búsqueda (persona/subproyecto/proyecto/empresa); tiles de totales; gráfica SVG propia de evolución (semana/mes, tooltip al hover, serie en sky `#02B5D3` — validado contraste sobre surface; blue queda para acciones); tablas por persona y por subproyecto con drill-down; modal de detalle con "Cargar más" (cursor keyset).
+  - Verificado visualmente con screenshots (desktop + móvil) contra los datos reales; fixes aplicados: fechas formateadas en UTC (evita el corrimiento de un día en CDMX), códigos largos de subproyecto con `overflow-wrap:anywhere`, error no-401 del catálogo no rompe la página.
+  - La fila "(sin subproyecto)" no tiene drill-down (no hay valor por el cual filtrar el detalle) — limitación conocida de v1.
 - [ ] **SB-14** — Tests de reportes + actualizar `docs/guides/manual-usuario.md`.
 
 ## 6. ⏸️ Diferido — despliegue (retomar cuando lo local esté perfecto)
