@@ -1,23 +1,14 @@
 import type { Metadata } from "next";
-import { Raleway, Poppins } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 
-// Tipografía principal iU Corp — títulos, encabezados, alto impacto.
-const raleway = Raleway({
+// Única familia tipográfica (decisión 2026-07-16: minimalista, reemplaza el
+// par Raleway/Poppins del brandbook). Variable font: cubre todos los pesos.
+const inter = Inter({
   subsets: ["latin"],
-  weight: ["400", "600", "700"],
-  variable: "--font-raleway",
+  variable: "--font-inter",
   display: "swap",
-  fallback: ["Lato", "Arial", "sans-serif"],
-});
-
-// Tipografía secundaria iU Corp — cuerpo, formularios, apoyo.
-const poppins = Poppins({
-  subsets: ["latin"],
-  weight: ["400", "500", "700"],
-  variable: "--font-poppins",
-  display: "swap",
-  fallback: ["Lato", "Arial", "sans-serif"],
+  fallback: ["system-ui", "Arial", "sans-serif"],
 });
 
 export const metadata: Metadata = {
@@ -31,7 +22,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" className={`${raleway.variable} ${poppins.variable}`}>
+    <html lang="es" className={inter.variable}>
       <body>{children}</body>
     </html>
   );

@@ -32,9 +32,10 @@
   --color-success: #66b169;     /* Unique Green 500 */
   --color-warning: #b57ed1;     /* Unique Purple 400 (avisos sutiles) */
 
-  /* Tipografía: principal Raleway, secundaria Poppins */
-  --font-display: var(--font-raleway), "Lato", Arial, sans-serif;
-  --font-sans: var(--font-poppins), "Lato", Arial, sans-serif;
+  /* Tipografía: Inter única (minimalista); display y sans apuntan a la misma
+     familia — la jerarquía queda en peso/tamaño, no en cambio de fuente. */
+  --font-display: var(--font-inter), system-ui, Arial, sans-serif;
+  --font-sans: var(--font-inter), system-ui, Arial, sans-serif;
 }
 
 /* Tema oscuro corporativo fijo: base Unique Black, texto claro, aire visual.
