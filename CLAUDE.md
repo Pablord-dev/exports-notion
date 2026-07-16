@@ -56,6 +56,7 @@ Notion ──(cron sync)──► Postgres tabla `pages` ──(GET /api/export)
 - `/` — login + **menú principal** de BDs: tarjetas generadas desde el registro `src/lib/databases.ts` (hoy solo `tiempos`).
 - `/db/tiempos` — dashboard de la BD (estado del snapshot, sync manual, descarga CSV). `/db/tiempos/reports` — UI de reportes.
 - `/reports` — redirect legacy a `/db/tiempos/reports`.
+- **`src/app/components/app-shell.tsx`** — shell de las páginas autenticadas: sidebar de navegación anclable/ocultable (preferencia en `localStorage` key `sidebar-pinned`; overlay con hamburguesa en móvil o desanclada). La navegación y el logout viven ahí; cada página la monta solo en su rama autenticada y pasa `onLogout` para resetear su estado local.
 - **El backend sigue single-DB**: agregar una entrada a `databases.ts` solo agrega la tarjeta al menú; soportar otra BD real es MB-02 en `docs/to-dos.md` (config/snapshot/sync/APIs por BD).
 
 ### Auth

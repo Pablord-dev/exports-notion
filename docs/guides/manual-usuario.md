@@ -34,7 +34,13 @@ Cada tarjeta muestra el nombre de la base, cuántos registros hay en cache y hac
 - **Reportes**: abre la vista de análisis de horas (sección 7).
 - **Exportar y sincronizar**: abre el dashboard de la base (sección 3).
 
-El botón **Cerrar sesión** (arriba a la derecha) te desloguea; la próxima vez te volverá a pedir contraseña.
+### Barra lateral
+
+A la izquierda está la barra de navegación, disponible en todas las pantallas. Desde ahí puedes saltar entre el menú principal, los reportes y el dashboard de cada base, y **Cerrar sesión** (abajo).
+
+- El **pin** (arriba a la derecha de la barra) la **ancla o desancla**: anclada queda fija y el contenido se acomoda a su lado; desanclada se esconde y aparece un botón ☰ arriba a la izquierda que la abre flotando sobre la página.
+- La preferencia se recuerda en tu navegador.
+- En pantallas chicas (móvil) siempre se comporta como flotante: ábrela con ☰ y ciérrala tocando fuera, con la ✕ o al navegar.
 
 ---
 
@@ -46,8 +52,7 @@ Al entrar con **Exportar y sincronizar** verás el panel de la base. Las tres se
 
 ### (A) Cabecera
 
-- **"BD Tiempos"**: la base en la que estás; el link **← Menú** regresa al menú principal.
-- **Reportes** y **Cerrar sesión** (arriba a la derecha).
+- **"BD Tiempos"**: la base en la que estás. Para regresar al menú o ir a los reportes usa la barra lateral.
 
 ### (B) Última sincronización
 
@@ -157,7 +162,7 @@ Si un Full está corriendo y necesitas detenerlo sin perder lo que ya descargó,
 
 ## 7. Consultar reportes
 
-Desde el menú principal pulsa **Reportes** en la tarjeta de la base (o el botón **Reportes** del dashboard) para abrir la vista de análisis de horas:
+Desde el menú principal pulsa **Reportes** en la tarjeta de la base (o en la barra lateral) para abrir la vista de análisis de horas:
 
 ![Página de reportes](./manual-screenshots/06-reportes.png)
 
@@ -185,7 +190,7 @@ Desde el menú principal pulsa **Reportes** en la tarjeta de la base (o el botó
 
 ## 8. Cerrar sesión
 
-Pulsa el botón **Cerrar sesión** (arriba a la derecha). El botón muestra "Saliendo…" mientras procesa y luego te regresa a la pantalla de login.
+Pulsa **Cerrar sesión** (abajo en la barra lateral). El botón muestra "Saliendo…" mientras procesa y luego te regresa a la pantalla de login.
 
 > 💡 Cerrar sesión es opcional — la cookie de sesión expira sola tras un tiempo de inactividad. Úsalo si compartes la computadora.
 

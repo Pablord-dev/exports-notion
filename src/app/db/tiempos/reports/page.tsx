@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { FlatRow } from "@/lib/types";
 import type { PersonTotal, SubprojectTotal, TimelineBucket, FilterOptions } from "@/lib/store-shared";
+import { AppShell } from "@/app/components/app-shell";
 import { BarChart, MultiSelect, Spinner, fmtHours } from "./components";
 
 type Granularity = "month" | "week";
@@ -158,18 +159,11 @@ export default function Reports() {
   const inputCls = "mt-1 block w-full rounded-lg border border-border bg-dark-blue px-3 py-2 text-sm text-fg outline-none transition [color-scheme:dark] focus:border-blue focus:ring-2 focus:ring-blue/30";
 
   return (
+    <AppShell onLogout={() => setAuthed(false)}>
     <main className="max-w-5xl mx-auto p-6 sm:p-8 space-y-6">
-      <header className="flex items-center justify-between border-b border-border pb-5">
-        <div className="flex items-baseline gap-4">
-          <h1 className="font-display text-xl font-bold text-fg tracking-tight">Reportes</h1>
-          <span className="text-sm text-muted">{fmtDate(filters.from)} — {fmtDate(filters.to)}</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <Link href="/" className="text-sm font-medium text-muted transition hover:text-blue">Menú</Link>
-          <Link href="/db/tiempos" className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-muted transition hover:border-blue hover:text-blue">
-            ← BD Tiempos
-          </Link>
-        </div>
+      <header className="flex items-baseline gap-4 border-b border-border pb-5">
+        <h1 className="font-display text-xl font-bold text-fg tracking-tight">Reportes</h1>
+        <span className="text-sm text-muted">{fmtDate(filters.from)} — {fmtDate(filters.to)}</span>
       </header>
 
       {/* Filtros: una fila, rango + 4 dimensiones */}
@@ -314,6 +308,7 @@ export default function Reports() {
         </div>
       )}
     </main>
+    </AppShell>
   );
 }
 

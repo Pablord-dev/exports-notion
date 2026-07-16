@@ -3,6 +3,7 @@
 // Antes vivía en / — el home ahora es el menú principal de BDs.
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { AppShell } from "@/app/components/app-shell";
 import { Spinner } from "@/app/components/spinner";
 
 type LastResult = {
@@ -44,7 +45,6 @@ export default function TiemposDashboard() {
   const [cancelling, setCancelling] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [downloadErr, setDownloadErr] = useState<string | null>(null);
-  const [loggingOut, setLoggingOut] = useState(false);
 
   async function loadStatus() {
     const r = await fetch("/api/sync/status");
@@ -89,15 +89,6 @@ export default function TiemposDashboard() {
     setCancelling(true);
     try { await fetch("/api/sync", { method: "DELETE" }); }
     finally { await loadStatus(); setCancelling(false); }
-  }
-
-  async function logout() {
-    if (loggingOut) return;
-    setLoggingOut(true);
-    try {
-      await fetch("/api/login", { method: "DELETE" });
-      setAuthed(false); setStatus(null);
-    } finally { setLoggingOut(false); }
   }
 
   async function download() {
@@ -151,23 +142,10 @@ export default function TiemposDashboard() {
   const running = status?.status.state === "running";
 
   return (
+    <AppShell onLogout={() => { setAuthed(false); setStatus(null); }}>
     <main className="max-w-2xl mx-auto p-6 sm:p-8 space-y-6">
-      <header className="flex items-center justify-between border-b border-border pb-5">
-        <div className="flex items-baseline gap-4">
-          <h1 className="font-display text-xl font-bold text-fg tracking-tight">BD Tiempos</h1>
-          <Link href="/" className="text-sm font-medium text-muted transition hover:text-blue">← Menú</Link>
-        </div>
-        <div className="flex items-center gap-3">
-          <Link href="/db/tiempos/reports"
-                className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-muted transition hover:border-blue hover:text-blue">
-            Reportes
-          </Link>
-          <button onClick={logout} disabled={loggingOut}
-                  className="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-muted transition hover:border-blue hover:text-blue disabled:cursor-not-allowed disabled:opacity-60">
-            {loggingOut && <Spinner className="h-3.5 w-3.5" />}
-            {loggingOut ? "Saliendo…" : "Cerrar sesión"}
-          </button>
-        </div>
+      <header className="border-b border-border pb-5">
+        <h1 className="font-display text-xl font-bold text-fg tracking-tight">BD Tiempos</h1>
       </header>
 
       <section className="rounded-xl border border-border bg-surface p-5 space-y-3">
@@ -257,5 +235,6 @@ export default function TiemposDashboard() {
         {downloadErr && <p className="text-sm font-medium text-danger">{downloadErr}</p>}
       </section>
     </main>
+    </AppShell>
   );
 }
