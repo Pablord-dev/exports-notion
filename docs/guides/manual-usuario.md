@@ -2,7 +2,7 @@
 
 App pública: **https://iu-exports-notion.vercel.app/**
 
-ExportNotion es una webapp que mantiene una copia diaria de la base de datos `BD Tiempos` de Notion en un cache rápido, y te permite descargar **CSV filtrados por rango de fechas** sin esperar a que Notion responda.
+ExportNotion es una webapp para **consultar reportes y exportar CSV** de bases de datos de Notion. Mantiene una copia diaria de cada base en un cache rápido, así no esperas a que Notion responda. Hoy incluye la base `BD Tiempos`; el menú principal está pensado para ir sumando más bases.
 
 ---
 
@@ -23,16 +23,31 @@ Abre **https://iu-exports-notion.vercel.app/**. Vas a ver la pantalla de login:
 
 ---
 
-## 2. Dashboard
+## 2. Menú principal
 
-Tras un login correcto verás el panel principal. Las tres secciones son independientes:
+Tras un login correcto verás el menú principal con las bases de datos disponibles:
+
+![Menú principal](./manual-screenshots/08-menu-principal.png)
+
+Cada tarjeta muestra el nombre de la base, cuántos registros hay en cache y hace cuánto fue la última sincronización, con dos accesos:
+
+- **Reportes**: abre la vista de análisis de horas (sección 7).
+- **Exportar y sincronizar**: abre el dashboard de la base (sección 3).
+
+El botón **Cerrar sesión** (arriba a la derecha) te desloguea; la próxima vez te volverá a pedir contraseña.
+
+---
+
+## 3. Dashboard de BD Tiempos
+
+Al entrar con **Exportar y sincronizar** verás el panel de la base. Las tres secciones son independientes:
 
 ![Dashboard principal](./manual-screenshots/02-dashboard.png)
 
 ### (A) Cabecera
 
-- **"ExportNotion"**: título de la app.
-- **Cerrar sesión** (arriba a la derecha): te desloguea. La próxima vez te volverá a pedir contraseña.
+- **"BD Tiempos"**: la base en la que estás; el link **← Menú** regresa al menú principal.
+- **Reportes** y **Cerrar sesión** (arriba a la derecha).
 
 ### (B) Última sincronización
 
@@ -56,7 +71,7 @@ Resumen del estado del cache:
 
 ---
 
-## 3. Descargar un CSV
+## 4. Descargar un CSV
 
 ### Sin filtro (todo)
 
@@ -84,7 +99,7 @@ Resumen del estado del cache:
 
 ---
 
-## 4. Sincronizar manualmente
+## 5. Sincronizar manualmente
 
 Aunque la app sincroniza sola dos veces al día, a veces necesitas refrescar al momento.
 
@@ -126,7 +141,7 @@ Aunque la app sincroniza sola dos veces al día, a veces necesitas refrescar al 
 
 ---
 
-## 5. Cancelar un sync en curso
+## 6. Cancelar un sync en curso
 
 Si un Full está corriendo y necesitas detenerlo sin perder lo que ya descargó, aparece un botón **Cancelar y guardar lo cargado** mientras está activo.
 
@@ -140,9 +155,9 @@ Si un Full está corriendo y necesitas detenerlo sin perder lo que ya descargó,
 
 ---
 
-## 6. Consultar reportes
+## 7. Consultar reportes
 
-Desde el dashboard, pulsa **Reportes** (arriba a la derecha) para abrir la vista de análisis de horas:
+Desde el menú principal pulsa **Reportes** en la tarjeta de la base (o el botón **Reportes** del dashboard) para abrir la vista de análisis de horas:
 
 ![Página de reportes](./manual-screenshots/06-reportes.png)
 
@@ -168,7 +183,7 @@ Desde el dashboard, pulsa **Reportes** (arriba a la derecha) para abrir la vista
 
 ---
 
-## 7. Cerrar sesión
+## 8. Cerrar sesión
 
 Pulsa el botón **Cerrar sesión** (arriba a la derecha). El botón muestra "Saliendo…" mientras procesa y luego te regresa a la pantalla de login.
 
@@ -176,7 +191,7 @@ Pulsa el botón **Cerrar sesión** (arriba a la derecha). El botón muestra "Sal
 
 ---
 
-## 8. Problemas comunes
+## 9. Problemas comunes
 
 | Síntoma | Causa probable | Qué hacer |
 |---|---|---|
@@ -191,7 +206,7 @@ Si nada de lo anterior funciona, contacta al administrador con un screenshot del
 
 ---
 
-## 9. Calendario de sincronizaciones automáticas
+## 10. Calendario de sincronizaciones automáticas
 
 | Tipo | Horario UTC | Horario CDMX (UTC−6) | Qué hace |
 |---|---|---|---|

@@ -51,6 +51,13 @@ Notion ──(cron sync)──► Postgres tabla `pages` ──(GET /api/export)
 - `GET /api/sync/status` — estado actual (protegido por el proxy).
 - `GET /api/export?from=YYYY-MM-DD&to=YYYY-MM-DD` — valida fechas ISO, filtra por `DATE_COLUMN`, ordena ascendente por `DATE_COLUMN` en memoria (la ruta usa `getAllRows` y conserva el pipeline previo a la migración) y stream CSV. Devuelve **503 `no_data`** si el cache está vacío (necesita primer sync manual). Devuelve **500 `date_column_not_in_whitelist`** si `DATE_COLUMN` no está en `COLUMNS`.
 
+### Páginas (UI)
+
+- `/` — login + **menú principal** de BDs: tarjetas generadas desde el registro `src/lib/databases.ts` (hoy solo `tiempos`).
+- `/db/tiempos` — dashboard de la BD (estado del snapshot, sync manual, descarga CSV). `/db/tiempos/reports` — UI de reportes.
+- `/reports` — redirect legacy a `/db/tiempos/reports`.
+- **El backend sigue single-DB**: agregar una entrada a `databases.ts` solo agrega la tarjeta al menú; soportar otra BD real es MB-02 en `docs/to-dos.md` (config/snapshot/sync/APIs por BD).
+
 ### Auth
 
 - **`src/proxy.ts`** (convención Next 16, ex-`middleware.ts`; runtime nodejs) protege `/api/export/*` y `/api/sync/status` con iron-session. **`/api/sync` no está en el matcher** — su auth (cookie OR cron bearer) la maneja la route handler.

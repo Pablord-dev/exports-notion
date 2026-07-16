@@ -1,33 +1,15 @@
 "use client";
+// Menú principal: login + lista de bases de Notion disponibles (src/lib/databases.ts).
+// Cada tarjeta lleva a su dashboard (/db/<slug>) y a sus reportes (/db/<slug>/reports).
+// El backend sigue siendo single-DB: el estado del snapshot (/api/sync/status)
+// aplica a la única BD registrada, BD Tiempos.
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { Spinner } from "@/app/components/spinner";
+import { DATABASES } from "@/lib/databases";
 
-function Spinner({ className = "" }: { className?: string }) {
-  return (
-    <svg
-      className={`animate-spin h-4 w-4 ${className}`}
-      viewBox="0 0 24 24"
-      fill="none"
-      role="status"
-      aria-label="Cargando"
-    >
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-    </svg>
-  );
-}
-
-type LastResult = {
-  kind: "incremental" | "full";
-  upserted: number;
-  deleted: number;
-  skipped: number;
-  finishedAt: string;
-};
 type Status = {
-  status: { state: "idle"|"running"|"error"; kind: "incremental"|"full"|null; done: number; total: number; error: string | null; skipped: number; lastResult?: LastResult | null; };
-  meta: { lastFullAt: string | null; lastIncrementalAt: string | null; count: number; };
-  next: { incremental: string; full: string; };
+  meta: { lastFullAt: string | null; lastIncrementalAt: string | null; count: number };
 };
 
 function fmtAgo(iso: string | null): string {
@@ -35,16 +17,8 @@ function fmtAgo(iso: string | null): string {
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
   if (mins < 60) return `hace ${mins} min`;
   const h = Math.floor(mins / 60);
-  return `hace ${h} h`;
-}
-function fmtCountdown(iso: string): string {
-  const ms = new Date(iso).getTime() - Date.now();
-  if (ms <= 0) return "00:00:00";
-  const s = Math.floor(ms / 1000);
-  const hh = String(Math.floor(s / 3600)).padStart(2, "0");
-  const mm = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
-  const ss = String(s % 60).padStart(2, "0");
-  return `${hh}:${mm}:${ss}`;
+  if (h < 48) return `hace ${h} h`;
+  return `hace ${Math.floor(h / 24)} días`;
 }
 
 export default function Home() {
@@ -53,33 +27,18 @@ export default function Home() {
   const [loginErr, setLoginErr] = useState<string | null>(null);
   const [loggingIn, setLoggingIn] = useState(false);
   const [status, setStatus] = useState<Status | null>(null);
-  const [from, setFrom] = useState(""); const [to, setTo] = useState("");
-  const [, setTick] = useState(0);
-  const [triggering, setTriggering] = useState<"incremental" | "full" | null>(null);
-  const [cancelling, setCancelling] = useState(false);
-  const [downloading, setDownloading] = useState(false);
-  const [downloadErr, setDownloadErr] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
 
   async function loadStatus() {
     const r = await fetch("/api/sync/status");
     if (r.status === 401) { setAuthed(false); return; }
     setAuthed(true);
-    const s: Status = await r.json();
-    setStatus(s);
-    // Cuando arranca un sync nuevo (vemos state=running), dejamos de mostrar "Iniciando…".
-    if (s.status.state === "running") setTriggering(null);
+    if (r.ok) setStatus(await r.json());
   }
   // Fetch inicial del status al montar: el setState ocurre tras el await (async),
   // no sincrónicamente — la regla no distingue ese caso.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadStatus(); }, []);
-  useEffect(() => {
-    if (!authed) return;
-    const i = setInterval(() => setTick((x) => x + 1), 1000);
-    const j = setInterval(() => loadStatus(), status?.status.state === "running" ? 2000 : 30000);
-    return () => { clearInterval(i); clearInterval(j); };
-  }, [authed, status?.status.state]);
 
   async function login(e: React.FormEvent) {
     e.preventDefault();
@@ -92,31 +51,6 @@ export default function Home() {
     } finally { setLoggingIn(false); }
   }
 
-  async function trigger(kind: "incremental" | "full") {
-    if (triggering) return;
-    setTriggering(kind);
-    try {
-      // Loop hasta que el server reporte done:true. Para incremental siempre es true en el primer call;
-      // para full cada call procesa un segmento (~35 s) y devuelve done:false si falta más.
-      // Máximo 20 segmentos (= ~200k registros) como tope defensivo.
-      for (let attempt = 0; attempt < 20; attempt++) {
-        const res = await fetch(`/api/sync?kind=${kind}`, { method: "POST" });
-        await loadStatus();
-        if (!res.ok) break;
-        const body = await res.json().catch(() => ({}));
-        if (body.done) break;
-      }
-    } finally {
-      setTriggering(null);
-    }
-  }
-  async function cancel() {
-    if (cancelling) return;
-    setCancelling(true);
-    try { await fetch("/api/sync", { method: "DELETE" }); }
-    finally { await loadStatus(); setCancelling(false); }
-  }
-
   async function logout() {
     if (loggingOut) return;
     setLoggingOut(true);
@@ -124,31 +58,6 @@ export default function Home() {
       await fetch("/api/login", { method: "DELETE" });
       setAuthed(false); setStatus(null);
     } finally { setLoggingOut(false); }
-  }
-
-  async function download() {
-    if (downloading) return;
-    setDownloading(true); setDownloadErr(null);
-    try {
-      const p = new URLSearchParams();
-      if (from) p.set("from", from); if (to) p.set("to", to);
-      const res = await fetch(`/api/export?${p.toString()}`);
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setDownloadErr(body.message ?? body.error ?? `Error ${res.status}`);
-        return;
-      }
-      const blob = await res.blob();
-      const cd = res.headers.get("Content-Disposition") ?? "";
-      const m = cd.match(/filename="?([^"]+)"?/i);
-      const fname = m?.[1] ?? `export-${new Date().toISOString().slice(0, 10)}.csv`;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = fname;
-      document.body.appendChild(a); a.click(); a.remove();
-      URL.revokeObjectURL(url);
-    } catch (e) { setDownloadErr(e instanceof Error ? e.message : "Falló la descarga"); }
-    finally { setDownloading(false); }
   }
 
   if (authed === null) {
@@ -167,7 +76,7 @@ export default function Home() {
               className="w-full max-w-sm bg-surface rounded-2xl border border-border p-8 space-y-6">
           <div className="space-y-1">
             <h1 className="font-display text-2xl font-bold text-fg tracking-tight">ExportNotion</h1>
-            <p className="text-sm text-muted">Exporta los datos de Notion a CSV.</p>
+            <p className="text-sm text-muted">Reportes y exportación de bases de Notion.</p>
           </div>
           <div className="space-y-2">
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
@@ -185,110 +94,46 @@ export default function Home() {
     );
   }
 
-  const running = status?.status.state === "running";
-
   return (
     <main className="max-w-2xl mx-auto p-6 sm:p-8 space-y-6">
       <header className="flex items-center justify-between border-b border-border pb-5">
         <h1 className="font-display text-xl font-bold text-fg tracking-tight">ExportNotion</h1>
-        <div className="flex items-center gap-3">
-          <Link href="/reports"
-                className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-muted transition hover:border-blue hover:text-blue">
-            Reportes
-          </Link>
-          <button onClick={logout} disabled={loggingOut}
-                  className="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-muted transition hover:border-blue hover:text-blue disabled:cursor-not-allowed disabled:opacity-60">
-            {loggingOut && <Spinner className="h-3.5 w-3.5" />}
-            {loggingOut ? "Saliendo…" : "Cerrar sesión"}
-          </button>
-        </div>
+        <button onClick={logout} disabled={loggingOut}
+                className="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-muted transition hover:border-blue hover:text-blue disabled:cursor-not-allowed disabled:opacity-60">
+          {loggingOut && <Spinner className="h-3.5 w-3.5" />}
+          {loggingOut ? "Saliendo…" : "Cerrar sesión"}
+        </button>
       </header>
 
-      <section className="rounded-xl border border-border bg-surface p-5 space-y-3">
-        <h2 className="font-display text-base font-semibold text-fg">Última sincronización</h2>
-        <dl className="grid grid-cols-3 gap-4">
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-muted">Full</dt>
-            <dd className="text-sm text-fg">{fmtAgo(status?.meta.lastFullAt ?? null)}</dd>
+      <section className="space-y-3">
+        <h2 className="text-xs uppercase tracking-wide text-muted">Bases de datos</h2>
+        {DATABASES.map((db) => (
+          <div key={db.slug} className="rounded-xl border border-border bg-surface p-5 space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-1">
+                <h3 className="font-display text-lg font-bold text-fg">{db.name}</h3>
+                <p className="text-sm text-muted">{db.description}</p>
+              </div>
+              <div className="text-right">
+                <p className="font-display text-xl font-bold text-sky tabular-nums">
+                  {(status?.meta.count ?? 0).toLocaleString("es-MX")}
+                </p>
+                <p className="text-xs text-muted whitespace-nowrap">registros · sync {fmtAgo(status?.meta.lastIncrementalAt ?? status?.meta.lastFullAt ?? null)}</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <Link href={`/db/${db.slug}/reports`}
+                    className="rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white transition hover:brightness-110">
+                Reportes
+              </Link>
+              <Link href={`/db/${db.slug}`}
+                    className="rounded-lg border border-blue px-4 py-2 text-sm font-medium text-blue transition hover:bg-blue hover:text-white">
+                Exportar y sincronizar
+              </Link>
+            </div>
           </div>
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-muted">Incremental</dt>
-            <dd className="text-sm text-fg">{fmtAgo(status?.meta.lastIncrementalAt ?? null)}</dd>
-          </div>
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-muted">Registros</dt>
-            <dd className="font-display text-xl font-bold text-sky">{status?.meta.count ?? 0}</dd>
-          </div>
-        </dl>
-        {status?.status.lastResult && (
-          <p className="border-t border-border pt-3 text-sm text-muted">
-            Último sync ({status.status.lastResult.kind}, {fmtAgo(status.status.lastResult.finishedAt)}):{" "}
-            <span className="font-medium text-fg">{status.status.lastResult.upserted} actualizados</span>
-            {" · "}
-            <span className="font-medium text-fg">{status.status.lastResult.deleted} eliminados</span>
-            {status.status.lastResult.skipped ? (
-              <> · <span className="font-medium text-warning">{status.status.lastResult.skipped} omitidos</span></>
-            ) : null}
-          </p>
-        )}
-      </section>
-
-      {running ? (
-        <section className="rounded-xl border border-sky/40 bg-surface p-5 space-y-3">
-          <h2 className="flex items-center gap-2 font-display text-base font-semibold text-fg">
-            <Spinner className="text-sky" />
-            Sync en progreso <span className="font-sans text-sm font-normal text-muted">({status?.status.kind})</span>
-          </h2>
-          <p className="font-display text-xl font-bold text-fg">
-            {status?.status.done} <span className="text-muted">/ {status?.status.total}</span>
-          </p>
-          {status?.status.skipped ? <p className="text-sm font-medium text-warning">Omitidos: {status.status.skipped}</p> : null}
-          <button onClick={cancel} disabled={cancelling}
-                  className="flex items-center gap-2 rounded-lg border border-danger px-3 py-2 text-sm font-medium text-danger transition hover:bg-danger hover:text-white disabled:cursor-not-allowed disabled:opacity-60">
-            {cancelling && <Spinner className="h-3.5 w-3.5" />}
-            {cancelling ? "Cancelando…" : "Cancelar y guardar lo cargado"}
-          </button>
-        </section>
-      ) : (
-        <section className="rounded-xl border border-border bg-surface p-5 space-y-3">
-          <h2 className="font-display text-base font-semibold text-fg">Próximas sincronizaciones</h2>
-          <div className="flex gap-8">
-            <p className="text-sm text-muted">Incremental en <span className="font-medium text-fg tabular-nums">{status ? fmtCountdown(status.next.incremental) : "—"}</span></p>
-            <p className="text-sm text-muted">Full en <span className="font-medium text-fg tabular-nums">{status ? fmtCountdown(status.next.full) : "—"}</span></p>
-          </div>
-          <div className="flex gap-3 pt-1">
-            <button onClick={() => trigger("incremental")} disabled={triggering !== null}
-                    className="flex items-center gap-2 rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60">
-              {triggering === "incremental" && <Spinner className="h-3.5 w-3.5" />}
-              {triggering === "incremental" ? "Iniciando…" : "Refrescar incremental"}
-            </button>
-            <button onClick={() => trigger("full")} disabled={triggering !== null}
-                    className="flex items-center gap-2 rounded-lg border border-blue px-4 py-2 text-sm font-medium text-blue transition hover:bg-blue hover:text-white disabled:cursor-not-allowed disabled:opacity-60">
-              {triggering === "full" && <Spinner className="h-3.5 w-3.5" />}
-              {triggering === "full" ? "Iniciando…" : "Full"}
-            </button>
-          </div>
-        </section>
-      )}
-
-      <section className="rounded-xl border border-border bg-surface p-5 space-y-4">
-        <h2 className="font-display text-base font-semibold text-fg">Descargar CSV</h2>
-        <div className="flex gap-3">
-          <label className="flex-1 text-sm text-muted">Desde
-            <input type="date" value={from} onChange={(e) => setFrom(e.target.value)}
-                   className="mt-1 block w-full rounded-lg border border-border bg-dark-blue px-3 py-2 text-sm text-fg outline-none transition [color-scheme:dark] focus:border-blue focus:ring-2 focus:ring-blue/30" />
-          </label>
-          <label className="flex-1 text-sm text-muted">Hasta
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)}
-                   className="mt-1 block w-full rounded-lg border border-border bg-dark-blue px-3 py-2 text-sm text-fg outline-none transition [color-scheme:dark] focus:border-blue focus:ring-2 focus:ring-blue/30" />
-          </label>
-        </div>
-        <button onClick={download} disabled={downloading}
-                className="flex items-center gap-2 rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60">
-          {downloading && <Spinner className="h-3.5 w-3.5" />}
-          {downloading ? "Descargando…" : "Descargar"}
-        </button>
-        {downloadErr && <p className="text-sm font-medium text-danger">{downloadErr}</p>}
+        ))}
+        <p className="pt-1 text-sm text-muted">Próximamente más bases de datos.</p>
       </section>
     </main>
   );
