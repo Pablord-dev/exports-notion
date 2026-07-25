@@ -14,7 +14,7 @@
 ## Raíz del repo
 
 - [README.md](../README.md) — setup local, tests, deploy a Vercel y notas operativas (audiencia: dev).
-- [CLAUDE.md](../CLAUDE.md) — arquitectura operativa, endpoints, claves Redis, límites de plataforma y modo de trabajo (audiencia: agentes IA / dev).
+- [CLAUDE.md](../CLAUDE.md) — arquitectura operativa, endpoints, esquema de Postgres, límites de plataforma y modo de trabajo (audiencia: agentes IA / dev).
 - [CONTRIBUTING.md](../CONTRIBUTING.md) — convención de commits, verificación requerida y reglas del proyecto.
 - [scripts/](../scripts/) — herramientas operativas: `reset-sync-state.cjs` (destrabar un sync trancado) y `check-cache-drift.cjs` (detectar cache desactualizado vs. Notion).
 
@@ -24,9 +24,9 @@
 
 ## brief/ — discovery vigente (Capa 1, reutilizable por flows)
 
-- [202606101335_project_brief.md](brief/202606101335_project_brief.md) — brief del proyecto, fingerprint `d39da8d` (2026-06-10).
-- [202606101335_architecture_map.json](brief/202606101335_architecture_map.json) — mapa estructurado de componentes, flujos e integraciones.
-- [202606101335_doc_coverage.json](brief/202606101335_doc_coverage.json) — cobertura documental, gaps y contradicciones.
+- [202607241807_project_brief.md](brief/202607241807_project_brief.md) — brief del proyecto, fingerprint `15ab3fa` (2026-07-24): Postgres/Supabase, reportes v1 + matriz, Asistente IA.
+- [202607241807_architecture_map.json](brief/202607241807_architecture_map.json) — mapa estructurado de componentes, flujos e integraciones.
+- [202607241807_doc_coverage.json](brief/202607241807_doc_coverage.json) — cobertura documental, gaps y contradicciones.
 
 ## guides/ — how-to
 

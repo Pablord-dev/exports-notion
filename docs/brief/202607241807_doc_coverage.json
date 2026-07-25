@@ -1,0 +1,40 @@
+{
+  "fingerprint": { "commit": "15ab3fa", "date": "2026-07-24T18:07:00-06:00", "scope": "full", "branch": "feat/supabase-reports", "replaces": "202606101335 (d39da8d)" },
+  "living_docs": [
+    { "path": "README.md", "audience": "dev", "status": "vigente", "notes": "Setup, tests, notas operativas. Revisar que refleje Postgres/Supabase y el Asistente IA." },
+    { "path": "CLAUDE.md", "audience": "agentes/dev", "status": "excelente", "notes": "Arquitectura operativa muy actual (Postgres, reportes, proxy, crons, fixes FX). Contradicción menor: dice '8 env vars' pero config.ts exige 7. No documenta aún el Asistente IA." },
+    { "path": "CONTRIBUTING.md", "audience": "dev", "status": "vigente", "notes": "Convención de commits y verificación." },
+    { "path": "docs/00-index.md", "audience": "todos", "status": "actualizado-esta-sesión", "notes": "Apunta a este brief y a los reportes/ADR-0006. Se actualizó la sección brief/." },
+    { "path": "docs/to-dos.md", "audience": "dev", "status": "vigente", "notes": "MB-02 (multi-BD backend) y despliegue diferido. Falta añadir pendientes del Asistente IA (persistencia en Postgres, LLM en prod, observabilidad)." },
+    { "path": "docs/architecture/adr/0001..0006", "audience": "dev", "status": "vigente", "notes": "0006 = migración a Postgres/Supabase. Sin ADR del Asistente IA (tool-calling + modelos intercambiables)." },
+    { "path": "docs/guides/manual-usuario.md", "audience": "usuario", "status": "vigente-parcial", "notes": "Cubre login/dashboard/sync/CSV. No cubre reportes ni Asistente IA." },
+    { "path": "docs/guides/cambiar-columnas.md", "audience": "dev", "status": "vigente", "notes": "Cómo cambiar COLUMNS/DATE_COLUMN." },
+    { "path": "docs/reports/202607081002_reportes_v1_spec.md", "audience": "dev", "status": "vigente", "notes": "Spec de reportes v1; implementado (incluye matriz)." },
+    { "path": "docs/superpowers/specs/2026-07-23-chat-ia-bd-tiempos-design.md", "audience": "dev", "status": "vigente", "notes": "Diseño del Asistente IA (no commiteado hasta hoy; ahora en git)." },
+    { "path": "docs/superpowers/plans/2026-07-23-chat-ia-bd-tiempos.md", "audience": "dev", "status": "vigente", "notes": "Plan de implementación del chat." }
+  ],
+  "frozen_archive": [
+    { "path": "docs/brief/202606101335_*", "notes": "Brief anterior (Redis/middleware/8 env vars). Movido a archive/ en esta sesión — reemplazado por 202607241807." },
+    { "path": "docs/reports/202606101335_doc_gap_report.md + update_plan.md", "notes": "Gap report y plan de la reorganización doc de junio." },
+    { "path": "docs/reports/202606101520_incident_report_sync_incremental.md", "notes": "Incidente del incremental (D1–D3); fixes FX-001..FX-005 implementados." }
+  ],
+  "gaps": [
+    { "id": "G1", "severity": "media", "desc": "El Asistente IA no tiene ADR ni entrada en el manual de usuario; CLAUDE.md no lo menciona." },
+    { "id": "G2", "severity": "media", "desc": "docs/to-dos.md no lista los pendientes del chat: persistencia en Postgres, elección de LLM en prod, fallback ante caídas/saldo, observabilidad." },
+    { "id": "G3", "severity": "baja", "desc": "Manual de usuario no cubre la UI de reportes (por persona/subproyecto/timeline/matriz/detalle)." },
+    { "id": "G4", "severity": "baja", "desc": "README puede tener referencias a Redis/Upstash o a la topología pre-migración; verificar." }
+  ],
+  "contradictions": [
+    { "where": "CLAUDE.md §config", "claim": "'exige las 8 env vars'", "reality": "config.ts (KEYS) exige 7 tras quitar UPSTASH_* y sumar DATABASE_URL", "action": "Corregir el conteo a 7 en CLAUDE.md." },
+    { "where": "docs/00-index.md (antes de esta sesión)", "claim": "'claves Redis' y brief de junio como vigente", "reality": "El estado es Postgres/Supabase; el brief vigente es 202607241807", "action": "Actualizado en esta sesión; revisar menciones residuales a Redis en la descripción de CLAUDE.md." }
+  ],
+  "resolved_since_previous": [
+    "Consolidación de sesión (session.ts única; auth.ts re-exporta) — laguna 5 del brief anterior.",
+    "middleware.ts → proxy.ts (Next 16) — laguna 8.",
+    "loadConfig() se invoca al boot vía instrumentation.ts — laguna 10.",
+    "Full reanudable con flag de sesión (full:active) + pivote por batch — FX-004, laguna 4.",
+    "Bug del countdown incremental (cron hardcodeado) — cron.ts ahora importa vercel.json.",
+    "E2E ya no exige backend real — stubs en memoria (E2E_STUBS=1) — laguna 9.",
+    "Migración de Redis → Postgres/Supabase — ADR-0006."
+  ]
+}

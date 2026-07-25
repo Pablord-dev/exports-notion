@@ -1,0 +1,77 @@
+{
+  "fingerprint": { "commit": "15ab3fa", "date": "2026-07-24T18:07:00-06:00", "scope": "full", "branch": "feat/supabase-reports", "generated_by": "flujo normal (rebuild manual)", "replaces": "202606101335 (d39da8d)" },
+  "components": [
+    { "name": "RootLayout", "path": "src/app/layout.tsx", "layer": "ui", "responsibility": "HTML root (lang=es); fuentes brandbook Raleway (display) + Poppins (sans)", "depends_on": [] },
+    { "name": "globals.css (@theme)", "path": "src/app/globals.css", "layer": "ui", "responsibility": "Design tokens brandbook iU Corp (dark-blue #051758, surface #0a2468, border #1c3c84, blue, sky, danger) + scrollbars del tema dark", "depends_on": [] },
+    { "name": "AppShell", "path": "src/app/components/app-shell.tsx", "layer": "ui", "responsibility": "Shell autenticado: sidebar anclable/ocultable (localStorage sidebar-pinned), nav con iconos (Menú principal, Asistente IA, grupo desplegable Bases de datos), logout", "depends_on": ["src/lib/databases.ts"] },
+    { "name": "HomePage (menú principal)", "path": "src/app/page.tsx", "layer": "ui", "responsibility": "Login + tarjetas de BDs (databases.ts) + tarjeta Asistente IA; estado del snapshot con polling", "depends_on": ["/api/sync/status", "/api/login"] },
+    { "name": "ReportsPage", "path": "src/app/db/tiempos/reports/page.tsx", "layer": "ui", "responsibility": "UI de reportes (persona/subproyecto/timeline/matriz/detalle) con filtros; export y sync en modals", "depends_on": ["/api/reports/*", "/api/export", "/api/sync", "src/app/components/{breadcrumb,dropdown}.tsx"] },
+    { "name": "AsistentePage", "path": "src/app/asistente/page.tsx", "layer": "ui", "responsibility": "Chat IA estilo Claude: burbujas usuario/IA, markdown, historial en localStorage, selectores BD/modelo", "depends_on": ["/api/chat", "/api/chat/providers", "src/lib/chat-store.ts", "src/app/components/{markdown-message,dropdown,breadcrumb}.tsx"] },
+    { "name": "proxy", "path": "src/proxy.ts", "layer": "infra", "responsibility": "Protege /api/export/*, /api/sync/status, /api/reports/*, /api/chat validando iron-session (ex-middleware.ts, Next 16)", "depends_on": ["src/lib/session.ts"] },
+    { "name": "instrumentation", "path": "src/instrumentation.ts", "layer": "infra", "responsibility": "Invoca loadConfig() al boot (fail-fast); guard por NEXT_PHASE en build", "depends_on": ["src/lib/config.ts"] },
+    { "name": "POST /api/login", "path": "src/app/api/login/route.ts", "layer": "api", "responsibility": "Auth password (bcrypt) + rate-limit 5/15min por IP (tabla login_attempts, ventana fija); crea sesión", "depends_on": ["src/lib/auth.ts", "src/lib/db.ts"] },
+    { "name": "DELETE /api/login", "path": "src/app/api/login/route.ts", "layer": "api", "responsibility": "Logout (destruye sesión)", "depends_on": ["src/lib/session.ts"] },
+    { "name": "POST /api/sync", "path": "src/app/api/sync/route.ts", "layer": "api", "responsibility": "Auth dual (cookie OR Bearer CRON_SECRET), runSync(kind) inline; 409 si lock; done:false con SYNC_BUDGET_MS agotado; maxDuration 300s", "depends_on": ["src/lib/sync.ts", "src/lib/db.ts"] },
+    { "name": "DELETE /api/sync", "path": "src/app/api/sync/route.ts", "layer": "api", "responsibility": "Setea flag cancel", "depends_on": ["src/lib/db.ts"] },
+    { "name": "GET /api/sync/status", "path": "src/app/api/sync/status/route.ts", "layer": "api", "responsibility": "status + meta + próximas corridas de cron", "depends_on": ["src/lib/db.ts", "src/lib/cron.ts"] },
+    { "name": "GET /api/export", "path": "src/app/api/export/route.ts", "layer": "api", "responsibility": "CSV stream; valida ISO, filtra por DATE_COLUMN, ordena asc en memoria; 503 no_data si vacío; 500 si DATE_COLUMN fuera de COLUMNS; maxDuration 60s", "depends_on": ["src/lib/db.ts", "src/lib/filter.ts", "src/lib/csv.ts", "src/lib/columns.ts"] },
+    { "name": "GET /api/reports/{by-person,by-subproject,timeline,matrix,detail,filters}", "path": "src/app/api/reports/*/route.ts", "layer": "api", "responsibility": "Agregados SQL sobre pages: totales por persona/subproyecto, evolución month/week, matriz persona×subproyecto, detalle con cursor, opciones de filtro", "depends_on": ["src/lib/db.ts", "src/lib/report-params.ts", "src/lib/store-shared.ts"] },
+    { "name": "POST /api/chat", "path": "src/app/api/chat/route.ts", "layer": "api", "responsibility": "Valida body (provider/messages), resolveProvider, valida db contra DATABASES, runChat(provider, messages, now, dbName); maxDuration 120s", "depends_on": ["src/lib/llm/agent.ts", "src/lib/llm/providers.ts", "src/lib/llm/request.ts", "src/lib/databases.ts"] },
+    { "name": "GET /api/chat/providers", "path": "src/app/api/chat/providers/route.ts", "layer": "api", "responsibility": "Lista proveedores disponibles + default", "depends_on": ["src/lib/llm/providers.ts"] },
+    { "name": "runSync()", "path": "src/lib/sync.ts", "layer": "domain", "responsibility": "Orquestador con lock en Postgres (acquireLock TTL 600s). incremental: dos queries (upsert vivas + delete papelera). full: staging pages_new, upsert por batch + checkpoint de pivote por batch, flag full:active (reanudación), swap transaccional al promover, SYNC_BUDGET_MS opcional", "depends_on": ["src/lib/notion.ts", "src/lib/flatten.ts", "src/lib/db.ts"] },
+    { "name": "fetchPages() / fetchFullBatches()", "path": "src/lib/notion.ts", "layer": "domain", "responsibility": "dataSources.query (v5), throttle 3 req/s, retry+retry-after. Incremental: dos queries (papelera por request() crudo, is_archived:true). Full: onBatch(pages, lastCreatedTime, hasMore), segmenta el cap de 10k por created_time", "depends_on": ["@notionhq/client v5 (dataSources.query)"] },
+    { "name": "flattenPage()", "path": "src/lib/flatten.ts", "layer": "domain", "responsibility": "PageObjectResponse → fila plana vía whitelist COLUMNS (incluye created_by/last_edited_by/unique_id); tipos no listados → string vacío", "depends_on": ["src/lib/columns.ts"] },
+    { "name": "Store (Postgres)", "path": "src/lib/db.ts + src/lib/store-shared.ts", "layer": "infra", "responsibility": "Interfaz Store + __setStore. Snapshot (upsert por unnest en chunks de 500, columnas tipadas) + control KV (sync_state) + login_attempts + funciones de reporte (reportByPerson/BySubproject/Timeline/Matrix/Detail/Filters)", "depends_on": ["postgres (postgres.js)"] },
+    { "name": "MemoryStore", "path": "src/lib/memory-store.ts", "layer": "infra", "responsibility": "Implementación en memoria de Store (tests + E2E_STUBS=1); incluye rate-limit del login", "depends_on": [] },
+    { "name": "LLM client", "path": "src/lib/llm/client.ts", "layer": "domain", "responsibility": "chatComplete: POST OpenAI-compatible /chat/completions (stream:false, temperature:0), mapea tool_calls; seams __setLlmClient/__resetLlmClient", "depends_on": ["fetch"] },
+    { "name": "LLM providers", "path": "src/lib/llm/providers.ts", "layer": "domain", "responsibility": "availableProviders() (Ollama/MiniMax desde env), resolveProvider(id) respeta LLM_DEFAULT_PROVIDER", "depends_on": [] },
+    { "name": "LLM tools", "path": "src/lib/llm/tools.ts", "layer": "domain", "responsibility": "TOOL_DEFS (6 herramientas: filtros, por persona, por subproyecto, línea de tiempo, matriz, detalle) + runTool(name, args) sobre las funciones de reporte; buildFilters reusa parseReportFilters", "depends_on": ["src/lib/db.ts", "src/lib/report-params.ts"] },
+    { "name": "LLM agent", "path": "src/lib/llm/agent.ts", "layer": "domain", "responsibility": "runChat: bucle de tool-calling (MAX_ITERS=5), systemPrompt en español (filtros opcionales, no pedir aclaraciones), cleanReply() strip de <think>", "depends_on": ["src/lib/llm/client.ts", "src/lib/llm/tools.ts"] },
+    { "name": "chat-store", "path": "src/lib/chat-store.ts", "layer": "domain", "responsibility": "Persistencia de chats en localStorage (key asistente-chats-v1): loadChats/saveChat/deleteChat/deriveTitle/newChatId", "depends_on": [] },
+    { "name": "session / auth", "path": "src/lib/session.ts + src/lib/auth.ts", "layer": "infra", "responsibility": "Única definición de sesión (cookie export-notion-session, 7d); auth.ts re-exporta y agrega verifyPassword (bcrypt)", "depends_on": ["iron-session", "bcryptjs"] },
+    { "name": "csv / filter / cron / columns / config / databases", "path": "src/lib/{csv,filter,cron,columns,config,databases}.ts", "layer": "domain/infra", "responsibility": "CSV con BOM; filtro por rango de fechas; próxima corrida cron (importa vercel.json); whitelist COLUMNS; loadConfig (7 env vars); registro DATABASES (menú)", "depends_on": ["csv-stringify", "cron-parser"] }
+  ],
+  "data_flows": [
+    { "name": "Autenticación", "steps": ["Form en page.tsx", "POST /api/login (rate-limit por IP en login_attempts)", "bcrypt.compare contra APP_PASSWORD_HASH", "iron-session escribe cookie", "UI pasa a app autenticada", "DELETE /api/login destruye sesión"], "trigger": "Submit del login" },
+    { "name": "Incremental sync", "steps": ["Botón o cron 21:00 UTC", "POST /api/sync?kind=incremental adquiere lock", "dos queries Notion (vivas + papelera is_archived:true) con last_edited_time > lastIncrementalAt − 60s", "flatten", "upsert vivas + delete papelera en pages", "setMeta"], "trigger": "Manual o cron 0 21 * * * UTC" },
+    { "name": "Full sync segmentado y reanudable", "steps": ["Botón o cron 09:00 UTC", "Sin full:active ⇒ sesión nueva (trunca pages_new, limpia pivote); con full:active ⇒ reanuda", "fetchFullBatches → onBatch: upsert al staging + fija pivote por batch (TTL 24h)", "Con SYNC_BUDGET_MS: corta y done:false (la UI encadena); sin presupuesto: corre hasta terminar", "Al completar/cancelar: swap transaccional pages_new→pages, lastIncrementalAt = startedAt", "0 páginas: no promueve"], "trigger": "Manual o cron 0 9 * * * UTC" },
+    { "name": "Export CSV", "steps": ["GET /api/export?from&to (proxy auth)", "Valida ISO y from ≤ to", "getAllRows", "filterByDateRange por DATE_COLUMN", "sort asc en memoria", "stream CSV con BOM"], "trigger": "Botón Descargar" },
+    { "name": "Reportes", "steps": ["UI /db/tiempos/reports", "GET /api/reports/* (proxy auth)", "parseReportFilters", "agregado SQL sobre pages (Store.report*)", "render de tablas/gráficas"], "trigger": "Interacción con filtros de reportes" },
+    { "name": "Asistente IA (chat)", "steps": ["UI /asistente", "POST /api/chat {provider, db, messages}", "resolveProvider + runChat", "bucle tool-calling MAX_ITERS=5: LLM invoca herramienta → runTool → función de reporte → resultado al LLM", "cleanReply (strip <think>)", "respuesta markdown + toolTrace", "saveChat en localStorage"], "trigger": "Enviar mensaje en el chat" }
+  ],
+  "external_integrations": [
+    { "service": "Notion API", "client_lib": "@notionhq/client v5 (dataSources.query)", "usage": "Query de páginas (last_edited_time/created_time), paginación, extracción de propiedades, papelera vía request() crudo", "limits_handled": "Cap 10k por query → segmentación por created_time; throttle 3 req/s; backoff 3 intentos; retry-after; 400/401/404 fail-fast" },
+    { "service": "Postgres (Supabase)", "client_lib": "postgres.js ^3.4", "usage": "Snapshot (pages/pages_new), control (sync_state), rate-limit (login_attempts), agregados de reporte", "limits_handled": "upsert por unnest en chunks de 500; TTL emulado por expires_at; swap transaccional; lock TTL 600s" },
+    { "service": "LLM (Ollama / MiniMax)", "client_lib": "fetch → /v1/chat/completions (OpenAI-compatible)", "usage": "Chat con tool-calling sobre las funciones de reporte; proveedores intercambiables por config", "limits_handled": "temperature:0, stream:false; strip de <think>; MiniMax requiere saldo (insufficient_balance observado)" },
+    { "service": "Vercel Cron", "client_lib": "plataforma (vercel.json)", "usage": "full 09:00 UTC, incremental 21:00 UTC, con Bearer CRON_SECRET", "limits_handled": "Hobby: 1 corrida diaria por expresión; maxDuration 300s (sync) requiere Pro" }
+  ],
+  "entry_points": [
+    { "route_or_file": "GET /", "method": "GET", "auth": "ninguna (la UI decide por /api/sync/status)", "purpose": "Login o menú principal" },
+    { "route_or_file": "GET /asistente", "method": "GET", "auth": "cookie (la página detecta 401)", "purpose": "Chat con el Asistente IA" },
+    { "route_or_file": "GET /db/tiempos/reports", "method": "GET", "auth": "cookie", "purpose": "UI de reportes (export/sync en modals)" },
+    { "route_or_file": "POST /api/login | DELETE /api/login", "method": "POST/DELETE", "auth": "rate-limit por IP | cookie", "purpose": "Login / logout" },
+    { "route_or_file": "POST /api/sync | DELETE /api/sync", "method": "POST/DELETE", "auth": "cookie OR Bearer CRON_SECRET", "purpose": "Disparar / cancelar sync" },
+    { "route_or_file": "GET /api/sync/status", "method": "GET", "auth": "cookie (proxy)", "purpose": "Estado para polling" },
+    { "route_or_file": "GET /api/export", "method": "GET", "auth": "cookie (proxy)", "purpose": "Descarga CSV" },
+    { "route_or_file": "GET /api/reports/*", "method": "GET", "auth": "cookie (proxy)", "purpose": "Agregados de reporte" },
+    { "route_or_file": "POST /api/chat | GET /api/chat/providers", "method": "POST/GET", "auth": "cookie (proxy)", "purpose": "Chat / lista de modelos" }
+  ],
+  "state_storage": [
+    { "key": "pages", "type": "tabla", "purpose": "Snapshot vivo: id PK + columnas tipadas (hours, created_at, person_id, subproject_id, project_id, company, last_edited_at) + row jsonb" },
+    { "key": "pages_new", "type": "tabla", "purpose": "Staging del full; se promueve con swap transaccional" },
+    { "key": "sync_state", "type": "tabla KV", "purpose": "key PK, value jsonb, expires_at (TTL emulado). Keys: meta, status, lock (600s), cancel (1h), full:pivot (24h), full:active" },
+    { "key": "login_attempts", "type": "tabla", "purpose": "Rate-limit login: (ip, window_start) PK + count" },
+    { "key": "localStorage asistente-chats-v1", "type": "cliente", "purpose": "Chats del Asistente IA (local-first, sin identidad)" },
+    { "key": "localStorage sidebar-pinned", "type": "cliente", "purpose": "Preferencia de la sidebar" }
+  ],
+  "env_vars": {
+    "required": ["NOTION_TOKEN", "NOTION_DATABASE_ID (Data Source ID)", "DATE_COLUMN", "APP_PASSWORD_HASH", "SESSION_SECRET", "CRON_SECRET", "DATABASE_URL"],
+    "optional_llm": ["LLM_DEFAULT_PROVIDER", "LLM_OLLAMA_BASE_URL", "LLM_OLLAMA_MODEL", "LLM_MINIMAX_BASE_URL", "LLM_MINIMAX_API_KEY", "LLM_MINIMAX_MODEL"]
+  },
+  "tests": {
+    "unit": ["auth", "config", "cron", "csv", "filter", "flatten", "report-params", "chat-store", "llm-agent", "llm-client", "llm-providers", "llm-request", "llm-tools"],
+    "integration": ["tests/integration/sync.test.ts (fakeNotion + memory-store)", "tests/integration/reports.memory.test.ts", "tests/integration/db.pg.test.ts (gated PG_TEST=1, requiere supabase start)"],
+    "e2e": ["tests/e2e/smoke.spec.ts (Playwright, stubs en memoria E2E_STUBS=1 por default)"],
+    "fixtures": ["tests/fixtures/fakeNotion.ts", "tests/fixtures/reportCases.ts", "tests/fixtures/notion-pages/*"]
+  }
+}
