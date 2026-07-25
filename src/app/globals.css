@@ -32,10 +32,10 @@
   --color-success: #66b169;     /* Unique Green 500 */
   --color-warning: #b57ed1;     /* Unique Purple 400 (avisos sutiles) */
 
-  /* Tipografía: Inter única (minimalista); display y sans apuntan a la misma
-     familia — la jerarquía queda en peso/tamaño, no en cambio de fuente. */
-  --font-display: var(--font-inter), system-ui, Arial, sans-serif;
-  --font-sans: var(--font-inter), system-ui, Arial, sans-serif;
+  /* Tipografía brandbook: Raleway (títulos/logotipo) + Poppins (cuerpo, nav,
+     botones). Respaldo Lato → Arial; datos técnicos en monoespaciada. */
+  --font-display: var(--font-raleway), Lato, Arial, sans-serif;
+  --font-sans: var(--font-poppins), Lato, Arial, sans-serif;
 }
 
 /* Tema oscuro corporativo fijo: base Unique Black, texto claro, aire visual.
@@ -50,4 +50,31 @@ body {
 
 h1, h2, h3 {
   font-family: var(--font-display);
+  font-weight: 700;
+}
+
+/* Scrollbars acordes al tema dark: delgados, thumb azulado sobre track
+   transparente. scrollbar-* cubre Firefox y Chromium moderno; las reglas
+   ::-webkit-* son fallback para navegadores sin soporte de scrollbar-color. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2a54ad;
+  border: 2px solid transparent;
+  background-clip: content-box;
 }

@@ -1,6 +1,7 @@
 "use client";
 // Menú principal: login + lista de bases de Notion disponibles (src/lib/databases.ts).
-// Cada tarjeta lleva a su dashboard (/db/<slug>) y a sus reportes (/db/<slug>/reports).
+// Cada tarjeta es un link a la página de su BD (/db/<slug>/reports), que
+// concentra reportes + export/sync en modals.
 // El backend sigue siendo single-DB: el estado del snapshot (/api/sync/status)
 // aplica a la única BD registrada, BD Tiempos.
 import { useEffect, useState } from "react";
@@ -11,6 +12,28 @@ import { DATABASES } from "@/lib/databases";
 
 type Status = {
   meta: { lastFullAt: string | null; lastIncrementalAt: string | null; count: number };
+};
+
+function ClockIcon() {
+  return (
+    <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  );
+}
+
+function ChatIcon() {
+  return (
+    <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15a2 2 0 01-2 2H8l-4 4V5a2 2 0 012-2h13a2 2 0 012 2z" />
+    </svg>
+  );
+}
+
+// Icono de cada BD del menú, por slug (default: sin icono).
+const DB_ICONS: Record<string, React.ReactNode> = {
+  tiempos: <ClockIcon />,
 };
 
 function fmtAgo(iso: string | null): string {
@@ -89,36 +112,41 @@ export default function Home() {
     <AppShell onLogout={() => { setAuthed(false); setStatus(null); }}>
     <main className="max-w-2xl mx-auto p-6 sm:p-8 space-y-6">
       <header className="border-b border-border pb-5">
-        <h1 className="font-display text-xl font-bold text-fg tracking-tight">ExportNotion</h1>
+        <h1 className="font-display text-xl font-bold text-fg tracking-tight">Reportes Notion</h1>
       </header>
+
+      <Link href="/asistente"
+            className="flex items-center gap-4 rounded-xl border border-border bg-surface p-5 transition hover:border-sky hover:bg-surface/80">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue/15 text-sky"><ChatIcon /></span>
+        <div className="min-w-0 flex-1">
+          <h3 className="font-display text-lg font-bold text-fg">Asistente IA</h3>
+          <p className="text-sm text-muted">Pregunta en lenguaje natural sobre tus bases de datos.</p>
+        </div>
+        <svg className="h-5 w-5 shrink-0 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+      </Link>
 
       <section className="space-y-3">
         <h2 className="text-xs uppercase tracking-wide text-muted">Bases de datos</h2>
         {DATABASES.map((db) => (
-          <div key={db.slug} className="rounded-xl border border-border bg-surface p-5 space-y-4">
+          <Link key={db.slug} href={`/db/${db.slug}/reports`}
+                className="block rounded-xl border border-border bg-surface p-5 transition hover:border-sky hover:bg-surface/80">
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-1">
-                <h3 className="font-display text-lg font-bold text-fg">{db.name}</h3>
+                <h3 className="flex items-center gap-2 font-display text-lg font-bold text-fg">
+                  <span className="text-sky">{DB_ICONS[db.slug]}</span>
+                  {db.name}
+                </h3>
                 <p className="text-sm text-muted">{db.description}</p>
               </div>
               <div className="text-right">
-                <p className="font-display text-xl font-bold text-sky tabular-nums">
+                <p className="whitespace-nowrap font-display text-xl font-bold text-sky tabular-nums">
                   {(status?.meta.count ?? 0).toLocaleString("es-MX")}
+                  <span className="ml-1.5 text-sm font-medium">registros</span>
                 </p>
-                <p className="text-xs text-muted whitespace-nowrap">registros · sync {fmtAgo(status?.meta.lastIncrementalAt ?? status?.meta.lastFullAt ?? null)}</p>
+                <p className="text-xs text-muted whitespace-nowrap">sync {fmtAgo(status?.meta.lastIncrementalAt ?? status?.meta.lastFullAt ?? null)}</p>
               </div>
             </div>
-            <div className="flex gap-3">
-              <Link href={`/db/${db.slug}/reports`}
-                    className="rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white transition hover:brightness-110">
-                Reportes
-              </Link>
-              <Link href={`/db/${db.slug}`}
-                    className="rounded-lg border border-blue px-4 py-2 text-sm font-medium text-blue transition hover:bg-blue hover:text-white">
-                Exportar y sincronizar
-              </Link>
-            </div>
-          </div>
+          </Link>
         ))}
         <p className="pt-1 text-sm text-muted">Próximamente más bases de datos.</p>
       </section>
