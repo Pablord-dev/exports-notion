@@ -27,8 +27,9 @@ Webapp Next.js 16 (App Router) que sirve **CSV bajo demanda** desde un **snapsho
 ### Flujo de datos
 
 ```
-Notion ──(cron sync)──► Postgres tabla `pages` ──(GET /api/export)──► CSV stream
-                                              └─(GET /api/reports/*)─► agregados SQL
+Notion ──(cron sync)──► Postgres tabla `pages` ──┬─(GET /api/export)──► CSV stream
+                                                 ├─(GET /api/reports/*)─► agregados SQL
+                                                 └─(POST /api/chat)─────► LLM + tool-calling
 ```
 
 - **`src/lib/sync.ts`** orquesta `runSync(kind)` con un **lock en Postgres** (`acquireLock` TTL 600s, fila en `sync_state` retomable al vencer). Devuelve `SyncResult`: `{ok, done:true, upserted, deleted}` o `{ok, done:false, segmentCount}` (sólo full con presupuesto). Dos modos:
@@ -41,8 +42,19 @@ Notion ──(cron sync)──► Postgres tabla `pages` ──(GET /api/export)
 - **`src/lib/db.ts`** abstrae todo Postgres (driver `postgres.js`, sin ORM). Expone la interfaz `Store` + `__setStore()` para tests; `src/lib/memory-store.ts` la implementa en memoria (tests y `E2E_STUBS=1`). El upsert va por `unnest` en chunks de 500 y **parsea las columnas tipadas** (`hours`, `created_at`, IDs de relaciones, `company`) desde la fila plana — el mapeo de nombres de propiedades vive al tope de `db.ts` y es parte del setup por proyecto, igual que `columns.ts`. ⚠️ Con cast `::jsonb`/`::jsonb[]` postgres.js ya serializa el valor JS: hacer `JSON.stringify` manual produce **doble encoding** (verificado empíricamente 2026-07-09).
 - **`src/lib/flatten.ts`** convierte `PageObjectResponse` → fila plana **respetando la whitelist** de `COLUMNS`. Soporta title, rich_text, number, select/status/multi_select, date (con rango `start → end`), checkbox, url/email/phone, people, relation, files, formula, rollup, created_time/last_edited_time, **created_by, last_edited_by, unique_id** (`<prefix>-<number>`). Tipos no listados → string vacío.
 - **`src/lib/columns.ts`** es la **whitelist server-side** de propiedades exportables. El cliente nunca puede pedir columnas fuera de aquí. El orden determina el orden de columnas del CSV. **Editar esta lista** es parte normal del setup por proyecto.
-- **`src/lib/config.ts`** — `loadConfig()` exige las **8 env vars** (`NOTION_TOKEN`, `NOTION_DATABASE_ID`, `DATE_COLUMN`, `APP_PASSWORD_HASH`, `SESSION_SECRET`, `CRON_SECRET`, `DATABASE_URL`) y lanza error listando las faltantes. No hay defaults. **`src/instrumentation.ts` la invoca al boot** (fail-fast: el server no arranca con vars faltantes; el build no la exige — guard por `NEXT_PHASE`).
+- **`src/lib/config.ts`** — `loadConfig()` exige las **7 env vars** (`NOTION_TOKEN`, `NOTION_DATABASE_ID`, `DATE_COLUMN`, `APP_PASSWORD_HASH`, `SESSION_SECRET`, `CRON_SECRET`, `DATABASE_URL`) y lanza error listando las faltantes. No hay defaults. **`src/instrumentation.ts` la invoca al boot** (fail-fast: el server no arranca con vars faltantes; el build no la exige — guard por `NEXT_PHASE`). Las vars del Asistente IA (`LLM_*`, ver abajo) son **opcionales** y NO las valida `loadConfig` — sin ellas el chat sólo muestra "sin modelo".
 - **`src/lib/cron.ts`** — deriva los schedules **importando `vercel.json`** (única fuente de verdad); la UI calcula la próxima corrida con `cron-parser` desde ahí. Cambiar un cron = editar solo `vercel.json`.
+
+### Asistente IA (chat con tool-calling)
+
+Chat en lenguaje natural que responde consultando **las mismas funciones de reporte** del `Store` vía **tool-calling**, con **modelos intercambiables**. Todo vive en `src/lib/llm/`:
+
+- **`providers.ts`** — un proveedor es `{baseUrl, apiKey, model}` que habla el dialecto **OpenAI-compatible** `/v1/chat/completions`. `availableProviders()` los arma desde env; `resolveProvider(id)` respeta `LLM_DEFAULT_PROVIDER` y cae al primero. Cambiar de modelo = variables de entorno, sin tocar código. Vars (todas opcionales): **Ollama** `LLM_OLLAMA_BASE_URL` (default `http://localhost:11434/v1`) + `LLM_OLLAMA_MODEL`; **MiniMax** `LLM_MINIMAX_BASE_URL` + `LLM_MINIMAX_API_KEY` + `LLM_MINIMAX_MODEL`. La API key va **sólo en `.env.local`** (nunca commiteada).
+- **`client.ts`** — `chatComplete` hace el POST (`stream:false`, `temperature:0`) y mapea `tool_calls`. Seams `__setLlmClient`/`__resetLlmClient` para tests (no mocks globales).
+- **`tools.ts`** — `TOOL_DEFS` son 6 herramientas (filtros, por persona, por subproyecto, línea de tiempo, matriz, detalle) que envuelven las funciones de reporte de `db.ts`; `buildFilters` reusa `parseReportFilters` de `report-params.ts`.
+- **`agent.ts`** — `runChat(provider, messages, now, dbName)` corre el bucle de tool-calling (`MAX_ITERS=5`). El system prompt (español) obliga a **usar herramientas para cualquier dato numérico** y a **no pedir aclaraciones** (los filtros son todos opcionales — llama la herramienta sin ellos). `cleanReply()` **quita los bloques `<think>…</think>`** de modelos con razonamiento (MiniMax M3 los emite en `content`).
+- **`request.ts`** — valida el body (`provider` + `messages` con roles user/assistant y contenido no vacío).
+- **`src/lib/chat-store.ts`** — persiste los chats en **`localStorage`** (key `asistente-chats-v1`): local-first, sin identidad por usuario (no hay tabla en Postgres). `deriveTitle`, `saveChat`, `deleteChat`.
 
 ### Endpoints
 
@@ -50,18 +62,21 @@ Notion ──(cron sync)──► Postgres tabla `pages` ──(GET /api/export)
 - `POST /api/sync?kind=incremental|full` — acepta **cookie de usuario** OR `Authorization: Bearer $CRON_SECRET`. **Espera inline** (no es 202 background — patrón "void runSync()" no es confiable en Vercel serverless porque la función muere al responder). Responde 200 con `{ok:true, done:true, upserted, deleted}` o `{ok:true, done:false, segmentCount}` (full con `SYNC_BUDGET_MS` agotado — el cliente debe volver a llamar para continuar). Devuelve 409 si hay otra sync corriendo (lock). `DELETE /api/sync` setea flag de cancel.
 - `GET /api/sync/status` — estado actual (protegido por el proxy).
 - `GET /api/export?from=YYYY-MM-DD&to=YYYY-MM-DD` — valida fechas ISO, filtra por `DATE_COLUMN`, ordena ascendente por `DATE_COLUMN` en memoria (la ruta usa `getAllRows` y conserva el pipeline previo a la migración) y stream CSV. Devuelve **503 `no_data`** si el cache está vacío (necesita primer sync manual). Devuelve **500 `date_column_not_in_whitelist`** si `DATE_COLUMN` no está en `COLUMNS`.
+- `GET /api/reports/{by-person,by-subproject,timeline,matrix,detail,filters}` — agregados SQL sobre `pages` (totales por persona/subproyecto, evolución `month`/`week`, matriz persona×subproyecto, detalle con cursor, opciones de filtro). Protegidos por el proxy. Spec: `docs/reports/202607081002_reportes_v1_spec.md`.
+- `POST /api/chat` — body `{provider, db, messages}`; valida el body, resuelve el proveedor, valida `db` contra `DATABASES` y corre `runChat`. Responde `{reply, toolTrace}`. `maxDuration=120`. `GET /api/chat/providers` — lista los proveedores disponibles + default.
 
 ### Páginas (UI)
 
-- `/` — login + **menú principal** de BDs: tarjetas generadas desde el registro `src/lib/databases.ts` (hoy solo `tiempos`).
-- `/db/tiempos` — dashboard de la BD (estado del snapshot, sync manual, descarga CSV). `/db/tiempos/reports` — UI de reportes.
+- `/` — login + **menú principal**: tarjeta del Asistente IA + tarjetas de BDs desde el registro `src/lib/databases.ts` (hoy solo `tiempos`). Cada tarjeta de BD es un link directo a sus reportes.
+- `/db/tiempos/reports` — UI de reportes (export y sync viven en **modals** ahí). `/db/tiempos` — **redirect** legacy a `/db/tiempos/reports` (el dashboard viejo se fusionó con reportes).
+- `/asistente` — Asistente IA (top-level, hermano del menú): chat estilo Claude (burbujas usuario/IA, markdown con `react-markdown`, historial en `localStorage` con borrado, selectores BD/modelo). `/db/tiempos/chat` — redirect legacy a `/asistente`.
 - `/reports` — redirect legacy a `/db/tiempos/reports`.
 - **`src/app/components/app-shell.tsx`** — shell de las páginas autenticadas: sidebar de navegación anclable/ocultable (preferencia en `localStorage` key `sidebar-pinned`; overlay con hamburguesa en móvil o desanclada). La navegación y el logout viven ahí; cada página la monta solo en su rama autenticada y pasa `onLogout` para resetear su estado local.
 - **El backend sigue single-DB**: agregar una entrada a `databases.ts` solo agrega la tarjeta al menú; soportar otra BD real es MB-02 en `docs/to-dos.md` (config/snapshot/sync/APIs por BD).
 
 ### Auth
 
-- **`src/proxy.ts`** (convención Next 16, ex-`middleware.ts`; runtime nodejs) protege `/api/export/*` y `/api/sync/status` con iron-session. **`/api/sync` no está en el matcher** — su auth (cookie OR cron bearer) la maneja la route handler.
+- **`src/proxy.ts`** (convención Next 16, ex-`middleware.ts`; runtime nodejs) protege `/api/export/*`, `/api/sync/status`, `/api/reports/*` y `/api/chat` con iron-session. **`/api/sync` no está en el matcher** — su auth (cookie OR cron bearer) la maneja la route handler.
 - **Única definición de sesión**: `src/lib/session.ts` (opciones + tipo). `src/lib/auth.ts` sólo la re-exporta y agrega `verifyPassword` (bcrypt) — no pueden divergir. `SESSION_SECRET` no tiene fallback: si falta, el fail-fast de `instrumentation.ts` impide arrancar.
 
 ### Crons (Vercel)
