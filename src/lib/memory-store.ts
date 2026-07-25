@@ -9,10 +9,10 @@
 // graph y un module-scope normal no compartiría estado entre handlers.
 import type { FlatRow, CacheMeta, SyncStatus } from "@/lib/types";
 import {
-  HOURS_COL, REPORT_PROPS, dateCol, toHours, toTimestamp, toExclusiveEndUtc,
+  HOURS_COL, REPORT_PROPS, UUID_RE, dateCol, toHours, toTimestamp, toExclusiveEndUtc,
   encodeDetailCursor, decodeDetailCursor,
   type Store, type ReportFilters, type PersonTotal, type SubprojectTotal,
-  type TimelineBucket, type DetailPage, type FilterOptions,
+  type TimelineBucket, type MatrixCell, type DetailPage, type FilterOptions,
 } from "@/lib/store-shared";
 
 interface KvEntry { value: unknown; expiresAt: number | null; }
@@ -86,8 +86,8 @@ class MemoryStore implements Store {
   // inclusivo, semana ISO lunes, keyset (created_at, id) desc). ----
   private norm(v: string | undefined): string { return (v ?? "").trim(); }
   private matching(f: ReportFilters): { id: string; row: FlatRow; created: number }[] {
-    const from = Date.parse(`${f.from}T00:00:00Z`);
-    const toEx = Date.parse(toExclusiveEndUtc(f.to));
+    const from = f.from ? Date.parse(`${f.from}T00:00:00Z`) : -Infinity;
+    const toEx = f.to ? Date.parse(toExclusiveEndUtc(f.to)) : Infinity;
     const out: { id: string; row: FlatRow; created: number }[] = [];
     for (const [id, row] of this.pages) {
       const ts = toTimestamp(row[dateCol()]);
@@ -103,17 +103,32 @@ class MemoryStore implements Store {
     return out;
   }
 
+  // Etiqueta visible del grupo de persona, como el SQL de pgStore: max() de
+  // "Hecho por"; si ninguna fila lo trae, max() de "Persona" descartando UUIDs.
+  private maxLabel(current: { primary: string | null; fallback: string | null }, row: FlatRow) {
+    const p = this.norm(row[REPORT_PROPS.personLabel]);
+    if (p && (current.primary === null || p > current.primary)) current.primary = p;
+    const f = this.norm(row[REPORT_PROPS.personLabelFallback]);
+    if (f && !UUID_RE.test(f) && (current.fallback === null || f > current.fallback)) current.fallback = f;
+    return current;
+  }
+  private resolveLabel(l: { primary: string | null; fallback: string | null }): string | null {
+    return l.primary ?? l.fallback;
+  }
+
   async reportByPerson(f: ReportFilters): Promise<PersonTotal[]> {
-    const acc = new Map<string, { hours: number; count: number }>();
+    const acc = new Map<string, { label: { primary: string | null; fallback: string | null }; hours: number; count: number }>();
     for (const { row } of this.matching(f)) {
       const key = this.norm(row[REPORT_PROPS.person]);
-      const g = acc.get(key) ?? { hours: 0, count: 0 };
+      const g = acc.get(key) ?? { label: { primary: null, fallback: null }, hours: 0, count: 0 };
+      this.maxLabel(g.label, row);
       g.hours += toHours(row[HOURS_COL]); g.count++;
       acc.set(key, g);
     }
     return [...acc.entries()]
-      .map(([person, g]) => ({ person, ...g }))
-      .sort((a, b) => b.hours - a.hours || a.person.localeCompare(b.person));
+      .map(([person, g]) => ({ person, label: this.resolveLabel(g.label), hours: g.hours, count: g.count }))
+      .sort((a, b) => b.hours - a.hours
+        || (a.label === null ? 1 : b.label === null ? -1 : a.label.localeCompare(b.label)));
   }
 
   async reportBySubproject(f: ReportFilters): Promise<SubprojectTotal[]> {
@@ -153,6 +168,29 @@ class MemoryStore implements Store {
     return [...acc.entries()].map(([bucket, g]) => ({ bucket, ...g })).sort((a, b) => a.bucket.localeCompare(b.bucket));
   }
 
+  async reportMatrix(f: ReportFilters, dim: "person" | "subproject"): Promise<MatrixCell[]> {
+    const prop = dim === "person" ? REPORT_PROPS.person : REPORT_PROPS.subproject;
+    const acc = new Map<string, { group: string | null; label: { primary: string | null; fallback: string | null }; bucket: string; hours: number }>();
+    for (const { row, created } of this.matching(f)) {
+      const d = new Date(created);
+      const dayFromMonday = (d.getUTCDay() + 6) % 7; // ISO: lunes = 0
+      const monday = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - dayFromMonday * 86_400_000;
+      const bucket = new Date(monday).toISOString().slice(0, 10);
+      const group = this.norm(row[prop]) || null;
+      const key = `${bucket}|${group ?? ""}`;
+      const g = acc.get(key) ?? { group, label: { primary: null, fallback: null }, bucket, hours: 0 };
+      if (dim === "person") this.maxLabel(g.label, row);
+      g.hours += toHours(row[HOURS_COL]);
+      acc.set(key, g);
+    }
+    // Mismo orden que el SQL: bucket asc, group asc con nulls al final.
+    return [...acc.values()]
+      .map((g) => ({ group: g.group, label: this.resolveLabel(g.label), bucket: g.bucket, hours: g.hours }))
+      .sort((a, b) =>
+        a.bucket.localeCompare(b.bucket)
+        || (a.group === null ? 1 : b.group === null ? -1 : a.group.localeCompare(b.group)));
+  }
+
   async reportDetail(f: ReportFilters, cursor: string | null, limit = 50): Promise<DetailPage> {
     const cur = decodeDetailCursor(cursor);
     let rows = this.matching(f).sort((a, b) => b.created - a.created || b.id.localeCompare(a.id));
@@ -176,8 +214,19 @@ class MemoryStore implements Store {
       }
       return [...set].sort((a, b) => a.localeCompare(b));
     };
+    // Personas: value = ID de la relación, label = max() del nombre en el grupo.
+    const peopleMap = new Map<string, { primary: string | null; fallback: string | null }>();
+    for (const row of this.pages.values()) {
+      const v = this.norm(row[REPORT_PROPS.person]);
+      if (!v) continue;
+      if (!peopleMap.has(v)) peopleMap.set(v, { primary: null, fallback: null });
+      this.maxLabel(peopleMap.get(v)!, row);
+    }
+    const people = [...peopleMap.entries()]
+      .map(([value, label]) => ({ value, label: this.resolveLabel(label) ?? value }))
+      .sort((a, b) => a.label.localeCompare(b.label));
     return {
-      people: dim(REPORT_PROPS.person),
+      people,
       subprojects: dim(REPORT_PROPS.subproject),
       projects: dim(REPORT_PROPS.project),
       companies: dim(REPORT_PROPS.company),

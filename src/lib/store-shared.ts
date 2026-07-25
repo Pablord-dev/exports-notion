@@ -9,7 +9,14 @@ export const dateCol = () => process.env.DATE_COLUMN ?? "Hora de creación";
 
 /** Propiedades (display) por las que agrupan/filtran los reportes. */
 export const REPORT_PROPS = {
-  person: "Persona",
+  // La dimensión "Persona" agrupa/filtra por el ID de la relación
+  // "Hecho por (no tocar)" (estable aunque cambie el nombre) y MUESTRA el
+  // nombre de "Hecho por" (2026-07-16: "Persona" no siempre trae el nombre).
+  person: "Hecho por (no tocar)",
+  personLabel: "Hecho por",
+  // Respaldo del nombre cuando "Hecho por" viene vacío en todo el grupo.
+  // Se descartan valores con pinta de UUID (a veces "Persona" trae el ID).
+  personLabelFallback: "Persona",
   subproject: "Subproyecto",
   project: "Proyecto",
   company: "Empresa productiva",
@@ -27,6 +34,9 @@ export function toTimestamp(v: string | undefined): string | null {
   return Number.isNaN(Date.parse(start)) ? null : start;
 }
 
+/** Valores con pinta de ID de Notion: no sirven como nombre visible. */
+export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** Fin EXCLUSIVO del rango en UTC: `to` (YYYY-MM-DD, inclusive) + 1 día. */
 export function toExclusiveEndUtc(to: string): string {
   return new Date(Date.parse(`${to}T00:00:00Z`) + 86_400_000).toISOString();
@@ -37,15 +47,23 @@ export function toExclusiveEndUtc(to: string): string {
 // de relación: verificado contra datos reales (2026-07-13) que 18-29% de las filas
 // tienen nombre sin ID — agrupar por ID partiría personas y subproyectos en dos.
 export interface ReportFilters {
-  /** YYYY-MM-DD inclusive, interpretado en UTC (igual que el export). */
-  from: string;
-  to: string;
+  /** YYYY-MM-DD inclusive, interpretado en UTC (igual que el export).
+      Ausente = sin cota por ese lado (sin rango = todos los registros). */
+  from?: string;
+  to?: string;
   people?: string[];
   subprojects?: string[];
   projects?: string[];
   companies?: string[];
 }
-export interface PersonTotal { person: string; hours: number; count: number; }
+export interface PersonTotal {
+  /** Clave de agrupación: ID de la relación (puede ser "" si no hay valor). */
+  person: string;
+  /** Nombre visible (max() de personLabel en el grupo); null si ninguno lo trae. */
+  label: string | null;
+  hours: number;
+  count: number;
+}
 export interface SubprojectTotal {
   /** null = registros sin subproyecto (no se pierden, spec §Reportes). */
   subproject: string | null;
@@ -56,8 +74,13 @@ export interface SubprojectTotal {
   count: number;
 }
 export interface TimelineBucket { bucket: string; hours: number; count: number; }
+/** Celda del reporte matriz (dimensión × semana). `group` null = sin valor en la
+    dimensión. `label` = nombre visible del grupo (solo dim person; null en el resto). */
+export interface MatrixCell { group: string | null; label: string | null; bucket: string; hours: number; }
 export interface DetailPage { rows: FlatRow[]; nextCursor: string | null; }
-export interface FilterOptions { people: string[]; subprojects: string[]; projects: string[]; companies: string[]; }
+/** Opción de filtro con valor (clave real) y etiqueta visible. */
+export interface FilterOption { value: string; label: string; }
+export interface FilterOptions { people: FilterOption[]; subprojects: string[]; projects: string[]; companies: string[]; }
 
 // ---- Cursor keyset del detail: (created_at, id) de la última fila entregada ----
 export interface DetailCursor { createdAt: string; id: string; }
@@ -106,6 +129,8 @@ export interface Store {
   reportByPerson(f: ReportFilters): Promise<PersonTotal[]>;
   reportBySubproject(f: ReportFilters): Promise<SubprojectTotal[]>;
   reportTimeline(f: ReportFilters, granularity: "month" | "week"): Promise<TimelineBucket[]>;
+  /** Matriz dimensión × semana ISO: horas agrupadas por (dim, semana) dentro de los filtros. */
+  reportMatrix(f: ReportFilters, dim: "person" | "subproject"): Promise<MatrixCell[]>;
   reportDetail(f: ReportFilters, cursor: string | null, limit?: number): Promise<DetailPage>;
   reportFilters(): Promise<FilterOptions>;
 }

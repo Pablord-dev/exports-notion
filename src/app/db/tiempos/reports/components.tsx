@@ -13,11 +13,15 @@ export const fmtHours = (h: number) =>
 
 // ---------------------------------------------------------------------------
 // MultiSelect: botón + dropdown con búsqueda y checkboxes. Cierra con click
-// afuera o Esc. El valor muestra cuántos hay seleccionados.
+// afuera o Esc. El valor muestra cuántos hay seleccionados. Las opciones son
+// pares {value, label}: se busca/muestra por label, se selecciona por value
+// (para Persona: value = ID de la relación, label = nombre).
 // ---------------------------------------------------------------------------
+export interface MultiSelectOption { value: string; label: string; }
+
 export function MultiSelect({ label, options, selected, onChange }: {
   label: string;
-  options: string[];
+  options: MultiSelectOption[];
   selected: string[];
   onChange: (next: string[]) => void;
 }) {
@@ -34,7 +38,7 @@ export function MultiSelect({ label, options, selected, onChange }: {
     return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
   }, [open]);
 
-  const visible = query ? options.filter((o) => o.toLowerCase().includes(query.toLowerCase())) : options;
+  const visible = query ? options.filter((o) => o.label.toLowerCase().includes(query.toLowerCase())) : options;
   const toggle = (v: string) =>
     onChange(selected.includes(v) ? selected.filter((x) => x !== v) : [...selected, v]);
 
@@ -59,11 +63,11 @@ export function MultiSelect({ label, options, selected, onChange }: {
           <ul className="max-h-56 overflow-y-auto p-1">
             {visible.length === 0 && <li className="px-2 py-2 text-muted">Sin coincidencias</li>}
             {visible.map((o) => (
-              <li key={o}>
+              <li key={o.value}>
                 <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-dark-blue">
-                  <input type="checkbox" checked={selected.includes(o)} onChange={() => toggle(o)}
+                  <input type="checkbox" checked={selected.includes(o.value)} onChange={() => toggle(o.value)}
                          className="accent-[#0f40ef]" />
-                  <span className="truncate text-fg">{o}</span>
+                  <span className="truncate text-fg">{o.label}</span>
                 </label>
               </li>
             ))}

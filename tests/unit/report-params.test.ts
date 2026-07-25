@@ -4,10 +4,15 @@ import { parseReportFilters, parseGranularity, parseLimit } from "@/lib/report-p
 const sp = (q: string) => new URLSearchParams(q);
 
 describe("parseReportFilters", () => {
-  it("exige from/to ISO y from <= to", () => {
-    expect(parseReportFilters(sp(""))).toMatchObject({ ok: false, error: "bad_from" });
-    expect(parseReportFilters(sp("from=2026-06-01"))).toMatchObject({ ok: false, error: "bad_to" });
+  it("acepta rango ausente (= todos los registros) y cotas sueltas", () => {
+    expect(parseReportFilters(sp(""))).toMatchObject({ ok: true, filters: { from: undefined, to: undefined } });
+    expect(parseReportFilters(sp("from=2026-06-01"))).toMatchObject({ ok: true, filters: { from: "2026-06-01", to: undefined } });
+    expect(parseReportFilters(sp("to=2026-06-30"))).toMatchObject({ ok: true, filters: { from: undefined, to: "2026-06-30" } });
+  });
+
+  it("valida ISO y from <= to cuando las cotas sí vienen", () => {
     expect(parseReportFilters(sp("from=junio&to=2026-06-30"))).toMatchObject({ ok: false, error: "bad_from" });
+    expect(parseReportFilters(sp("from=2026-06-01&to=treinta"))).toMatchObject({ ok: false, error: "bad_to" });
     expect(parseReportFilters(sp("from=2026-07-01&to=2026-06-30"))).toMatchObject({ ok: false, error: "from_after_to" });
   });
 

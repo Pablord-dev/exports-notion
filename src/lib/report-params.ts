@@ -17,16 +17,17 @@ function getMulti(sp: URLSearchParams, key: string): string[] | undefined {
 }
 
 export function parseReportFilters(sp: URLSearchParams): ParseResult {
+  // from/to son opcionales (ausente = sin cota); si vienen, deben ser ISO válidos.
   const from = sp.get("from");
   const to = sp.get("to");
-  if (!from || !ISO_DATE.test(from)) return { ok: false, error: "bad_from" };
-  if (!to || !ISO_DATE.test(to)) return { ok: false, error: "bad_to" };
-  if (from > to) return { ok: false, error: "from_after_to" };
+  if (from && !ISO_DATE.test(from)) return { ok: false, error: "bad_from" };
+  if (to && !ISO_DATE.test(to)) return { ok: false, error: "bad_to" };
+  if (from && to && from > to) return { ok: false, error: "from_after_to" };
   return {
     ok: true,
     filters: {
-      from,
-      to,
+      from: from || undefined,
+      to: to || undefined,
       people: getMulti(sp, "person"),
       subprojects: getMulti(sp, "subproject"),
       projects: getMulti(sp, "project"),

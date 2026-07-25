@@ -6,7 +6,7 @@ import postgres from "postgres";
 import { memoryStore } from "@/lib/memory-store";
 import type { FlatRow, CacheMeta, SyncStatus } from "@/lib/types";
 import {
-  HOURS_COL, REPORT_PROPS, dateCol, toHours, toTimestamp, toExclusiveEndUtc,
+  HOURS_COL, REPORT_PROPS, UUID_RE, dateCol, toHours, toTimestamp, toExclusiveEndUtc,
   encodeDetailCursor, decodeDetailCursor,
   type Store, type ReportFilters,
 } from "@/lib/store-shared";
@@ -54,11 +54,26 @@ async function kvDel(sql: Sql, key: string) {
   await sql`delete from sync_state where key = ${key}`;
 }
 
-// WHERE común de reportes: rango [from, to] inclusivo en UTC + filtros por nombre.
+// Etiqueta visible de un grupo de persona: max() de "Hecho por"; si ninguna
+// fila del grupo lo trae, max() de "Persona" descartando valores con pinta de
+// UUID (a veces esa propiedad trae el ID en vez del nombre).
+function personLabelSql(sql: Sql) {
+  return sql`coalesce(
+    max(nullif(trim(coalesce(row->>${REPORT_PROPS.personLabel}, '')), '')),
+    max(case when trim(coalesce(row->>${REPORT_PROPS.personLabelFallback}, '')) !~* ${UUID_RE.source}
+             then nullif(trim(coalesce(row->>${REPORT_PROPS.personLabelFallback}, '')), '') end)
+  )`;
+}
+
+// WHERE común de reportes: rango [from, to] inclusivo en UTC (cada cota es
+// opcional; sin rango = todo) + filtros por nombre. `created_at is not null`
+// replica la exclusión implícita que el rango hacía de filas sin fecha
+// (memory-store también las salta).
 function reportWhere(sql: Sql, f: ReportFilters) {
   return sql`
-    created_at >= ${`${f.from}T00:00:00Z`}::timestamptz
-    and created_at < ${toExclusiveEndUtc(f.to)}::timestamptz
+    created_at is not null
+    ${f.from ? sql`and created_at >= ${`${f.from}T00:00:00Z`}::timestamptz` : sql``}
+    ${f.to ? sql`and created_at < ${toExclusiveEndUtc(f.to)}::timestamptz` : sql``}
     ${f.people?.length ? sql`and trim(coalesce(row->>${REPORT_PROPS.person}, '')) = any(${f.people})` : sql``}
     ${f.subprojects?.length ? sql`and trim(coalesce(row->>${REPORT_PROPS.subproject}, '')) = any(${f.subprojects})` : sql``}
     ${f.projects?.length ? sql`and trim(coalesce(row->>${REPORT_PROPS.project}, '')) = any(${f.projects})` : sql``}
@@ -177,12 +192,16 @@ function pgStore(sql: Sql): Store {
     async reportByPerson(f) {
       const rs = await sql`
         select trim(coalesce(row->>${REPORT_PROPS.person}, '')) as person,
+               ${personLabelSql(sql)} as label,
                sum(hours)::float8 as hours, count(*)::int as count
         from pages
         where ${reportWhere(sql, f)}
         group by 1
-        order by 2 desc, 1 asc`;
-      return rs.map((r) => ({ person: r.person as string, hours: r.hours as number, count: r.count as number }));
+        order by 3 desc, 2 asc nulls last`;
+      return rs.map((r) => ({
+        person: r.person as string, label: r.label as string | null,
+        hours: r.hours as number, count: r.count as number,
+      }));
     },
     async reportBySubproject(f) {
       const rs = await sql`
@@ -210,6 +229,24 @@ function pgStore(sql: Sql): Store {
         order by 1 asc`;
       return rs.map((r) => ({ bucket: r.bucket as string, hours: r.hours as number, count: r.count as number }));
     },
+    async reportMatrix(f, dim) {
+      // Semana ISO (lunes), igual que reportTimeline. group null = sin valor.
+      // Para dim person el grupo es el ID de la relación y label trae el nombre.
+      const prop = dim === "person" ? REPORT_PROPS.person : REPORT_PROPS.subproject;
+      const rs = await sql`
+        select nullif(trim(coalesce(row->>${prop}, '')), '') as grp,
+               ${dim === "person" ? personLabelSql(sql) : sql`null::text`} as label,
+               to_char(date_trunc('week', created_at at time zone 'UTC'), 'YYYY-MM-DD') as bucket,
+               sum(hours)::float8 as hours
+        from pages
+        where ${reportWhere(sql, f)}
+        group by 1, 3
+        order by 3 asc, 1 asc nulls last`;
+      return rs.map((r) => ({
+        group: r.grp as string | null, label: r.label as string | null,
+        bucket: r.bucket as string, hours: r.hours as number,
+      }));
+    },
     async reportDetail(f, cursor, limit = 50) {
       const cur = decodeDetailCursor(cursor);
       const rs = await sql`
@@ -231,8 +268,16 @@ function pgStore(sql: Sql): Store {
           where coalesce(trim(row->>${prop}), '') <> '' order by 1`;
         return rs.map((r) => r.v as string);
       };
+      // Personas: value = ID de la relación, label = nombre visible del grupo.
+      const people = await sql`
+        select trim(row->>${REPORT_PROPS.person}) as v,
+               ${personLabelSql(sql)} as label
+        from pages
+        where coalesce(trim(row->>${REPORT_PROPS.person}), '') <> ''
+        group by 1
+        order by 2 asc nulls last, 1 asc`;
       return {
-        people: await dim(REPORT_PROPS.person),
+        people: people.map((r) => ({ value: r.v as string, label: (r.label as string | null) ?? (r.v as string) })),
         subprojects: await dim(REPORT_PROPS.subproject),
         projects: await dim(REPORT_PROPS.project),
         companies: await dim(REPORT_PROPS.company),
@@ -260,13 +305,19 @@ function pgStore(sql: Sql): Store {
 let sqlClient: Sql | null = null;
 let store: Store | null = null;
 
+// En dev, el HMR de Next recrea este módulo en cada recompilación: sin cache
+// global cada reload abría un pool nuevo sin cerrar el anterior, hasta agotar
+// max_connections de Postgres ("sorry, too many clients already").
+const globalForDb = globalThis as unknown as { __exportNotionSql?: Sql };
+
 function s(): Store {
   if (!store) {
     if (process.env.E2E_STUBS === "1") {
       // Playwright local sin Postgres real (mismo patrón que memory-redis).
       store = memoryStore();
     } else {
-      sqlClient = postgres(process.env.DATABASE_URL!);
+      sqlClient = globalForDb.__exportNotionSql ?? postgres(process.env.DATABASE_URL!);
+      if (process.env.NODE_ENV !== "production") globalForDb.__exportNotionSql = sqlClient;
       store = pgStore(sqlClient);
     }
   }
@@ -279,6 +330,7 @@ export function __setStore(fake: Store | null) { store = fake; }
 /** Cierra la conexión (scripts/CLI; el server no lo necesita). */
 export async function closeDb() {
   if (sqlClient) { await sqlClient.end(); sqlClient = null; }
+  globalForDb.__exportNotionSql = undefined;
   store = null;
 }
 
@@ -313,5 +365,6 @@ export const rateLimitLogin: Store["rateLimitLogin"] = (ip, limit, win) => s().r
 export const reportByPerson: Store["reportByPerson"] = (f) => s().reportByPerson(f);
 export const reportBySubproject: Store["reportBySubproject"] = (f) => s().reportBySubproject(f);
 export const reportTimeline: Store["reportTimeline"] = (f, g) => s().reportTimeline(f, g);
+export const reportMatrix: Store["reportMatrix"] = (f, d) => s().reportMatrix(f, d);
 export const reportDetail: Store["reportDetail"] = (f, c, l) => s().reportDetail(f, c, l);
 export const reportFilters: Store["reportFilters"] = () => s().reportFilters();
