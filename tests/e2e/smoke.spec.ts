@@ -10,7 +10,7 @@ test("login screen renders and rejects wrong password", async ({ page }) => {
 
 // Sólo en modo stub (default): el password del entorno E2E es conocido.
 // Con E2E_REAL=1 se salta — no conocemos el password real.
-test("login shows main menu and DB dashboard renders", async ({ page }) => {
+test("login shows main menu and sync/export modals work", async ({ page }) => {
   test.skip(process.env.E2E_REAL === "1", "password real desconocido");
   await page.goto("/");
   await page.getByPlaceholder("Contraseña").fill("e2e-password");
@@ -21,12 +21,22 @@ test("login shows main menu and DB dashboard renders", async ({ page }) => {
   const sidebar = page.getByRole("complementary", { name: "Navegación" });
   await expect(sidebar).toBeVisible();
   await expect(sidebar.getByRole("button", { name: "Cerrar sesión" })).toBeVisible();
-  // Entrar al dashboard de la BD desde la tarjeta: sync + export.
-  await page.locator("main").getByRole("link", { name: "Exportar y sincronizar" }).click();
-  await expect(page.getByRole("heading", { name: "BD Tiempos" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Incremental" })).toBeVisible();
+  // La página de la BD es la de reportes; sync y export viven en modals.
+  await sidebar.getByRole("link", { name: "BD Tiempos" }).click();
+  await expect(page.getByRole("heading", { name: "Reportes" })).toBeVisible();
+  // Modal de sincronización: botones del viejo dashboard; Esc lo cierra.
+  await page.getByRole("button", { name: "Sincronizar" }).click();
+  await expect(page.getByRole("button", { name: "Refrescar incremental" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Full" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Full" })).toBeHidden();
+  // Modal de exportación: click fuera (backdrop) regresa al reporte.
+  // Posición fuera de la sidebar anclada (0–240px) y del cuadro centrado del modal.
+  await page.getByRole("button", { name: "Exportar" }).click();
   await expect(page.getByRole("button", { name: "Descargar" })).toBeVisible();
+  await page.locator("div.fixed.inset-0").click({ position: { x: 300, y: 300 } });
+  await expect(page.getByRole("button", { name: "Descargar" })).toBeHidden();
+  await expect(page.getByRole("heading", { name: "Reportes" })).toBeVisible();
 });
 
 // Reportes (SB-13/14): con el store en memoria vacío la página debe cargar
@@ -36,7 +46,8 @@ test("reports page renders filters and empty state", async ({ page }) => {
   await page.goto("/");
   await page.getByPlaceholder("Contraseña").fill("e2e-password");
   await page.getByRole("button", { name: "Entrar" }).click();
-  await page.locator("main").getByRole("link", { name: "Reportes" }).click();
+  // La tarjeta completa de la BD es el link a sus reportes.
+  await page.locator("main").getByRole("link", { name: "BD Tiempos" }).click();
   await expect(page.getByRole("heading", { name: "Reportes" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Persona" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Subproyecto" })).toBeVisible();
@@ -57,17 +68,37 @@ test("sidebar can be unpinned, reopened and pinned again", async ({ page }) => {
   await expect(sidebar).not.toBeInViewport();
   const burger = page.getByRole("button", { name: "Abrir menú" });
   await expect(burger).toBeVisible();
-  // Abrir como overlay y navegar (el overlay se cierra al navegar).
+  // Abrir como overlay y navegar (el overlay se cierra al navegar):
+  // la BD vive dentro del grupo desplegable "Bases de datos" (abierto por default).
   await burger.click();
   await expect(sidebar).toBeInViewport();
-  await sidebar.getByRole("link", { name: "Exportar y sincronizar" }).click();
-  await expect(page.getByRole("button", { name: "Incremental" })).toBeVisible();
+  await expect(sidebar.getByRole("button", { name: "Bases de datos" })).toBeVisible();
+  await sidebar.getByRole("link", { name: "BD Tiempos" }).click();
+  await expect(page.getByRole("button", { name: "Sincronizar" })).toBeVisible();
   await expect(sidebar).not.toBeInViewport();
   // Re-anclar: abrir overlay y fijar.
   await burger.click();
   await sidebar.getByRole("button", { name: "Anclar menú" }).click();
   await expect(sidebar).toBeInViewport();
   await expect(burger).toBeHidden();
+});
+
+// Asistente IA (chat): la página carga tras login, con encabezado, selector de
+// modelo y caja de mensaje. No se envía nada (el LLM real no corre en E2E).
+test("chat page renders composer and model selector", async ({ page }) => {
+  test.skip(process.env.E2E_REAL === "1", "password real desconocido");
+  await page.goto("/");
+  await page.getByPlaceholder("Contraseña").fill("e2e-password");
+  await page.getByRole("button", { name: "Entrar" }).click();
+  // "Asistente IA" es entrada top-level del sidebar → /asistente.
+  const sidebar = page.getByRole("complementary", { name: "Navegación" });
+  await sidebar.getByRole("link", { name: "Asistente IA" }).click();
+  await expect(page).toHaveURL(/\/asistente$/);
+  await expect(page.getByRole("heading", { name: "Asistente IA" })).toBeVisible();
+  await expect(page.getByPlaceholder("Escribe tu pregunta…")).toBeVisible();
+  // Dropdowns propios dentro del cuadro de texto (botones que abren un listbox).
+  await expect(page.getByRole("button", { name: "Modelo" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Base de datos" })).toBeVisible();
 });
 
 // La ruta vieja /reports redirige a la nueva ubicación bajo su BD.
