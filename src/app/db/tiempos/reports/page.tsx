@@ -64,7 +64,8 @@ type LastResult = {
 type SyncStatus = {
   status: { state: "idle"|"running"|"error"; kind: "incremental"|"full"|null; done: number; total: number; error: string | null; skipped: number; lastResult?: LastResult | null; };
   meta: { lastFullAt: string | null; lastIncrementalAt: string | null; count: number; };
-  next: { incremental: string; full: string; };
+  // null = ese kind no está croneado en vercel.json (sólo disparo manual).
+  next: { incremental: string | null; full: string | null; };
 };
 
 function fmtAgo(iso: string | null): string {
@@ -631,8 +632,8 @@ export default function Reports() {
           ) : (
             <div className="space-y-3 border-t border-border pt-4">
               <div className="flex gap-8">
-                <p className="text-sm text-muted">Incremental en <span className="font-medium text-fg tabular-nums">{syncStatus ? fmtCountdown(syncStatus.next.incremental) : "—"}</span></p>
-                <p className="text-sm text-muted">Full en <span className="font-medium text-fg tabular-nums">{syncStatus ? fmtCountdown(syncStatus.next.full) : "—"}</span></p>
+                <p className="text-sm text-muted">Incremental en <span className="font-medium text-fg tabular-nums">{syncStatus?.next.incremental ? fmtCountdown(syncStatus.next.incremental) : "—"}</span></p>
+                <p className="text-sm text-muted">Full <span className="font-medium text-fg">{syncStatus?.next.full ? <>en <span className="tabular-nums">{fmtCountdown(syncStatus.next.full)}</span></> : "sólo manual"}</span></p>
               </div>
               <div className="flex gap-3">
                 <button onClick={() => trigger("incremental")} disabled={triggering !== null}

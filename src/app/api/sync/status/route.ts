@@ -12,9 +12,10 @@ export async function GET() {
   const [status, meta] = await Promise.all([getStatus(), getMeta()]);
   return NextResponse.json({
     status, meta,
+    // null = ese kind no está croneado (se dispara sólo a mano desde la UI).
     next: {
-      incremental: nextRun(CRON_INCREMENTAL, now).toISOString(),
-      full: nextRun(CRON_FULL, now).toISOString(),
+      incremental: CRON_INCREMENTAL ? nextRun(CRON_INCREMENTAL, now).toISOString() : null,
+      full: CRON_FULL ? nextRun(CRON_FULL, now).toISOString() : null,
     },
   });
 }

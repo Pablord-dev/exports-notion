@@ -316,7 +316,12 @@ function s(): Store {
       // Playwright local sin Postgres real (mismo patrón que memory-redis).
       store = memoryStore();
     } else {
-      sqlClient = globalForDb.__exportNotionSql ?? postgres(process.env.DATABASE_URL!);
+      // prepare:false es obligatorio con el transaction pooler de Supabase
+      // (pgBouncer en modo transaction no soporta prepared statements, que es el
+      // default de postgres.js). En Postgres local es inocuo, así que va siempre
+      // y no depende de detectar el entorno.
+      sqlClient = globalForDb.__exportNotionSql
+        ?? postgres(process.env.DATABASE_URL!, { prepare: false });
       if (process.env.NODE_ENV !== "production") globalForDb.__exportNotionSql = sqlClient;
       store = pgStore(sqlClient);
     }

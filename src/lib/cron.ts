@@ -9,8 +9,11 @@ export function nextRun(expression: string, from: Date = new Date()): Date {
 
 // vercel.json es la única fuente de verdad de los schedules; derivarlos de ahí
 // evita que la UI muestre una próxima corrida que no coincide con el cron real.
-export function cronSchedule(kind: SyncKind): string {
+// Devuelve null si ese kind no tiene cron: la AUSENCIA es configuración válida,
+// no un error. El full no se cronea en planes con timeout corto (Vercel Hobby,
+// 60s) porque un cron dispara UNA invocación y no encadena los tramos que deja
+// SYNC_BUDGET_MS — el full se corre a mano desde la UI, que sí encadena.
+export function cronSchedule(kind: SyncKind): string | null {
   const cron = vercelConfig.crons.find((c) => c.path.includes(`kind=${kind}`));
-  if (!cron) throw new Error(`no cron in vercel.json for kind=${kind}`);
-  return cron.schedule;
+  return cron?.schedule ?? null;
 }

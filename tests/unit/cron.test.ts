@@ -10,11 +10,18 @@ describe("nextRun", () => {
 });
 
 describe("cronSchedule", () => {
-  it("encuentra en vercel.json una expresión cron parseable para cada kind", () => {
+  it("devuelve una expresión parseable para el kind que sí está en vercel.json", () => {
     const base = new Date("2026-05-17T10:30:00Z");
-    for (const kind of ["incremental", "full"] as const) {
-      const schedule = cronSchedule(kind);
-      expect(() => nextRun(schedule, base)).not.toThrow();
-    }
+    const schedule = cronSchedule("incremental");
+    expect(schedule).not.toBeNull();
+    expect(() => nextRun(schedule!, base)).not.toThrow();
+  });
+
+  it("devuelve null para un kind sin cron en vez de lanzar", () => {
+    // El full no se cronea (un cron dispara una sola invocación y no encadena
+    // los tramos de SYNC_BUDGET_MS); se corre a mano desde la UI. Que devuelva
+    // null y no una excepción es lo que mantiene vivo /api/sync/status, donde
+    // cronSchedule se evalúa en el top-level del módulo.
+    expect(cronSchedule("full")).toBeNull();
   });
 });

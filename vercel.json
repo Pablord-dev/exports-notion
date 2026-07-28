@@ -1,6 +1,5 @@
 {
   "crons": [
-    { "path": "/api/sync?kind=full",        "schedule": "0 9 * * *" },
     { "path": "/api/sync?kind=incremental", "schedule": "0 21 * * *" }
   ],
   "headers": [
