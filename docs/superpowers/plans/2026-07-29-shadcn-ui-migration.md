@@ -56,7 +56,7 @@
 **Interfaces:**
 - Produces: `cn(...inputs: ClassValue[]): string` en `@/lib/utils` — lo consumen todos los componentes generados.
 
-- [ ] **Step 1: Crear `components.json`** con este contenido exacto:
+- [x] **Step 1: Crear `components.json`** con este contenido exacto:
 
 ```json
 {
@@ -82,12 +82,12 @@
 }
 ```
 
-- [ ] **Step 2: Instalar dependencias base**
+- [x] **Step 2: Instalar dependencias base**
 
 Run: `npm install clsx tailwind-merge class-variance-authority lucide-react tw-animate-css`
 Expected: exit 0, package.json actualizado.
 
-- [ ] **Step 3: Crear `src/lib/utils.ts`**
+- [x] **Step 3: Crear `src/lib/utils.ts`**
 
 ```ts
 import { clsx, type ClassValue } from "clsx";
@@ -98,12 +98,12 @@ export function cn(...inputs: ClassValue[]) {
 }
 ```
 
-- [ ] **Step 4: Gate**
+- [x] **Step 4: Gate**
 
 Run: `npm test && npm run lint && npx tsc --noEmit`
 Expected: PASS (nada consume aún lo nuevo).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add components.json src/lib/utils.ts package.json package-lock.json
