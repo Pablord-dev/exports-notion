@@ -302,14 +302,14 @@ git commit -m "feat(ui): tema dark iU en tokens shadcn y clases semánticas"
 - Produces: `AppModal({ open, onClose, title, anchor?, wide?, children })` — modal NO bloqueante (Esc y click fuera cierran; el tour puede clickear su popover con el modal abierto).
 - Produces: `Spinner({ className? })` — mismo API que hoy (los callsites no se tocan).
 
-- [ ] **Step 1: Agregar componentes con la CLI**
+- [x] **Step 1: Agregar componentes con la CLI**
 
 Run: `npx shadcn@latest add --yes button card input textarea label dialog sheet table popover command select breadcrumb collapsible tabs badge separator skeleton chart`
 Expected: archivos creados en `src/components/ui/`; instala deps Radix + `recharts` + `cmdk`. Si la CLI pide confirmación interactiva pese a `--yes`, correrla por grupos pequeños.
 
-- [ ] **Step 2: Ajustar `src/components/ui/input.tsx`** — inputs "recesados" del brandbook: en la cadena de clases base del `<input>`, sustituir `bg-transparent` por `bg-background` y agregar `[color-scheme:dark]` (para que el date picker nativo salga oscuro). Si hay variantes `dark:bg-input/30`, eliminarlas (no hay clase dark).
+- [x] **Step 2: Ajustar `src/components/ui/input.tsx`** — inputs "recesados" del brandbook: en la cadena de clases base del `<input>`, sustituir `bg-transparent` por `bg-background` y agregar `[color-scheme:dark]` (para que el date picker nativo salga oscuro). Si hay variantes `dark:bg-input/30`, eliminarlas (no hay clase dark).
 
-- [ ] **Step 3: Reescribir `src/app/components/spinner.tsx`**:
+- [x] **Step 3: Reescribir `src/app/components/spinner.tsx`**:
 
 ```tsx
 import { Loader2 } from "lucide-react";
@@ -321,7 +321,7 @@ export function Spinner({ className }: { className?: string }) {
 }
 ```
 
-- [ ] **Step 4: Crear `src/components/app-modal.tsx`**:
+- [x] **Step 4: Crear `src/components/app-modal.tsx`**:
 
 ```tsx
 "use client";
@@ -361,12 +361,12 @@ export function AppModal({ open, onClose, title, anchor, wide, children }: {
 
 ⚠️ Verificaciones de este componente (quedan cubiertas por E2E en Tareas 6–7): el backdrop debe ser el ÚNICO `div.fixed.inset-0` visible con el modal abierto (el smoke test lo clickea con locator estricto); `DialogContent` de shadcn usa `z-50` — no subirlo (el tour vive en `z-[55]+`).
 
-- [ ] **Step 5: Gate**
+- [x] **Step 5: Gate**
 
 Run: `npm test && npm run lint && npx tsc --noEmit`
 Expected: PASS. Si eslint marca los archivos generados, corregirlos (son código propio).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/components src/app/components/spinner.tsx package.json package-lock.json
