@@ -122,7 +122,7 @@ export interface Store {
   getFullActive(): Promise<string | null>;
   setFullActive(startedAt: string, ttlSec?: number): Promise<void>;
   clearFullActive(): Promise<void>;
-  /** Rate-limit del login: ventana FIJA por IP (sucesor del sliding window de Upstash). */
+  /** Rate-limit del login: ventana FIJA por IP (no sliding window). */
   rateLimitLogin(ip: string, limit?: number, windowSec?: number): Promise<boolean>;
 
   // Reportes (SB-12). Agregación al momento de consultar — sin precálculo.

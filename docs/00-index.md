@@ -20,7 +20,7 @@
 
 ## architecture/ — decisiones vivas
 
-- [adr/README.md](architecture/adr/README.md) — índice de ADRs: whitelist (0001), Data Source ID (0002), segmentación 10k (0003), espera inline (0004), presupuesto opcional (0005), migración a Postgres/Supabase (0006).
+- [adr/README.md](architecture/adr/README.md) — índice de ADRs: whitelist (0001), Data Source ID (0002), segmentación 10k (0003), espera inline (0004), presupuesto opcional (0005), migración a Postgres/Supabase (0006), deploy Hobby + Supabase cloud-only (0007).
 
 ## brief/ — discovery vigente (Capa 1, reutilizable por flows)
 
@@ -32,6 +32,7 @@
 
 - [manual-usuario.md](guides/manual-usuario.md) — manual de usuario en español con screenshots (login, dashboard, sync, descarga CSV).
 - [cambiar-columnas.md](guides/cambiar-columnas.md) — cómo agregar/quitar/renombrar columnas exportadas y cambiar `DATE_COLUMN` (impacto en cache/CSV, cuándo hace falta Full).
+- [deploy.md](guides/deploy.md) — deploy y operación en Vercel Hobby + Supabase Cloud: esquema, pooler, env vars, primer Full sync, riesgos del modelo cloud-only.
 
 ## reports/ — entregables fechados vigentes
 

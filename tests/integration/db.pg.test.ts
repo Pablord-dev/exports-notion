@@ -1,23 +1,32 @@
-// Test de integración de db.ts contra el Postgres local de Supabase.
-// Gated: sólo corre con PG_TEST=1 (requiere `supabase start`).
-//   PG_TEST=1 npx vitest run tests/integration/db.pg.test.ts
+// Test de integración de db.ts contra un Postgres REAL.
 // Verifica el SQL real (unnest/upsert, swap transaccional, KV con TTL) — lo que
-// el fake en memoria no puede cubrir.
+// el fake en memoria no puede cubrir (ahí se encontró el doble-encoding de jsonb).
 //
-// ⚠️ Corre contra una BASE DEDICADA (`exportnotion_test`) que se recrea desde la
-// migración en cada corrida — NUNCA contra la base del app: este test TRUNCA
-// tablas en beforeEach y una corrida contra la base real borró el snapshot de
-// 21k filas (2026-07-13). No "simplificar" apuntándolo a DATABASE_URL.
+// Gated por TEST_DATABASE_URL: sin esa variable el test se salta. Ya no existe el
+// Postgres local (`supabase start`) — el proyecto es cloud-only (ADR 0007).
+//   TEST_DATABASE_URL="postgresql://…pooler.supabase.com:6543/postgres" \
+//     npx vitest run tests/integration/db.pg.test.ts
+//
+// ⚠️ TEST_DATABASE_URL debe apuntar a un PROYECTO SUPABASE DEDICADO A TESTS, jamás
+// al del app: este test DROPEA las tablas en beforeAll y las TRUNCA en cada test.
+// Una corrida contra la base real borró el snapshot de 21k filas (2026-07-13).
+// Hay dos guardas abajo, pero la única protección de verdad es un proyecto aparte.
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import postgres from "postgres";
 import fs from "node:fs";
 import path from "node:path";
 import { runReportAssertions } from "../fixtures/reportCases";
 
-const RUN = process.env.PG_TEST === "1";
-const ADMIN_URL = "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
-const TEST_DB = "exportnotion_test";
-const URL = `postgresql://postgres:postgres@127.0.0.1:54322/${TEST_DB}`;
+const URL = process.env.TEST_DATABASE_URL ?? "";
+const RUN = URL.length > 0;
+
+// Guarda 1 (estática): la URL de test no puede ser la del app.
+if (RUN && process.env.DATABASE_URL && URL === process.env.DATABASE_URL) {
+  throw new Error(
+    "TEST_DATABASE_URL es igual a DATABASE_URL. Este test borra las tablas: " +
+    "apúntalo a un proyecto Supabase dedicado a tests.",
+  );
+}
 
 const row = (id: string, extra: Record<string, string> = {}) => ({
   id,
@@ -40,12 +49,29 @@ describe.runIf(RUN)("db.ts contra Postgres real", () => {
   let sql: ReturnType<typeof postgres>;
 
   beforeAll(async () => {
-    // Recrear la base de test desde cero y aplicar las migraciones del repo.
-    const admin = postgres(ADMIN_URL);
-    await admin.unsafe(`drop database if exists ${TEST_DB} with (force)`);
-    await admin.unsafe(`create database ${TEST_DB}`);
-    await admin.end();
-    sql = postgres(URL);
+    // prepare:false igual que en db.ts — el pooler de Supabase no soporta
+    // prepared statements (ver ADR 0007).
+    sql = postgres(URL, { prepare: false });
+
+    // Guarda 2 (dinámica, la que de verdad protege): si la base destino ya tiene un
+    // snapshot con filas, no es una base de test. Aborta antes de dropear nada.
+    // Esta guarda funciona aunque DATABASE_URL no esté cargada en el entorno de tests.
+    const [t] = await sql`
+      select count(*)::int as n from information_schema.tables
+      where table_schema = 'public' and table_name = 'pages'`;
+    if (t.n) {
+      const [{ n }] = await sql`select count(*)::int as n from pages`;
+      if (n > 0) {
+        await sql.end();
+        throw new Error(
+          `La base de TEST_DATABASE_URL tiene ${n} filas en "pages": parece la base real del app, ` +
+          "no una de tests. Abortado para no borrar el snapshot.",
+        );
+      }
+    }
+
+    // Partir de cero: la migración usa `create table` sin IF NOT EXISTS.
+    await sql.unsafe("drop table if exists pages, pages_new, sync_state, login_attempts cascade");
     const dir = path.resolve(__dirname, "../../supabase/migrations");
     for (const f of fs.readdirSync(dir).sort()) {
       await sql.unsafe(fs.readFileSync(path.join(dir, f), "utf8"));

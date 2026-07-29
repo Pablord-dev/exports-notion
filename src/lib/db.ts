@@ -140,9 +140,9 @@ function pgStore(sql: Sql): Store {
     async clearNewCache() {
       await sql`truncate pages_new`;
     },
-    // Equivalente del RENAME atómico de Redis: dentro de una transacción el
-    // cache vivo nunca se ve a medio construir. Copia (~20k filas) en vez de
-    // DROP+RENAME para no invalidar el plan cache ni renombrar índices.
+    // Swap atómico: dentro de una transacción el snapshot vivo nunca se ve a
+    // medio construir. Copia (~20k filas) en vez de DROP+RENAME para no
+    // invalidar el plan cache ni renombrar índices.
     async promoteNewCache() {
       await sql.begin(async (tx) => {
         await tx`truncate pages`;
@@ -163,7 +163,7 @@ function pgStore(sql: Sql): Store {
     },
     async setStatus(s) { await kvSet(sql, "status", s); },
 
-    // Lock: el NX+EX de Redis se traduce a "insertar, o actualizar sólo si la fila venció".
+    // Lock set-if-absent con TTL: insertar, o actualizar sólo si la fila venció.
     async acquireLock(ttlSec = 600) {
       const rs = await sql`
         insert into sync_state (key, value, expires_at)
@@ -313,7 +313,7 @@ const globalForDb = globalThis as unknown as { __exportNotionSql?: Sql };
 function s(): Store {
   if (!store) {
     if (process.env.E2E_STUBS === "1") {
-      // Playwright local sin Postgres real (mismo patrón que memory-redis).
+      // Playwright local sin Postgres real.
       store = memoryStore();
     } else {
       // prepare:false es obligatorio con el transaction pooler de Supabase

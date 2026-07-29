@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 // Por defecto el E2E corre contra un server con stubs en memoria (E2E_STUBS=1):
-// no necesita Upstash ni Notion reales y usa su propio puerto para no chocar
+// no necesita Postgres ni Notion reales y usa su propio puerto para no chocar
 // con un dev server abierto. Con E2E_REAL=1 vuelve al modo original: reutiliza
 // (o levanta) el server del puerto 3000 con las credenciales de .env.local.
 const REAL = process.env.E2E_REAL === "1";
@@ -22,8 +22,8 @@ const STUB_ENV = {
   APP_PASSWORD_HASH: "e2e-dummy",
   SESSION_SECRET: "e2e-session-secret-of-32-chars!!",
   CRON_SECRET: "e2e-dummy",
-  UPSTASH_REDIS_REST_URL: "http://localhost:1",
-  UPSTASH_REDIS_REST_TOKEN: "e2e-dummy",
+  // Nunca se conecta (E2E_STUBS=1 usa memoryStore), pero loadConfig la exige.
+  DATABASE_URL: "postgresql://e2e:e2e@127.0.0.1:1/e2e",
 };
 
 export default defineConfig({

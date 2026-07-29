@@ -23,7 +23,7 @@ Cuerpo opcional: el porqué y lo no obvio (hallazgos verificados, trade-offs).
 npm test           # 100% verde — Vitest (unit + integration)
 npx tsc --noEmit   # typecheck limpio
 npm run lint       # eslint limpio
-npm run test:e2e   # si tocaste rutas, auth o UI (corre con stubs, sin Upstash real)
+npm run test:e2e   # si tocaste rutas, auth o UI (corre con stubs, sin Postgres real)
 ```
 
 ## Reglas del proyecto

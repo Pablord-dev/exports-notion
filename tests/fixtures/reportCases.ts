@@ -1,5 +1,5 @@
 // Casos de reportes compartidos: corren idénticos contra el pgStore real
-// (db.pg.test.ts, gated PG_TEST) y contra memory-store (reports.memory.test.ts).
+// (db.pg.test.ts, gated TEST_DATABASE_URL) y contra memory-store (reports.memory.test.ts).
 // Si ambas implementaciones pasan las mismas aserciones, el stub es fiel.
 // Fechas elegidas con calendario conocido: 2026-06-01 fue LUNES (semanas ISO).
 import { expect } from "vitest";

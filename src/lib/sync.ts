@@ -2,7 +2,7 @@ import type { SyncKind, SyncLastResult } from "@/lib/types";
 import { fetchPages, fetchFullBatches } from "@/lib/notion";
 import { flattenPage } from "@/lib/flatten";
 import {
-  acquireLock, releaseLock, patchStatus, setStatus,
+  acquireLock, releaseLock, patchStatus, setStatus, getStatus,
   upsertRows, deleteRows, clearNewCache, promoteNewCache,
   getMeta, setMeta, countRows, countRowsNew, clearCancel, isCancelRequested,
   getFullPivot, setFullPivot, clearFullPivot,
@@ -46,7 +46,7 @@ async function runFull(): Promise<SyncResult> {
   const hasBudget = Number.isFinite(budgetMs);
 
   // Una "sesión" de full va desde el arranque hasta promover (o cancelar), y puede
-  // abarcar varias invocaciones si hay presupuesto de tiempo. El flag en Redis (valor =
+  // abarcar varias invocaciones si hay presupuesto de tiempo. El flag en sync_state (valor =
   // startedAt) es lo que distingue sesión nueva de reanudación — NO la ausencia de
   // pivote: así, si la función muere antes de fijar el primer pivote, el siguiente
   // intento reanuda en vez de borrar el `:new` acumulado (FX-004/D3).
@@ -54,6 +54,13 @@ async function runFull(): Promise<SyncResult> {
   const isNewSession = !active;
   const sessionStart = active ?? new Date().toISOString();
   let pivot: string | null = null;
+
+  // Los contadores pertenecen a la SESIÓN, no a la invocación: con SYNC_BUDGET_MS
+  // el full se parte en varias llamadas y cada una vuelve a entrar acá. Al reanudar
+  // hay que sembrarlos desde el status persistido (que no lleva TTL) o el progreso
+  // se reinicia en cada tramo — que es lo que veía la UI en Vercel Hobby (FX-006).
+  let skipped = 0;
+  let processed = 0;
 
   if (isNewSession) {
     await clearCancel();
@@ -63,12 +70,11 @@ async function runFull(): Promise<SyncResult> {
     await setStatus({ state: "running", kind: "full", done: 0, total: 0, startedAt: sessionStart, error: null, skipped: 0 });
   } else {
     pivot = await getFullPivot();
+    const prev = await getStatus();
+    processed = prev?.done ?? 0;
+    skipped = prev?.skipped ?? 0;
     await patchStatus({ state: "running", kind: "full", error: null });
   }
-
-  let skipped = 0;
-  let upserted = 0;
-  let processed = 0;
 
   const run = await fetchFullBatches({
     pivot: pivot ?? undefined,
@@ -81,7 +87,6 @@ async function runFull(): Promise<SyncResult> {
         catch { skipped++; }
       }
       if (rows.length) await upsertRows(rows, "new");
-      upserted += rows.length;
       processed += batchPages.length;
       // Checkpoint por batch: si la función muere aquí, la siguiente invocación
       // reanuda desde este pivote conservando todo lo ya upserteado al :new.
@@ -111,9 +116,13 @@ async function runFull(): Promise<SyncResult> {
   }
   await clearFullPivot();
   await clearFullActive();
-  const lastResult: SyncLastResult = { kind: "full", upserted, deleted: 0, skipped, finishedAt: now };
+  // El total reportado es `newCount` (filas distintas que quedaron en el staging de la
+  // sesión), no un acumulado de la invocación: es el número real de registros
+  // sincronizados y además no cuenta doble las páginas frontera que el pivote
+  // `on_or_before` re-trae en cada segmento (FX-006).
+  const lastResult: SyncLastResult = { kind: "full", upserted: newCount, deleted: 0, skipped, finishedAt: now };
   await patchStatus({ state: "idle", kind: null, startedAt: null, skipped, lastResult });
-  return { ok: true, done: true, upserted, deleted: 0 };
+  return { ok: true, done: true, upserted: newCount, deleted: 0 };
 }
 
 async function runIncremental(): Promise<SyncResult> {

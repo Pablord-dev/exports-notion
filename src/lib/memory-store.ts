@@ -1,7 +1,7 @@
 // src/lib/memory-store.ts
 // Implementación en memoria de la interfaz Store de db.ts. Doble uso:
-//   - tests de integración (db.__setStore(memoryStore()) — reemplaza a fakeRedis)
-//   - E2E_STUBS=1 (Playwright local sin Postgres real, igual que memory-redis)
+//   - tests de integración (db.__setStore(memoryStore()))
+//   - E2E_STUBS=1 (Playwright local sin Postgres real)
 // Debe ser FIEL a la semántica del pgStore real (lección D1: un fake infiel
 // ocultó un bug de producción): TTL vencido = ausente, promote reemplaza el
 // vivo con el staging y lo vacía, lock NX retomable al vencer.

@@ -619,8 +619,14 @@ export default function Reports() {
                 <Spinner className="text-sky" />
                 Sync en progreso <span className="font-sans font-normal text-muted">({syncStatus?.status.kind})</span>
               </h3>
+              {/* Sin denominador a propósito: Notion no expone un total de antemano, así
+                  que `status.total` es sólo done + un page_size cuando queda más. Mostrarlo
+                  como "1,200 / 1,300" fingía un progreso que nadie conoce. */}
               <p className="font-display text-xl font-bold text-fg">
-                {syncStatus?.status.done} <span className="text-muted">/ {syncStatus?.status.total}</span>
+                {(syncStatus?.status.done ?? 0).toLocaleString("es-MX")}
+                <span className="ml-1.5 font-sans text-sm font-normal text-muted">
+                  {(syncStatus?.status.total ?? 0) > (syncStatus?.status.done ?? 0) ? "registros y contando…" : "registros"}
+                </span>
               </p>
               {syncStatus?.status.skipped ? <p className="text-sm font-medium text-warning">Omitidos: {syncStatus.status.skipped}</p> : null}
               <button onClick={cancelSync} disabled={cancelling}

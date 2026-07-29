@@ -14,15 +14,23 @@ npx vitest run tests/unit/flatten.test.ts   # un solo archivo
 npx vitest run -t "nombre del test"          # filtrar por nombre
 npm run test:e2e         # Playwright smoke — por defecto con stubs en memoria (E2E_STUBS=1), sin Postgres/Notion reales
 E2E_REAL=1 npm run test:e2e   # contra el server real del puerto 3000 con .env.local
-supabase start           # Postgres local (requiere Docker Desktop corriendo); DB en 127.0.0.1:54322
-PG_TEST=1 npx vitest run tests/integration/db.pg.test.ts   # tests de db.ts contra el Postgres local (skipped sin PG_TEST)
+supabase db push         # aplica supabase/migrations/ a la base cloud (requiere `supabase link` previo)
+TEST_DATABASE_URL="postgresql://…:6543/postgres" npx vitest run tests/integration/db.pg.test.ts   # SQL real (skipped sin la var)
 ```
+
+> **No hay Postgres local** (ADR-0007, 2026-07-28): local y producción usan la **misma** base de
+> Supabase Cloud, así que `npm run dev` escribe donde ven los colaboradores y un Full local
+> reconstruye el snapshot de producción. `supabase/` sobrevive **sólo** como fuente de migraciones.
+> ⚠️ `TEST_DATABASE_URL` debe ser un **proyecto Supabase dedicado a tests**: `db.pg.test.ts` dropea
+> y trunca tablas (una corrida contra la base real borró el snapshot de 21k filas el 2026-07-13).
+> Tiene dos guardas: aborta si la URL coincide con `DATABASE_URL` y si el destino ya tiene filas
+> en `pages`.
 
 > El E2E stub levanta su propio server (`next build` + `next start`, puerto 3100; `next dev` tiene lock por proyecto en Next 16). Stubs: `src/lib/memory-store.ts` (implementación en memoria de la interfaz `Store` de `db.ts`, activada por `E2E_STUBS=1` — cubre datos y rate-limit del login) y password fijo `e2e-password` en `verifyPassword`. ⚠️ El password E2E NO va por env var: `next start` (16.2.6) pisa el `process.env` heredado con `.env.local` (verificado empíricamente 2026-07-06, contra lo que dice la doc) — sólo pasan limpias las vars que `.env.local` no define, como `E2E_STUBS`.
 
 ## Arquitectura
 
-Webapp Next.js 16 (App Router) que sirve **CSV bajo demanda** desde un **snapshot en Postgres (Supabase)** de una base de Notion (migración desde Upstash Redis: ADR-0006, 2026-07). El export NO consulta Notion en vivo — todo pasa por el snapshot, que se rellena con crons. Los reportes consultables (spec `docs/reports/202607081002_reportes_v1_spec.md`) se sirven con SQL sobre el mismo snapshot.
+Webapp Next.js 16 (App Router) que sirve **CSV bajo demanda** desde un **snapshot en Postgres (Supabase Cloud)** de una base de Notion (ADR-0006 eligió Postgres; ADR-0007 lo dejó **cloud-only**: la misma base en local y en Vercel, sin Postgres local). El export NO consulta Notion en vivo — todo pasa por el snapshot, que se rellena con crons. Los reportes consultables (spec `docs/reports/202607081002_reportes_v1_spec.md`) se sirven con SQL sobre el mismo snapshot.
 
 ### Flujo de datos
 
@@ -34,12 +42,13 @@ Notion ──(cron sync)──► Postgres tabla `pages` ──┬─(GET /api/e
 
 - **`src/lib/sync.ts`** orquesta `runSync(kind)` con un **lock en Postgres** (`acquireLock` TTL 600s, fila en `sync_state` retomable al vencer). Devuelve `SyncResult`: `{ok, done:true, upserted, deleted}` o `{ok, done:false, segmentCount}` (sólo full con presupuesto). Dos modos:
   - `incremental`: **dos queries** a Notion con filtro `last_edited_time > lastIncrementalAt - 60s` (OVERLAP_MS): una de vivas (upsert) y una de papelera con `is_archived: true` (delete). No hay forma de traer ambas en una sola query — ver *notion.ts*. `lastIncrementalAt` se captura **antes** del fetch (las ediciones durante el sync caen en la próxima ventana) y **no avanza si el sync fue cancelado**. Siempre devuelve `done:true`.
+  - **Contadores de sesión (FX-006, 2026-07-28)**: `processed`/`skipped` pertenecen a la **sesión**, no a la invocación. Al reanudar un full encadenado se siembran desde `getStatus()` (el status se persiste sin TTL); si no, cada tramo reescribía `done` desde 0 y la UI mostraba el progreso reiniciándose. El total que se reporta al terminar es `countRowsNew()` — filas distintas del staging, que además no cuenta doble las páginas frontera que el pivote `on_or_before` re-trae.
   - `full`: construye el snapshot en la tabla staging `pages_new` con **upsert progresivo por batch (≤100) y checkpoint de pivote por batch**. Una "sesión" de full se marca con la key `full:active` de `sync_state` (valor = startedAt): ausente = sesión nueva (trunca staging y limpia pivote); presente = **reanudación** — una función muerta a mitad ya NO pierde el avance. Sin `SYNC_BUDGET_MS` la invocación corre hasta terminar; con presupuesto corta a tiempo con checkpoint y devuelve `done:false` para que el cliente encadene. Promueve `pages_new` → `pages` con **swap transaccional** (TRUNCATE + INSERT…SELECT, mismo efecto que el viejo RENAME de Redis) al completar o cancelar; si Notion devuelve 0 páginas en total, no promueve. Al promover, `lastIncrementalAt = startedAt de la sesión` (no el final): lo editado durante el full entra en la ventana del próximo incremental.
 - **`src/lib/notion.ts`** usa `@notionhq/client` **v5** con `dataSources.query` (no `databases.query`). `NOTION_DATABASE_ID` debe ser un **Data Source ID**, no el database ID antiguo — obtenerlo via `GET /v1/databases/<id>` → `data_sources[0].id` (header `Notion-Version: 2025-09-03`). Throttle 3 req/s, retry con backoff y respeto de `retry-after`.
   - **Notion limita CUALQUIER query a 10,000 resultados**, incluso paginando con cursor. Para datasets más grandes, full sync se segmenta por `created_time` DESC con filtro `on_or_before: pivote` recursivo.
   - `fetchPages` (incremental): dos queries. ⚠️ En la versión de API `2025-09-03`, `is_archived` **particiona** (omitido = sólo vivas; `true` = sólo papelera) y `in_trash`/`archived` en el body dan `validation_error` 400 aunque los tipos del SDK los declaren (verificado contra el API real el 2026-07-06). Además el SDK v5.21 **descarta `is_archived` en silencio** (whitelist interna de body params), así que la query de papelera va por `client().request()` crudo.
   - `fetchFullBatches` (full): entrega batch por batch vía `onBatch(pages, lastCreatedTime, hasMore)` — ahí el caller persiste y fija checkpoint — y encadena internamente los segmentos del cap de 10k hasta agotar el dataset, salvo corte por `shouldCancel` o `budgetExhausted`.
-- **`src/lib/db.ts`** abstrae todo Postgres (driver `postgres.js`, sin ORM). Expone la interfaz `Store` + `__setStore()` para tests; `src/lib/memory-store.ts` la implementa en memoria (tests y `E2E_STUBS=1`). El upsert va por `unnest` en chunks de 500 y **parsea las columnas tipadas** (`hours`, `created_at`, IDs de relaciones, `company`) desde la fila plana — el mapeo de nombres de propiedades vive al tope de `db.ts` y es parte del setup por proyecto, igual que `columns.ts`. ⚠️ Con cast `::jsonb`/`::jsonb[]` postgres.js ya serializa el valor JS: hacer `JSON.stringify` manual produce **doble encoding** (verificado empíricamente 2026-07-09).
+- **`src/lib/db.ts`** abstrae todo Postgres (driver `postgres.js`, sin ORM). Expone la interfaz `Store` + `__setStore()` para tests; `src/lib/memory-store.ts` la implementa en memoria (tests y `E2E_STUBS=1`). El upsert va por `unnest` en chunks de 500 y **parsea las columnas tipadas** (`hours`, `created_at`, IDs de relaciones, `company`) desde la fila plana — el mapeo de nombres de propiedades vive al tope de `db.ts` y es parte del setup por proyecto, igual que `columns.ts`. ⚠️ Con cast `::jsonb`/`::jsonb[]` postgres.js ya serializa el valor JS: hacer `JSON.stringify` manual produce **doble encoding** (verificado empíricamente 2026-07-09). ⚠️ El cliente se crea con **`prepare: false`**: el transaction pooler de Supabase (pgBouncer, puerto 6543) no soporta prepared statements, que son el default de `postgres.js` — sin esa opción los queries fallan **sólo en producción** (ADR-0007).
 - **`src/lib/flatten.ts`** convierte `PageObjectResponse` → fila plana **respetando la whitelist** de `COLUMNS`. Soporta title, rich_text, number, select/status/multi_select, date (con rango `start → end`), checkbox, url/email/phone, people, relation, files, formula, rollup, created_time/last_edited_time, **created_by, last_edited_by, unique_id** (`<prefix>-<number>`). Tipos no listados → string vacío.
 - **`src/lib/columns.ts`** es la **whitelist server-side** de propiedades exportables. El cliente nunca puede pedir columnas fuera de aquí. El orden determina el orden de columnas del CSV. **Editar esta lista** es parte normal del setup por proyecto.
 - **`src/lib/config.ts`** — `loadConfig()` exige las **7 env vars** (`NOTION_TOKEN`, `NOTION_DATABASE_ID`, `DATE_COLUMN`, `APP_PASSWORD_HASH`, `SESSION_SECRET`, `CRON_SECRET`, `DATABASE_URL`) y lanza error listando las faltantes. No hay defaults. **`src/instrumentation.ts` la invoca al boot** (fail-fast: el server no arranca con vars faltantes; el build no la exige — guard por `NEXT_PHASE`). Las vars del Asistente IA (`LLM_*`, ver abajo) son **opcionales** y NO las valida `loadConfig` — sin ellas el chat sólo muestra "sin modelo".
@@ -81,10 +90,12 @@ Chat en lenguaje natural que responde consultando **las mismas funciones de repo
 
 ### Crons (Vercel)
 
-`vercel.json`: full `0 9 * * *` y incremental `0 21 * * *` (UTC). En Hobby cada expresión sólo permite una corrida diaria — por eso ambos son diarios. Vercel los llama con `Authorization: Bearer $CRON_SECRET`.
+`vercel.json` declara **sólo el incremental**: `0 21 * * *` (UTC). Vercel lo llama con `Authorization: Bearer $CRON_SECRET`, y **sólo en deploys de producción** (rama `main`). En Hobby cada expresión permite una corrida diaria.
 
-- **El cron full dispara UNA invocación de `runSync("full")`.** Sin `SYNC_BUDGET_MS`, esa invocación encadena internamente los segmentos de 10k y corre hasta terminar — si cabe en `maxDuration`. Si la función muere a mitad, el avance queda checkpointeado (flag de sesión + pivote por batch) y la siguiente invocación (cron del día siguiente o botón Full de la UI) **reanuda donde quedó**. Con `SYNC_BUDGET_MS` definido, cada invocación corta a tiempo y responde `done:false`; la UI encadena las llamadas, el cron no (procesa un tramo por día).
-- **Tras el primer deploy hay que hacer un "Full" manual desde la UI** antes de que `/api/export` deje de responder 503.
+- **El full NO se cronea** (ADR-0007): un cron dispara UNA invocación y no encadena. Con `SYNC_BUDGET_MS` cada invocación corta y devuelve `done:false` esperando que el cliente vuelva a llamar — cosa que el cron nunca hace. Y el checkpoint (`full:active`/`full:pivot`, TTL 24h) expiraría justo antes de la corrida siguiente, así que cada día empezaría de cero. El full se dispara desde la UI, que **sí** encadena (hasta 20 llamadas).
+- **`cronSchedule(kind)` devuelve `null`** cuando ese kind no está en `vercel.json` (ausencia = configuración válida). Se evalúa en el top-level de `/api/sync/status`: si lanzara, esa route daría 500 y rompería el modal de sync. La UI muestra "Full sólo manual".
+- **Tras el primer deploy hay que hacer un "Full" manual** antes de que `/api/export` deje de responder 503. Conviene correrlo **desde local** (sin cap de 60s: `SYNC_BUDGET_MS` no va en `.env.local`) en vez de encadenar tramos desde el navegador.
+- **El progreso se muestra sin denominador.** `status.total` es `done + page_size` cuando queda más — Notion no expone un total de antemano, así que un "1,200 / 1,300" fingía un avance que nadie conoce.
 
 ### Esquema de Postgres (migración `supabase/migrations/`)
 
@@ -110,6 +121,8 @@ Keys de `sync_state` (mismas semánticas que las viejas keys de Redis):
 
 - **`maxDuration`: `/api/sync` = 300s (requiere Vercel Pro), `/api/export` = 60s.** El full pagina en batches de 100 con checkpoint por batch; el cap de 10k de Notion se maneja internamente re-consultando con pivote.
 - **En Vercel Hobby `maxDuration` está capado a 60s**, así que una invocación del full puede morir a mitad. Desde el fix FX-004 (2026-07-06) eso ya **no pierde avance**: el flag de sesión + el pivote por batch hacen que el siguiente intento reanude. Para cortes limpios en vez de muertes, definir `SYNC_BUDGET_MS` (p. ej. 40000) — cada invocación corta a tiempo y responde `done:false`.
+- **El despliegue vigente es Hobby con `SYNC_BUDGET_MS=40000`** (ADR-0007). Aritmética que lo obliga: ~21k filas ÷ batches de 100 = ~212 requests a Notion a 3 req/s ≈ **71s sólo de fetches**, así que el full nunca cabe en 60s. En local `SYNC_BUDGET_MS` no se define y corre completo de una pasada.
+- **Región**: las funciones de Vercel deben ir en la región de Supabase (`pdx1` ↔ `aws us-west-2`); el default `iad1` cruza el continente en cada query de reportes.
 - **Cold start** puede ser 5-15s en Hobby.
 - **Notion API rate limit**: 3 req/s oficial. Throttle local lo respeta. 429 con `retry-after` se respeta.
 - **Notion query cap**: 10,000 resultados por query, incluso paginando con cursor. Razón del chunking.
@@ -124,11 +137,12 @@ Diagnóstico original con evidencia en `docs/reports/202606101520_incident_repor
 - **R1 → FX-003**: `status.lastResult` (kind, upserted, deleted, skipped, finishedAt) persiste y se muestra en la UI.
 - **FX-005**: `tests/fixtures/fakeNotion.ts` ahora es fiel a la API real (filtra papelera sin `in_trash`, aplica `since`, `on_or_before` y sorts) — la infidelidad del fake era lo que ocultaba D1.
 - Contexto operativo: la base real ronda **~21k filas** (>10k), por lo que el full siempre cruza al menos un límite de segmento. Verificado con el corte a Postgres (2026-07-13): full real de 21,146 filas en una invocación.
+- **FX-006 (2026-07-28)**: los contadores del full eran locales a la invocación, así que en el despliegue Hobby (con `SYNC_BUDGET_MS`) cada tramo encadenado reescribía `done` desde 0 — la UI mostraba el progreso reiniciándose — y el total final reportaba sólo el último tramo. Ahora se siembran desde el status persistido al reanudar y el total es `countRowsNew()`. Regresión cubierta en `tests/integration/sync.test.ts`.
 
 ## Convenciones
 
 - Path alias `@/*` → `src/*` (ver `tsconfig.json`).
-- Para tests que tocan Notion/Postgres: usar `__setClient(fake)` de `notion.ts` (fake en `tests/fixtures/fakeNotion.ts`) y `__setStore(newMemoryStore())` de `db.ts` (implementación en `src/lib/memory-store.ts`) en vez de mocks globales. Si cambias comportamiento de la API o del SQL real, actualiza el fake/memory-store para que siga siendo fiel (ver D1 arriba: un fake infiel ocultó un bug real). El SQL real de `db.ts` se cubre con `tests/integration/db.pg.test.ts` (gated `PG_TEST=1`, requiere `supabase start`).
+- Para tests que tocan Notion/Postgres: usar `__setClient(fake)` de `notion.ts` (fake en `tests/fixtures/fakeNotion.ts`) y `__setStore(newMemoryStore())` de `db.ts` (implementación en `src/lib/memory-store.ts`) en vez de mocks globales. Si cambias comportamiento de la API o del SQL real, actualiza el fake/memory-store para que siga siendo fiel (ver D1 arriba: un fake infiel ocultó un bug real). El SQL real de `db.ts` se cubre con `tests/integration/db.pg.test.ts` (gated por `TEST_DATABASE_URL`, que debe apuntar a un **proyecto Supabase dedicado a tests** — ver bloque de Comandos).
 - Errores de Notion 400/401/404 → no se reintenta (permanentes); 429 respeta `retry-after`; otros → backoff exponencial 3 intentos.
 - **`APP_PASSWORD_HASH` en `.env.local` debe ir con `\$` escapados** (`\$2b\$10\$...`) porque Next/`dotenv-expand` interpreta `$2b`, `$10` como variables. En la UI de Vercel pegar el hash literal sin escape.
 

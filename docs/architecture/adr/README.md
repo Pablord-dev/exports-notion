@@ -9,4 +9,5 @@
 | [0003](0003-segmentacion-por-cap-de-10k.md) | Segmentación del full sync por el cap de 10k de Notion | Aceptada | 2026-05-18 |
 | [0004](0004-espera-inline-en-api-sync.md) | `POST /api/sync` espera inline (sin "void background") | Aceptada | 2026-06-05 |
 | [0005](0005-presupuesto-de-tiempo-opcional.md) | Presupuesto de tiempo del full: de obligatorio a opcional (`SYNC_BUDGET_MS`) | Aceptada | 2026-06-05 · matizada 2026-07-06 |
-| [0006](0006-migracion-snapshot-a-postgres-supabase.md) | El snapshot migra de Upstash Redis a Postgres (Supabase) — driver `postgres.js`, esquema `pages`/`pages_new`/`sync_state` | Aceptada | 2026-07-08 |
+| [0006](0006-migracion-snapshot-a-postgres-supabase.md) | El snapshot migra de Upstash Redis a Postgres (Supabase) — driver `postgres.js`, esquema `pages`/`pages_new`/`sync_state` | Aceptada · local-first reemplazado por 0007 | 2026-07-08 |
+| [0007](0007-despliegue-vercel-hobby-y-supabase-cloud-only.md) | Despliegue en Vercel Hobby con Supabase cloud-only: pooler + `prepare:false`, sin Postgres local, full sync sin cron | Aceptada | 2026-07-28 |

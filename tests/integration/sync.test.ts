@@ -173,7 +173,7 @@ describe("runSync full reanudable (FX-004)", () => {
     expect(await cache.getFullPivot()).toBe(ct(99));
     expect(await cache.getFullActive()).not.toBeNull();
 
-    // "muerte" de la función: no pasa nada más; el estado quedó en Redis.
+    // "muerte" de la función: no pasa nada más; el estado quedó en el store.
     const r2 = await runSync("full");
     expect(r2).toMatchObject({ ok: true, done: false });
     // 199 y no 200: el pivote on_or_before re-trae la página frontera (idempotente por id).
@@ -191,6 +191,36 @@ describe("runSync full reanudable (FX-004)", () => {
     const inc = new Date(meta.lastIncrementalAt!).getTime();
     expect(inc).toBeGreaterThanOrEqual(t0);
     expect(inc).toBeLessThanOrEqual(t1);
+  });
+
+  it("el contador de progreso ACUMULA entre invocaciones encadenadas y el total final es el de la sesión (FX-006)", async () => {
+    // Regresión: `processed`/`skipped`/`upserted` son locales a runFull(), así que
+    // cada invocación encadenada los reiniciaba en 0 y patchStatus escribía
+    // done: 100, 200… desde cero — en Vercel Hobby (SYNC_BUDGET_MS) la UI mostraba
+    // el conteo reiniciándose en cada tramo. El total final reportaba sólo la
+    // última invocación en vez de la sesión completa.
+    process.env.SYNC_BUDGET_MS = "0";
+    const pages = Array.from({ length: 250 }, (_, i) =>
+      makePage(`p${i}`, `T${i}`, "2026-01-01", false, { created_time: ct(i) }));
+    setNotion(makeFakeClient(pages) as any);
+
+    await runSync("full");
+    const done1 = (await cache.getStatus())!.done;
+    expect(done1).toBe(100);
+
+    // Segunda invocación: el contador debe SEGUIR desde 100, no volver a empezar.
+    await runSync("full");
+    const done2 = (await cache.getStatus())!.done;
+    expect(done2).toBeGreaterThan(done1);
+    // total nunca puede ir hacia atrás mientras la sesión sigue viva.
+    expect((await cache.getStatus())!.total).toBeGreaterThanOrEqual(done2);
+
+    const r3 = await runSync("full");
+    // El total reportado es el de la SESIÓN (250 filas promovidas), no el del último tramo.
+    expect(r3).toMatchObject({ ok: true, done: true, upserted: 250 });
+    const st = await cache.getStatus();
+    expect(st!.lastResult).toMatchObject({ kind: "full", upserted: 250 });
+    expect(await cache.countRows()).toBe(250);
   });
 
   it("reintento tras muerte sin pivote NO borra el :new acumulado", async () => {
