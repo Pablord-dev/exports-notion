@@ -59,3 +59,6 @@ next-env.d.ts
 # Artefactos de herramientas (Playwright)
 .playwright-cli/
 test-results/
+
+# CodeGraph (índice local por máquina)
+.codegraph/
