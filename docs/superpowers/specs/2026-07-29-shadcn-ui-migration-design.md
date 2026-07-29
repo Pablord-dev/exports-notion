@@ -58,7 +58,7 @@ general de cada página no cambia. Cero cambios de lógica de datos.
 
 `button`, `card`, `input`, `textarea`, `label`, `dialog`, `sheet`, `table`,
 `popover`, `command`, `select`, `breadcrumb`, `collapsible`, `tabs`,
-`sidebar`, `chart`, más tres con uso puntual: `badge` (contador del
+`chart`, más tres con uso puntual: `badge` (contador del
 MultiSelect), `separator` (divisores en modals y sidebar) y `skeleton`
 (estados de carga de tarjetas de totales y tablas, en lugar del "…" actual).
 Si al implementar alguno no encuentra uso, no se instala.
@@ -73,7 +73,7 @@ Si al implementar alguno no encuentra uso, no se instala.
 | `Dropdown` custom del composer del asistente | `Select` de shadcn (Radix decide dirección de apertura; desaparece el prop `openUp`) |
 | `BarChart` SVG a mano | `ChartContainer` sobre Recharts: barras sky redondeadas, `ChartTooltip`, **se conserva el click-para-drill-down por barra** |
 | Tablas a mano (agregados, matriz, detalle) | `Table`; el **heatmap se conserva** con estilos inline (`heatBg`) como hoy |
-| Sidebar custom de `AppShell` | `Sidebar` de shadcn (`SidebarProvider`, `collapsible="offcanvas"`, `Collapsible` para el grupo de BDs; móvil = `Sheet` automático). La preferencia anclada/oculta persiste (shadcn usa cookie `sidebar_state` en lugar de la key `sidebar-pinned`) |
+| Sidebar custom de `AppShell` | **Se conserva el shell propio** (máquina de estados anclada/overlay + `<aside>`), restilizado por dentro con `Button`, `Collapsible`, `Separator` e iconos lucide. Decisión 2026-07-29: el `Sidebar` de shadcn tiene un solo estado abierto/cerrado y no soporta anclada+overlay sin reescribir los E2E; no se instala. La key `sidebar-pinned` de `localStorage` no cambia |
 | `Breadcrumb` custom | `Breadcrumb` de shadcn |
 | `Spinner` custom | `Loader2` de lucide + `animate-spin`, conservando el API del componente `Spinner` (no se tocan callsites) |
 | SVGs inline de iconos | `lucide-react` (Clock, MessageSquare, Database, Home, Table2, LogOut, Menu, X, Pin, Plus, Trash2, ChevronRight…) |
@@ -90,9 +90,13 @@ de `Input` + `[color-scheme:dark]`). El DatePicker de shadcn agrega
 - Lógica de datos intacta: fetches, polling de sync, encadenado del full,
   drill-down, chat-store, auth.
 - Atributos `data-tour="…"` se preservan en los elementos equivalentes.
-- Keys de `localStorage`: `onboarding-v1` y `asistente-chats-v1` no cambian.
-  (`sidebar-pinned` migra a la persistencia propia del Sidebar de shadcn.)
-- Textos visibles sin cambios (los E2E los usan como selectores).
+- Keys de `localStorage`: `onboarding-v1`, `asistente-chats-v1` y
+  `sidebar-pinned` no cambian.
+- Textos visibles sin cambios (los E2E los usan como selectores). Única
+  excepción acordada: los dropdowns del composer del asistente pasan de
+  `role="button"`+listbox propio a `Select` de Radix (`role="combobox"`),
+  así que el smoke test actualiza esos dos selectores de rol (el aria-label
+  "Base de datos"/"Modelo" se conserva).
 - Nada de logotipo/isotipo ni texto "iU Corporation" nuevos; dark fijo sin
   toggle.
 
