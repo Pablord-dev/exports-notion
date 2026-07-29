@@ -28,3 +28,11 @@
       Opción: proyecto Supabase de desarrollo aparte (revierte parte de ADR-0007 §1).
 - [ ] **DP-04** — Vercel Hobby es, por términos de servicio, para uso personal/no comercial. Decidir
       si se pasa a Pro cuando esto deje de ser una prueba con colaboradores.
+
+## 3. Documentación de usuario
+
+- [ ] **DOC-01** — Reescribir [guides/manual-usuario.md](guides/manual-usuario.md): describe el
+      dashboard viejo (fusionado con reportes el 2026-07-16) y un cron full que ya no existe
+      (ADR-0007). El onboarding guiado (2026-07-29) cubre el recorrido básico en la app, así que
+      el manual debería quedarse con lo que un tour no puede dar: formato del CSV, tabla de
+      problemas comunes y calendario de sincronizaciones.
