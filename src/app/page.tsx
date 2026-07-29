@@ -109,13 +109,13 @@ export default function Home() {
   }
 
   return (
-    <AppShell onLogout={() => { setAuthed(false); setStatus(null); }}>
+    <AppShell onLogout={() => { setAuthed(false); setStatus(null); }} tour={{ id: "menu" }}>
     <main className="max-w-2xl mx-auto p-6 sm:p-8 space-y-6">
       <header className="border-b border-border pb-5">
         <h1 className="font-display text-xl font-bold text-fg tracking-tight">Reportes Notion</h1>
       </header>
 
-      <Link href="/asistente"
+      <Link href="/asistente" data-tour="menu-asistente"
             className="flex items-center gap-4 rounded-xl border border-border bg-surface p-5 transition hover:border-sky hover:bg-surface/80">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue/15 text-sky"><ChatIcon /></span>
         <div className="min-w-0 flex-1">
@@ -127,8 +127,9 @@ export default function Home() {
 
       <section className="space-y-3">
         <h2 className="text-xs uppercase tracking-wide text-muted">Bases de datos</h2>
-        {DATABASES.map((db) => (
+        {DATABASES.map((db, i) => (
           <Link key={db.slug} href={`/db/${db.slug}/reports`}
+                data-tour={i === 0 ? "menu-db-card" : undefined}
                 className="block rounded-xl border border-border bg-surface p-5 transition hover:border-sky hover:bg-surface/80">
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-1">

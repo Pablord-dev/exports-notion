@@ -9,6 +9,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { DATABASES } from "@/lib/databases";
 import { Spinner } from "@/app/components/spinner";
+import { TourLayer, type TourBinding } from "@/app/components/tour/tour-layer";
 
 const PIN_KEY = "sidebar-pinned";
 
@@ -71,7 +72,12 @@ function LogoutIcon() {
   );
 }
 
-export function AppShell({ children, onLogout }: { children: React.ReactNode; onLogout: () => void }) {
+export function AppShell({ children, onLogout, tour }: {
+  children: React.ReactNode;
+  onLogout: () => void;
+  /** Guión de esta página. Sin él no hay botón "?" ni overlay. */
+  tour?: TourBinding;
+}) {
   const [pinned, setPinned] = useState(true);
   const [open, setOpen] = useState(false);
   const [dbsOpen, setDbsOpen] = useState(true);
@@ -127,7 +133,7 @@ export function AppShell({ children, onLogout }: { children: React.ReactNode; on
         <div className="fixed inset-0 z-40 bg-dark-blue/70 lg:bg-dark-blue/40" onClick={close} aria-hidden />
       )}
 
-      <aside aria-label="Navegación"
+      <aside aria-label="Navegación" data-tour="shell-sidebar"
              className={`fixed inset-y-0 left-0 z-50 flex w-60 flex-col border-r border-border bg-surface transition-transform duration-200 ${
                open ? "translate-x-0" : "-translate-x-full"
              } ${pinned ? "lg:translate-x-0" : ""}`}>
@@ -189,7 +195,13 @@ export function AppShell({ children, onLogout }: { children: React.ReactNode; on
 
       {/* pt-12: aire para la hamburguesa cuando está visible (móvil siempre;
           desktop solo con la sidebar oculta) */}
-      <div className={pinned ? "pt-12 lg:pl-60 lg:pt-0" : "pt-12"}>{children}</div>
+      <div className={pinned ? "pt-12 lg:pl-60 lg:pt-0" : "pt-12"}>
+        {tour && (
+          <TourLayer tour={tour}
+                     shellActions={{ openSidebar: () => setOpen(true), closeSidebar: () => setOpen(false) }} />
+        )}
+        {children}
+      </div>
     </>
   );
 }
