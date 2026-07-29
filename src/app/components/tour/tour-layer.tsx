@@ -288,7 +288,7 @@ export function TourLayer({ tour, shellActions, justLoggedIn = false }: {
 
       <button ref={helpRef} onClick={start} data-tour="help-button"
               aria-label="Ayuda: iniciar el recorrido guiado" title="Recorrido guiado"
-              className="fixed top-4 right-4 z-30 flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-surface font-display text-base font-bold text-muted transition hover:border-blue hover:text-blue">
+              className="fixed top-4 right-4 z-30 flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card font-display text-base font-bold text-muted-foreground transition hover:border-blue hover:text-blue">
         ?
       </button>
 
@@ -307,7 +307,7 @@ export function TourLayer({ tour, shellActions, justLoggedIn = false }: {
                    zIndex: 56,
                  }} />
           ) : (
-            <div aria-hidden className="pointer-events-none fixed inset-0 z-[56] bg-dark-blue/80" />
+            <div aria-hidden className="pointer-events-none fixed inset-0 z-[56] bg-background/80" />
           )}
           <TourPopover
             title={step.title} body={step.body}

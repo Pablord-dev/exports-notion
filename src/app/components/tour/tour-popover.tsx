@@ -56,34 +56,34 @@ export function TourPopover({
       data-testid="tour-popover"
       data-tour-step={index}
       style={style}
-      className={`fixed z-[57] space-y-3 rounded-2xl border border-sky/40 bg-surface p-5 shadow-2xl ${
+      className={`fixed z-[57] space-y-3 rounded-2xl border border-sky/40 bg-card p-5 shadow-2xl ${
         placement.mobile ? "left-2 right-2" : ""
       }`}
     >
       <div className="flex items-start justify-between gap-3">
-        <h2 id="tour-title" className="font-display text-base font-bold text-fg">{title}</h2>
+        <h2 id="tour-title" className="font-display text-base font-bold text-foreground">{title}</h2>
         <button onClick={onSkip} aria-label="Cerrar el recorrido"
-                className="-mr-1 -mt-1 shrink-0 rounded-lg p-1 text-muted transition hover:text-danger">
+                className="-mr-1 -mt-1 shrink-0 rounded-lg p-1 text-muted-foreground transition hover:text-danger">
           <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M6 6l12 12M18 6L6 18" />
           </svg>
         </button>
       </div>
 
-      <p className="text-sm leading-relaxed text-muted">{body}</p>
+      <p className="text-sm leading-relaxed text-muted-foreground">{body}</p>
 
       <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
-        <span className="text-xs tabular-nums text-muted" data-testid="tour-progress">
+        <span className="text-xs tabular-nums text-muted-foreground" data-testid="tour-progress">
           {index + 1} / {total}
         </span>
         <div className="flex items-center gap-2">
           <button onClick={onSkip}
-                  className="rounded-lg px-2.5 py-1.5 text-sm text-muted transition hover:text-fg">
+                  className="rounded-lg px-2.5 py-1.5 text-sm text-muted-foreground transition hover:text-foreground">
             Saltar
           </button>
           {onPrev && (
             <button onClick={onPrev}
-                    className="rounded-lg border border-border px-3 py-1.5 text-sm text-muted transition hover:border-blue hover:text-blue">
+                    className="rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:border-blue hover:text-blue">
               Atrás
             </button>
           )}

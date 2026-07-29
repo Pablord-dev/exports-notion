@@ -22,7 +22,7 @@ function NavLink({ href, label, icon, onNavigate }: {
   return (
     <Link href={href} onClick={onNavigate}
           className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition ${
-            active ? "bg-dark-blue font-medium text-fg" : "text-muted hover:bg-dark-blue/60 hover:text-fg"
+            active ? "bg-background font-medium text-foreground" : "text-muted-foreground hover:bg-background/60 hover:text-foreground"
           }`}>
       {icon}
       {label}
@@ -123,7 +123,7 @@ export function AppShell({ children, onLogout, tour, justLoggedIn }: {
       {/* Hamburguesa: visible cuando la sidebar no está a la vista */}
       {!open && (
         <button onClick={() => setOpen(true)} aria-label="Abrir menú"
-                className={`fixed top-4 left-4 z-30 rounded-lg border border-border bg-surface p-2 text-muted transition hover:border-blue hover:text-blue ${pinned ? "lg:hidden" : ""}`}>
+                className={`fixed top-4 left-4 z-30 rounded-lg border border-border bg-card p-2 text-muted-foreground transition hover:border-blue hover:text-blue ${pinned ? "lg:hidden" : ""}`}>
           <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M4 6h16M4 12h16M4 18h16" />
           </svg>
@@ -132,29 +132,29 @@ export function AppShell({ children, onLogout, tour, justLoggedIn }: {
 
       {/* Backdrop del modo overlay */}
       {open && (
-        <div className="fixed inset-0 z-40 bg-dark-blue/70 lg:bg-dark-blue/40" onClick={close} aria-hidden />
+        <div className="fixed inset-0 z-40 bg-background/70 lg:bg-background/40" onClick={close} aria-hidden />
       )}
 
       <aside aria-label="Navegación" data-tour="shell-sidebar"
-             className={`fixed inset-y-0 left-0 z-50 flex w-60 flex-col border-r border-border bg-surface transition-transform duration-200 ${
+             className={`fixed inset-y-0 left-0 z-50 flex w-60 flex-col border-r border-border bg-card transition-transform duration-200 ${
                open ? "translate-x-0" : "-translate-x-full"
              } ${pinned ? "lg:translate-x-0" : ""}`}>
         <div className="flex items-center justify-between border-b border-border p-4">
-          <Link href="/" onClick={close} className="font-display text-base font-bold tracking-tight text-fg">
+          <Link href="/" onClick={close} className="font-display text-base font-bold tracking-tight text-foreground">
             iU Corp
           </Link>
           <div className="flex items-center gap-1">
             {/* Anclar/desanclar: solo tiene sentido en desktop */}
             <button onClick={togglePin} aria-label={pinned ? "Desanclar menú" : "Anclar menú"}
                     title={pinned ? "Desanclar" : "Anclar"}
-                    className={`hidden rounded-lg p-1.5 transition hover:text-blue lg:block ${pinned ? "text-sky" : "text-muted"}`}>
+                    className={`hidden rounded-lg p-1.5 transition hover:text-blue lg:block ${pinned ? "text-sky" : "text-muted-foreground"}`}>
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 17v5M9 4h6l1 7 2.5 2.5H5.5L8 11l1-7z" />
               </svg>
             </button>
             {/* Cerrar el overlay */}
             <button onClick={close} aria-label="Cerrar menú"
-                    className={`rounded-lg p-1.5 text-muted transition hover:text-blue ${pinned ? "lg:hidden" : ""}`}>
+                    className={`rounded-lg p-1.5 text-muted-foreground transition hover:text-blue ${pinned ? "lg:hidden" : ""}`}>
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                 <path d="M6 6l12 12M18 6L6 18" />
               </svg>
@@ -168,7 +168,7 @@ export function AppShell({ children, onLogout, tour, justLoggedIn }: {
           {/* Grupo desplegable: una entrada por BD registrada */}
           <div>
             <button onClick={() => setDbsOpen((v) => !v)} aria-expanded={dbsOpen}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted transition hover:bg-dark-blue/60 hover:text-fg">
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition hover:bg-background/60 hover:text-foreground">
               <DatabaseIcon />
               <span className="flex-1 text-left">Bases de datos</span>
               <svg className={`h-3.5 w-3.5 shrink-0 transition-transform ${dbsOpen ? "rotate-90" : ""}`}
@@ -188,7 +188,7 @@ export function AppShell({ children, onLogout, tour, justLoggedIn }: {
 
         <div className="border-t border-border p-4">
           <button onClick={logout} disabled={loggingOut}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-muted transition hover:border-danger hover:text-danger disabled:cursor-not-allowed disabled:opacity-60">
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-muted-foreground transition hover:border-danger hover:text-danger disabled:cursor-not-allowed disabled:opacity-60">
             {loggingOut ? <Spinner className="h-3.5 w-3.5" /> : <LogoutIcon />}
             {loggingOut ? "Saliendo…" : "Cerrar sesión"}
           </button>

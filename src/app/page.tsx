@@ -77,7 +77,7 @@ export default function Home() {
 
   if (authed === null) {
     return (
-      <main className="min-h-screen flex items-center justify-center gap-3 text-muted">
+      <main className="min-h-screen flex items-center justify-center gap-3 text-muted-foreground">
         <Spinner className="text-sky" />
         <span className="text-sm">Cargando…</span>
       </main>
@@ -88,14 +88,14 @@ export default function Home() {
     return (
       <main className="min-h-screen flex items-center justify-center p-6">
         <form onSubmit={login}
-              className="w-full max-w-sm bg-surface rounded-2xl border border-border p-8 space-y-6">
+              className="w-full max-w-sm bg-card rounded-2xl border border-border p-8 space-y-6">
           <div className="space-y-1">
-            <h1 className="font-display text-2xl font-bold text-fg tracking-tight">ExportNotion</h1>
-            <p className="text-sm text-muted">Reportes y exportación de bases de Notion.</p>
+            <h1 className="font-display text-2xl font-bold text-foreground tracking-tight">ExportNotion</h1>
+            <p className="text-sm text-muted-foreground">Reportes y exportación de bases de Notion.</p>
           </div>
           <div className="space-y-2">
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-                   className="w-full rounded-lg border border-border bg-dark-blue px-3 py-2.5 text-fg placeholder:text-muted outline-none transition focus:border-blue focus:ring-2 focus:ring-blue/30"
+                   className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-foreground placeholder:text-muted-foreground outline-none transition focus:border-blue focus:ring-2 focus:ring-blue/30"
                    placeholder="Contraseña" autoFocus />
             {loginErr && <p className="text-sm font-medium text-danger">{loginErr}</p>}
           </div>
@@ -114,44 +114,44 @@ export default function Home() {
               tour={{ id: "menu" }} justLoggedIn={justLoggedIn}>
     <main className="max-w-2xl mx-auto p-6 sm:p-8 space-y-6">
       <header className="border-b border-border pb-5">
-        <h1 className="font-display text-xl font-bold text-fg tracking-tight">Reportes Notion</h1>
+        <h1 className="font-display text-xl font-bold text-foreground tracking-tight">Reportes Notion</h1>
       </header>
 
       <Link href="/asistente" data-tour="menu-asistente"
-            className="flex items-center gap-4 rounded-xl border border-border bg-surface p-5 transition hover:border-sky hover:bg-surface/80">
+            className="flex items-center gap-4 rounded-xl border border-border bg-card p-5 transition hover:border-sky hover:bg-card/80">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue/15 text-sky"><ChatIcon /></span>
         <div className="min-w-0 flex-1">
-          <h3 className="font-display text-lg font-bold text-fg">Asistente IA</h3>
-          <p className="text-sm text-muted">Pregunta en lenguaje natural sobre tus bases de datos.</p>
+          <h3 className="font-display text-lg font-bold text-foreground">Asistente IA</h3>
+          <p className="text-sm text-muted-foreground">Pregunta en lenguaje natural sobre tus bases de datos.</p>
         </div>
-        <svg className="h-5 w-5 shrink-0 text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+        <svg className="h-5 w-5 shrink-0 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
       </Link>
 
       <section className="space-y-3">
-        <h2 className="text-xs uppercase tracking-wide text-muted">Bases de datos</h2>
+        <h2 className="text-xs uppercase tracking-wide text-muted-foreground">Bases de datos</h2>
         {DATABASES.map((db, i) => (
           <Link key={db.slug} href={`/db/${db.slug}/reports`}
                 data-tour={i === 0 ? "menu-db-card" : undefined}
-                className="block rounded-xl border border-border bg-surface p-5 transition hover:border-sky hover:bg-surface/80">
+                className="block rounded-xl border border-border bg-card p-5 transition hover:border-sky hover:bg-card/80">
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-1">
-                <h3 className="flex items-center gap-2 font-display text-lg font-bold text-fg">
+                <h3 className="flex items-center gap-2 font-display text-lg font-bold text-foreground">
                   <span className="text-sky">{DB_ICONS[db.slug]}</span>
                   {db.name}
                 </h3>
-                <p className="text-sm text-muted">{db.description}</p>
+                <p className="text-sm text-muted-foreground">{db.description}</p>
               </div>
               <div className="text-right">
                 <p className="whitespace-nowrap font-display text-xl font-bold text-sky tabular-nums">
                   {(status?.meta.count ?? 0).toLocaleString("es-MX")}
                   <span className="ml-1.5 text-sm font-medium">registros</span>
                 </p>
-                <p className="text-xs text-muted whitespace-nowrap">sync {fmtAgo(status?.meta.lastIncrementalAt ?? status?.meta.lastFullAt ?? null)}</p>
+                <p className="text-xs text-muted-foreground whitespace-nowrap">sync {fmtAgo(status?.meta.lastIncrementalAt ?? status?.meta.lastFullAt ?? null)}</p>
               </div>
             </div>
           </Link>
         ))}
-        <p className="pt-1 text-sm text-muted">Próximamente más bases de datos.</p>
+        <p className="pt-1 text-sm text-muted-foreground">Próximamente más bases de datos.</p>
       </section>
     </main>
     </AppShell>

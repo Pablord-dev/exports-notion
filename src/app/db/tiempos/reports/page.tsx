@@ -341,7 +341,7 @@ export default function Reports() {
 
   if (authed === null) {
     return (
-      <main className="min-h-screen flex items-center justify-center gap-3 text-muted">
+      <main className="min-h-screen flex items-center justify-center gap-3 text-muted-foreground">
         <Spinner className="text-sky" /><span className="text-sm">Cargando…</span>
       </main>
     );
@@ -349,9 +349,9 @@ export default function Reports() {
   if (!authed) {
     return (
       <main className="min-h-screen flex items-center justify-center p-6">
-        <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-8 text-center space-y-4">
-          <h1 className="font-display text-2xl font-bold text-fg">Reportes</h1>
-          <p className="text-sm text-muted">Necesitas iniciar sesión para consultar los reportes.</p>
+        <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-8 text-center space-y-4">
+          <h1 className="font-display text-2xl font-bold text-foreground">Reportes</h1>
+          <p className="text-sm text-muted-foreground">Necesitas iniciar sesión para consultar los reportes.</p>
           <Link href="/" className="inline-block rounded-lg bg-blue px-4 py-2.5 text-sm font-medium text-white transition hover:brightness-110">
             Ir al inicio de sesión
           </Link>
@@ -360,7 +360,7 @@ export default function Reports() {
     );
   }
 
-  const inputCls = "mt-1 block w-full rounded-lg border border-border bg-dark-blue px-3 py-2 text-sm text-fg outline-none transition [color-scheme:dark] focus:border-blue focus:ring-2 focus:ring-blue/30";
+  const inputCls = "mt-1 block w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition [color-scheme:dark] focus:border-blue focus:ring-2 focus:ring-blue/30";
 
   return (
     <AppShell onLogout={() => setAuthed(false)}
@@ -372,11 +372,11 @@ export default function Reports() {
     <main className="max-w-7xl mx-auto p-4 sm:p-5 space-y-5">
       <header className="space-y-2 border-b border-border pb-5">
         <Breadcrumb items={[{ label: "Menú", href: "/" }, { label: "BD Tiempos" }]} />
-        <h1 className="font-display text-xl font-bold text-fg tracking-tight">BD Tiempos</h1>
+        <h1 className="font-display text-xl font-bold text-foreground tracking-tight">BD Tiempos</h1>
       </header>
 
       {/* Snapshot: registros + última sync + acciones (abren modals no bloqueantes) */}
-      <section data-tour="reports-snapshot" className="rounded-xl border border-border bg-surface p-5">
+      <section data-tour="reports-snapshot" className="rounded-xl border border-border bg-card p-5">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-0.5">
             <p className="whitespace-nowrap font-display text-xl font-bold text-sky tabular-nums">
@@ -389,7 +389,7 @@ export default function Reports() {
                 Sincronizando ({syncStatus?.status.kind}): {syncStatus?.status.done} / {syncStatus?.status.total}
               </p>
             ) : (
-              <p className="text-xs text-muted">
+              <p className="text-xs text-muted-foreground">
                 Última sincronización {fmtAgo(syncStatus?.meta.lastIncrementalAt ?? syncStatus?.meta.lastFullAt ?? null)}
               </p>
             )}
@@ -409,8 +409,8 @@ export default function Reports() {
 
       {/* Título de la sección de reportes, ya con el snapshot arriba */}
       <div className="flex items-baseline gap-4 pt-2">
-        <h2 className="font-display text-lg font-bold text-fg tracking-tight">Reportes</h2>
-        <span className="text-sm text-muted">
+        <h2 className="font-display text-lg font-bold text-foreground tracking-tight">Reportes</h2>
+        <span className="text-sm text-muted-foreground">
           {!filters.from && !filters.to
             ? "Todos los registros"
             : filters.from && filters.to
@@ -422,13 +422,13 @@ export default function Reports() {
       </div>
 
       {/* Filtros: una fila, rango + 4 dimensiones */}
-      <section data-tour="reports-filters" className="rounded-xl border border-border bg-surface p-5">
+      <section data-tour="reports-filters" className="rounded-xl border border-border bg-card p-5">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          <label className="text-sm text-muted">Desde
+          <label className="text-sm text-muted-foreground">Desde
             <input type="date" value={filters.from} max={filters.to}
                    onChange={(e) => setFilters({ ...filters, from: e.target.value })} className={inputCls} />
           </label>
-          <label className="text-sm text-muted">Hasta
+          <label className="text-sm text-muted-foreground">Hasta
             <input type="date" value={filters.to} min={filters.from}
                    onChange={(e) => setFilters({ ...filters, to: e.target.value })} className={inputCls} />
           </label>
@@ -452,49 +452,49 @@ export default function Reports() {
           { label: "Registros", value: totals.count.toLocaleString("es-MX") },
           { label: "Personas activas", value: String(totals.people) },
         ].map((t) => (
-          <div key={t.label} className="rounded-xl border border-border bg-surface p-5">
-            <p className="text-xs uppercase tracking-wide text-muted">{t.label}</p>
+          <div key={t.label} className="rounded-xl border border-border bg-card p-5">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">{t.label}</p>
             <p className="mt-1 font-display text-2xl font-bold text-sky">{loading ? "…" : t.value}</p>
           </div>
         ))}
       </section>
 
       {/* Evolución temporal */}
-      <section data-tour="reports-timeline" className="rounded-xl border border-border bg-surface p-5 space-y-4">
+      <section data-tour="reports-timeline" className="rounded-xl border border-border bg-card p-5 space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="font-display text-base font-semibold text-fg">Evolución de horas</h2>
+          <h2 className="font-display text-base font-semibold text-foreground">Evolución de horas</h2>
           <div className="flex rounded-lg border border-border p-0.5 text-sm">
             {(["week", "month"] as const).map((g) => (
               <button key={g} onClick={() => setGranularity(g)}
-                      className={`rounded-md px-3 py-1 font-medium transition ${granularity === g ? "bg-blue text-white" : "text-muted hover:text-fg"}`}>
+                      className={`rounded-md px-3 py-1 font-medium transition ${granularity === g ? "bg-blue text-white" : "text-muted-foreground hover:text-foreground"}`}>
                 {g === "week" ? "Semana" : "Mes"}
               </button>
             ))}
           </div>
         </div>
         {loading
-          ? <div className="flex h-60 items-center justify-center text-muted"><Spinner className="text-sky" /></div>
+          ? <div className="flex h-60 items-center justify-center text-muted-foreground"><Spinner className="text-sky" /></div>
           : <BarChart buckets={timeline} granularity={granularity}
                       onBarClick={(b) => { const r = barToRange(b); void openDetail(`Registros · ${fmtDate(r.from)} — ${fmtDate(r.to)}`, {}, r); }} />}
       </section>
 
       {/* Reporte dinámico: matriz dimensión × semana (1 persona o 1 subproyecto) */}
       {matrixMode && (
-        <section className="rounded-xl border border-sky/40 bg-surface p-5 space-y-3">
-          <h2 className="font-display text-base font-semibold text-fg">{matrixMode.title}</h2>
+        <section className="rounded-xl border border-sky/40 bg-card p-5 space-y-3">
+          <h2 className="font-display text-base font-semibold text-foreground">{matrixMode.title}</h2>
           {matrixLoading ? (
-            <div className="flex h-44 flex-col items-center justify-center gap-3 text-muted">
+            <div className="flex h-44 flex-col items-center justify-center gap-3 text-muted-foreground">
               <Spinner className="h-6 w-6 text-sky" />
               <p className="text-sm">Generando reporte…</p>
             </div>
           ) : !matrixView ? (
-            <p className="py-8 text-center text-sm text-muted">Sin registros en el rango seleccionado.</p>
+            <p className="py-8 text-center text-sm text-muted-foreground">Sin registros en el rango seleccionado.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead>
-                  <tr className="text-xs uppercase tracking-wide text-muted">
-                    <th className="sticky left-0 bg-surface pb-2 pr-3 font-medium">{matrixMode.rowLabel}</th>
+                  <tr className="text-xs uppercase tracking-wide text-muted-foreground">
+                    <th className="sticky left-0 bg-card pb-2 pr-3 font-medium">{matrixMode.rowLabel}</th>
                     {matrixView.weeks.map((w) => (
                       <th key={w} className="whitespace-nowrap px-2 pb-2 text-right font-medium">{fmtWeek(w)}</th>
                     ))}
@@ -504,7 +504,7 @@ export default function Reports() {
                 <tbody>
                   {matrixView.rows.map((r) => (
                     <tr key={r.group ?? "__sin_grupo__"} className="border-t border-border/60">
-                      <td className={`sticky left-0 min-w-44 max-w-72 bg-surface py-2 pr-3 [overflow-wrap:anywhere] ${r.group ? "text-fg" : "italic text-muted"}`}>
+                      <td className={`sticky left-0 min-w-44 max-w-72 bg-card py-2 pr-3 [overflow-wrap:anywhere] ${r.group ? "text-foreground" : "italic text-muted-foreground"}`}>
                         {/* grupo sin valor: nunca mostrar el label (mezclaría personas) */}
                         {r.group ? (r.label ?? r.group) : matrixMode.nullLabel}
                       </td>
@@ -512,8 +512,8 @@ export default function Reports() {
                         const v = r.cells.get(w);
                         return (
                           <td key={w} style={v ? { backgroundColor: heatBg(v, matrixView.max) } : undefined}
-                              className="whitespace-nowrap px-2 py-2 text-right tabular-nums text-fg">
-                            {v ? fmtHours(v) : <span className="text-muted/40">—</span>}
+                              className="whitespace-nowrap px-2 py-2 text-right tabular-nums text-foreground">
+                            {v ? fmtHours(v) : <span className="text-muted-foreground/40">—</span>}
                           </td>
                         );
                       })}
@@ -529,8 +529,8 @@ export default function Reports() {
 
       {/* Tablas de agregados: apiladas, cada una a lo ancho completo */}
       <div data-tour="reports-tables" className="space-y-5">
-        <section className="rounded-xl border border-border bg-surface p-5 space-y-3">
-          <h2 className="font-display text-base font-semibold text-fg">Horas por persona</h2>
+        <section className="rounded-xl border border-border bg-card p-5 space-y-3">
+          <h2 className="font-display text-base font-semibold text-foreground">Horas por persona</h2>
           <AggTable
             head={["Persona", "Horas", "Registros"]}
             empty={loading ? "Cargando…" : "Sin registros en el rango."}
@@ -550,8 +550,8 @@ export default function Reports() {
               };
             })} />
         </section>
-        <section className="rounded-xl border border-border bg-surface p-5 space-y-3">
-          <h2 className="font-display text-base font-semibold text-fg">Horas por subproyecto</h2>
+        <section className="rounded-xl border border-border bg-card p-5 space-y-3">
+          <h2 className="font-display text-base font-semibold text-foreground">Horas por subproyecto</h2>
           <AggTable
             head={["Subproyecto", "Proyecto", "Horas", "Registros"]}
             empty={loading ? "Cargando…" : "Sin registros en el rango."}
@@ -570,14 +570,14 @@ export default function Reports() {
       {/* Modal de exportación (no bloqueante: click fuera o Esc regresa al reporte) */}
       {modal === "export" && (
         <Modal title="Exportar CSV" anchor="export-modal" onClose={() => setModal(null)}>
-          <p className="text-sm text-muted">
+          <p className="text-sm text-muted-foreground">
             Rango opcional por fecha de creación. Con ambos campos vacíos se exporta todo el snapshot.
           </p>
           <div className="flex gap-3">
-            <label className="flex-1 text-sm text-muted">Desde
+            <label className="flex-1 text-sm text-muted-foreground">Desde
               <input type="date" value={exportFrom} onChange={(e) => setExportFrom(e.target.value)} className={inputCls} />
             </label>
-            <label className="flex-1 text-sm text-muted">Hasta
+            <label className="flex-1 text-sm text-muted-foreground">Hasta
               <input type="date" value={exportTo} onChange={(e) => setExportTo(e.target.value)} className={inputCls} />
             </label>
           </div>
@@ -595,24 +595,24 @@ export default function Reports() {
         <Modal title="Sincronización" anchor="sync-modal" onClose={() => setModal(null)}>
           <dl className="grid grid-cols-3 gap-4">
             <div>
-              <dt className="text-xs uppercase tracking-wide text-muted">Full</dt>
-              <dd className="text-sm text-fg">{fmtAgo(syncStatus?.meta.lastFullAt ?? null)}</dd>
+              <dt className="text-xs uppercase tracking-wide text-muted-foreground">Full</dt>
+              <dd className="text-sm text-foreground">{fmtAgo(syncStatus?.meta.lastFullAt ?? null)}</dd>
             </div>
             <div>
-              <dt className="text-xs uppercase tracking-wide text-muted">Incremental</dt>
-              <dd className="text-sm text-fg">{fmtAgo(syncStatus?.meta.lastIncrementalAt ?? null)}</dd>
+              <dt className="text-xs uppercase tracking-wide text-muted-foreground">Incremental</dt>
+              <dd className="text-sm text-foreground">{fmtAgo(syncStatus?.meta.lastIncrementalAt ?? null)}</dd>
             </div>
             <div>
-              <dt className="text-xs uppercase tracking-wide text-muted">Registros</dt>
+              <dt className="text-xs uppercase tracking-wide text-muted-foreground">Registros</dt>
               <dd className="font-display text-xl font-bold text-sky">{(syncStatus?.meta.count ?? 0).toLocaleString("es-MX")}</dd>
             </div>
           </dl>
           {syncStatus?.status.lastResult && (
-            <p className="border-t border-border pt-3 text-sm text-muted">
+            <p className="border-t border-border pt-3 text-sm text-muted-foreground">
               Último sync ({syncStatus.status.lastResult.kind}, {fmtAgo(syncStatus.status.lastResult.finishedAt)}):{" "}
-              <span className="font-medium text-fg">{syncStatus.status.lastResult.upserted} actualizados</span>
+              <span className="font-medium text-foreground">{syncStatus.status.lastResult.upserted} actualizados</span>
               {" · "}
-              <span className="font-medium text-fg">{syncStatus.status.lastResult.deleted} eliminados</span>
+              <span className="font-medium text-foreground">{syncStatus.status.lastResult.deleted} eliminados</span>
               {syncStatus.status.lastResult.skipped ? (
                 <> · <span className="font-medium text-warning">{syncStatus.status.lastResult.skipped} omitidos</span></>
               ) : null}
@@ -620,16 +620,16 @@ export default function Reports() {
           )}
           {running ? (
             <div className="space-y-3 border-t border-border pt-4">
-              <h3 className="flex items-center gap-2 font-display text-sm font-semibold text-fg">
+              <h3 className="flex items-center gap-2 font-display text-sm font-semibold text-foreground">
                 <Spinner className="text-sky" />
-                Sync en progreso <span className="font-sans font-normal text-muted">({syncStatus?.status.kind})</span>
+                Sync en progreso <span className="font-sans font-normal text-muted-foreground">({syncStatus?.status.kind})</span>
               </h3>
               {/* Sin denominador a propósito: Notion no expone un total de antemano, así
                   que `status.total` es sólo done + un page_size cuando queda más. Mostrarlo
                   como "1,200 / 1,300" fingía un progreso que nadie conoce. */}
-              <p className="font-display text-xl font-bold text-fg">
+              <p className="font-display text-xl font-bold text-foreground">
                 {(syncStatus?.status.done ?? 0).toLocaleString("es-MX")}
-                <span className="ml-1.5 font-sans text-sm font-normal text-muted">
+                <span className="ml-1.5 font-sans text-sm font-normal text-muted-foreground">
                   {(syncStatus?.status.total ?? 0) > (syncStatus?.status.done ?? 0) ? "registros y contando…" : "registros"}
                 </span>
               </p>
@@ -643,8 +643,8 @@ export default function Reports() {
           ) : (
             <div className="space-y-3 border-t border-border pt-4">
               <div className="flex gap-8">
-                <p className="text-sm text-muted">Incremental en <span className="font-medium text-fg tabular-nums">{syncStatus?.next.incremental ? fmtCountdown(syncStatus.next.incremental) : "—"}</span></p>
-                <p className="text-sm text-muted">Full <span className="font-medium text-fg">{syncStatus?.next.full ? <>en <span className="tabular-nums">{fmtCountdown(syncStatus.next.full)}</span></> : "sólo manual"}</span></p>
+                <p className="text-sm text-muted-foreground">Incremental en <span className="font-medium text-foreground tabular-nums">{syncStatus?.next.incremental ? fmtCountdown(syncStatus.next.incremental) : "—"}</span></p>
+                <p className="text-sm text-muted-foreground">Full <span className="font-medium text-foreground">{syncStatus?.next.full ? <>en <span className="tabular-nums">{fmtCountdown(syncStatus.next.full)}</span></> : "sólo manual"}</span></p>
               </div>
               <div className="flex gap-3">
                 <button onClick={() => trigger("incremental")} disabled={triggering !== null}
@@ -665,13 +665,13 @@ export default function Reports() {
 
       {/* Panel de detalle (drill-down) */}
       {detail && (
-        <div className="fixed inset-0 z-30 flex items-start justify-center overflow-y-auto bg-dark-blue/80 p-4 sm:p-10"
+        <div className="fixed inset-0 z-30 flex items-start justify-center overflow-y-auto bg-background/80 p-4 sm:p-10"
              onClick={(e) => { if (e.target === e.currentTarget) setDetail(null); }}>
-          <div className="w-full max-w-4xl rounded-2xl border border-border bg-surface shadow-2xl">
+          <div className="w-full max-w-4xl rounded-2xl border border-border bg-card shadow-2xl">
             <div className="flex items-center justify-between border-b border-border p-5">
-              <h2 className="font-display text-base font-semibold text-fg">{detail.title}</h2>
+              <h2 className="font-display text-base font-semibold text-foreground">{detail.title}</h2>
               <button onClick={() => setDetail(null)}
-                      className="rounded-lg border border-border px-3 py-1.5 text-sm text-muted transition hover:border-blue hover:text-blue">
+                      className="rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:border-blue hover:text-blue">
                 Cerrar
               </button>
             </div>
@@ -679,11 +679,11 @@ export default function Reports() {
               {detail.loading && detail.rows.length === 0
                 ? <div className="flex justify-center py-10"><Spinner className="text-sky" /></div>
                 : detail.rows.length === 0
-                  ? <p className="py-8 text-center text-sm text-muted">Sin registros para este corte.</p>
+                  ? <p className="py-8 text-center text-sm text-muted-foreground">Sin registros para este corte.</p>
                   : (
                     <table className="w-full text-left text-sm">
                       <thead>
-                        <tr className="text-xs uppercase tracking-wide text-muted">
+                        <tr className="text-xs uppercase tracking-wide text-muted-foreground">
                           <th className="pb-2 pr-3 font-medium">ID</th>
                           <th className="pb-2 pr-3 font-medium">Fecha</th>
                           <th className="pb-2 pr-3 font-medium">Persona</th>
@@ -695,12 +695,12 @@ export default function Reports() {
                       <tbody>
                         {detail.rows.map((r) => (
                           <tr key={r["ID"]} className="border-t border-border/60 align-top">
-                            <td className="py-2 pr-3 whitespace-nowrap text-muted">{r["ID"]}</td>
-                            <td className="py-2 pr-3 whitespace-nowrap text-fg">{fmtDate(r["Hora de creación"])}</td>
+                            <td className="py-2 pr-3 whitespace-nowrap text-muted-foreground">{r["ID"]}</td>
+                            <td className="py-2 pr-3 whitespace-nowrap text-foreground">{fmtDate(r["Hora de creación"])}</td>
                             {/* La columna "Persona" muestra el nombre (personLabel), no el ID de la relación */}
-                            <td className="py-2 pr-3 text-fg">{r[REPORT_PROPS.personLabel]}</td>
-                            <td className="py-2 pr-3 text-fg">{r["Tarea"]}</td>
-                            <td className="py-2 pr-3 text-muted">{r["Breve descripción"]}</td>
+                            <td className="py-2 pr-3 text-foreground">{r[REPORT_PROPS.personLabel]}</td>
+                            <td className="py-2 pr-3 text-foreground">{r["Tarea"]}</td>
+                            <td className="py-2 pr-3 text-muted-foreground">{r["Breve descripción"]}</td>
                             <td className="py-2 text-right font-medium text-sky whitespace-nowrap">{fmtHours(Number(r["Registro de horas"]) || 0)}</td>
                           </tr>
                         ))}
@@ -731,13 +731,13 @@ function Modal({ title, onClose, anchor, children }: {
   title: string; onClose: () => void; anchor?: string; children: React.ReactNode;
 }) {
   return (
-    <div className="fixed inset-0 z-30 flex items-start justify-center overflow-y-auto bg-dark-blue/80 p-4 sm:p-10"
+    <div className="fixed inset-0 z-30 flex items-start justify-center overflow-y-auto bg-background/80 p-4 sm:p-10"
          onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div data-tour={anchor} className="w-full max-w-lg rounded-2xl border border-border bg-surface shadow-2xl">
+      <div data-tour={anchor} className="w-full max-w-lg rounded-2xl border border-border bg-card shadow-2xl">
         <div className="flex items-center justify-between border-b border-border p-5">
-          <h2 className="font-display text-base font-semibold text-fg">{title}</h2>
+          <h2 className="font-display text-base font-semibold text-foreground">{title}</h2>
           <button onClick={onClose}
-                  className="rounded-lg border border-border px-3 py-1.5 text-sm text-muted transition hover:border-blue hover:text-blue">
+                  className="rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:border-blue hover:text-blue">
             Cerrar
           </button>
         </div>
@@ -756,13 +756,13 @@ function AggTable({ head, rows, empty, heatCol }: {
   heatCol?: number;
   rows: { key: string; cells: string[]; onClick?: () => void; mutedFirst?: boolean; heat?: number }[];
 }) {
-  if (!rows.length) return <p className="py-8 text-center text-sm text-muted">{empty}</p>;
+  if (!rows.length) return <p className="py-8 text-center text-sm text-muted-foreground">{empty}</p>;
   const maxHeat = Math.max(...rows.map((r) => r.heat ?? 0));
   return (
     <div className="max-h-96 overflow-y-auto">
       <table className="w-full text-left text-sm">
-        <thead className="sticky top-0 bg-surface">
-          <tr className="text-xs uppercase tracking-wide text-muted">
+        <thead className="sticky top-0 bg-card">
+          <tr className="text-xs uppercase tracking-wide text-muted-foreground">
             {head.map((h, i) => (
               <th key={h} className={`pb-2 font-medium ${i >= head.length - 2 ? "text-right pl-3" : "pr-3"}`}>{h}</th>
             ))}
@@ -773,7 +773,7 @@ function AggTable({ head, rows, empty, heatCol }: {
             <tr key={r.key}
                 onClick={r.onClick}
                 title={r.onClick ? "Ver registros" : undefined}
-                className={`border-t border-border/60 ${r.onClick ? "cursor-pointer transition hover:bg-dark-blue/50" : ""}`}>
+                className={`border-t border-border/60 ${r.onClick ? "cursor-pointer transition hover:bg-background/50" : ""}`}>
               {r.cells.map((c, i) => (
                 <td key={i}
                     style={heatCol === i ? { backgroundColor: heatBg(r.heat ?? 0, maxHeat) } : undefined}
@@ -783,7 +783,7 @@ function AggTable({ head, rows, empty, heatCol }: {
                       // (SubProy-…::NO-3510) no tienen espacios y desbordaban la tarjeta.
                       : "pr-3 [overflow-wrap:anywhere]"}
                       ${heatCol === i ? "px-3" : ""}
-                      ${i === 0 ? (r.mutedFirst ? "italic text-muted" : "text-fg") : i >= r.cells.length - 2 ? "text-fg" : "text-muted"}`}>
+                      ${i === 0 ? (r.mutedFirst ? "italic text-muted-foreground" : "text-foreground") : i >= r.cells.length - 2 ? "text-foreground" : "text-muted-foreground"}`}>
                   {c}
                 </td>
               ))}

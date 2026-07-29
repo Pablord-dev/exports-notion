@@ -46,7 +46,7 @@ export function MultiSelect({ label, options, selected, onChange }: {
     <div ref={ref} className="relative text-sm">
       <button type="button" onClick={() => { setOpen(!open); setQuery(""); }}
               className={`flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left transition
-                ${selected.length ? "border-sky/60 text-fg" : "border-border text-muted"} hover:border-blue focus-visible:ring-2 focus-visible:ring-blue/30 outline-none`}>
+                ${selected.length ? "border-sky/60 text-foreground" : "border-border text-muted-foreground"} hover:border-blue focus-visible:ring-2 focus-visible:ring-blue/30 outline-none`}>
         <span className="truncate">
           {label}{selected.length ? <span className="ml-1.5 font-medium text-sky">{selected.length}</span> : ""}
         </span>
@@ -55,19 +55,19 @@ export function MultiSelect({ label, options, selected, onChange }: {
         </svg>
       </button>
       {open && (
-        <div className="absolute z-20 mt-1 w-full min-w-56 rounded-lg border border-border bg-surface shadow-xl shadow-dark-blue/60">
+        <div className="absolute z-20 mt-1 w-full min-w-56 rounded-lg border border-border bg-card shadow-xl shadow-background/60">
           <div className="p-2 border-b border-border">
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar…" autoFocus
-                   className="w-full rounded-md border border-border bg-dark-blue px-2 py-1.5 text-fg placeholder:text-muted outline-none focus:border-blue" />
+                   className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-foreground placeholder:text-muted-foreground outline-none focus:border-blue" />
           </div>
           <ul className="max-h-56 overflow-y-auto p-1">
-            {visible.length === 0 && <li className="px-2 py-2 text-muted">Sin coincidencias</li>}
+            {visible.length === 0 && <li className="px-2 py-2 text-muted-foreground">Sin coincidencias</li>}
             {visible.map((o) => (
               <li key={o.value}>
-                <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-dark-blue">
+                <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-background">
                   <input type="checkbox" checked={selected.includes(o.value)} onChange={() => toggle(o.value)}
                          className="accent-[#0f40ef]" />
-                  <span className="truncate text-fg">{o.label}</span>
+                  <span className="truncate text-foreground">{o.label}</span>
                 </label>
               </li>
             ))}
@@ -75,7 +75,7 @@ export function MultiSelect({ label, options, selected, onChange }: {
           {selected.length > 0 && (
             <div className="border-t border-border p-1">
               <button type="button" onClick={() => onChange([])}
-                      className="w-full rounded-md px-2 py-1.5 text-left text-muted transition hover:bg-dark-blue hover:text-fg">
+                      className="w-full rounded-md px-2 py-1.5 text-left text-muted-foreground transition hover:bg-background hover:text-foreground">
                 Limpiar selección
               </button>
             </div>
@@ -108,7 +108,7 @@ export function BarChart({ buckets, granularity, onBarClick }: {
 }) {
   const [hover, setHover] = useState<number | null>(null);
   if (!buckets.length) {
-    return <p className="py-12 text-center text-sm text-muted">Sin registros en el rango seleccionado.</p>;
+    return <p className="py-12 text-center text-sm text-muted-foreground">Sin registros en el rango seleccionado.</p>;
   }
   const max = Math.max(...buckets.map((b) => b.hours), 1);
   // techo "bonito" para el eje: 1-2-5 × 10^n
@@ -157,16 +157,16 @@ export function BarChart({ buckets, granularity, onBarClick }: {
         })}
       </svg>
       {hover !== null && buckets[hover] && (
-        <div className="pointer-events-none absolute rounded-lg border border-border bg-dark-blue px-3 py-2 text-xs shadow-xl"
+        <div className="pointer-events-none absolute rounded-lg border border-border bg-background px-3 py-2 text-xs shadow-xl"
              style={{
                left: `${((PAD_L + step * hover + step / 2) / W) * 100}%`,
                top: 0,
                transform: `translateX(${hover > buckets.length / 2 ? "-100%" : "0"})`,
              }}>
-          <p className="font-medium text-fg">{bucketLabel(buckets[hover].bucket, granularity)}</p>
+          <p className="font-medium text-foreground">{bucketLabel(buckets[hover].bucket, granularity)}</p>
           <p className="text-sky font-semibold">{fmtHours(buckets[hover].hours)} h</p>
-          <p className="text-muted">{buckets[hover].count} registros</p>
-          {onBarClick && <p className="mt-1 text-muted">Click para ver el detalle</p>}
+          <p className="text-muted-foreground">{buckets[hover].count} registros</p>
+          {onBarClick && <p className="mt-1 text-muted-foreground">Click para ver el detalle</p>}
         </div>
       )}
     </div>
