@@ -6,34 +6,28 @@
 // aplica a la única BD registrada, BD Tiempos.
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { ChevronRight, Clock, MessageSquare } from "lucide-react";
 import { AppShell } from "@/app/components/app-shell";
 import { Spinner } from "@/app/components/spinner";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { DATABASES } from "@/lib/databases";
 
 type Status = {
   meta: { lastFullAt: string | null; lastIncrementalAt: string | null; count: number };
 };
 
-function ClockIcon() {
-  return (
-    <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 7v5l3 2" />
-    </svg>
-  );
-}
-
-function ChatIcon() {
-  return (
-    <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 15a2 2 0 01-2 2H8l-4 4V5a2 2 0 012-2h13a2 2 0 012 2z" />
-    </svg>
-  );
-}
-
 // Icono de cada BD del menú, por slug (default: sin icono).
 const DB_ICONS: Record<string, React.ReactNode> = {
-  tiempos: <ClockIcon />,
+  tiempos: <Clock className="h-5 w-5 shrink-0" />,
 };
 
 function fmtAgo(iso: string | null): string {
@@ -87,24 +81,25 @@ export default function Home() {
   if (!authed) {
     return (
       <main className="min-h-screen flex items-center justify-center p-6">
-        <form onSubmit={login}
-              className="w-full max-w-sm bg-card rounded-2xl border border-border p-8 space-y-6">
-          <div className="space-y-1">
-            <h1 className="font-display text-2xl font-bold text-foreground tracking-tight">ExportNotion</h1>
-            <p className="text-sm text-muted-foreground">Reportes y exportación de bases de Notion.</p>
-          </div>
-          <div className="space-y-2">
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-                   className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-foreground placeholder:text-muted-foreground outline-none transition focus:border-blue focus:ring-2 focus:ring-blue/30"
-                   placeholder="Contraseña" autoFocus />
-            {loginErr && <p className="text-sm font-medium text-danger">{loginErr}</p>}
-          </div>
-          <button disabled={loggingIn}
-                  className="w-full flex items-center justify-center gap-2 rounded-lg bg-blue py-2.5 text-sm font-medium text-white transition hover:brightness-110 focus-visible:ring-2 focus-visible:ring-blue/40 disabled:cursor-not-allowed disabled:opacity-60">
-            {loggingIn && <Spinner />}
-            {loggingIn ? "Entrando…" : "Entrar"}
-          </button>
-        </form>
+        <Card className="w-full max-w-sm">
+          <form onSubmit={login} className="space-y-6">
+            <CardHeader>
+              <CardTitle className="font-display text-2xl font-bold tracking-tight">ExportNotion</CardTitle>
+              <CardDescription>Reportes y exportación de bases de Notion.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                     placeholder="Contraseña" autoFocus />
+              {loginErr && <p className="text-sm font-medium text-danger">{loginErr}</p>}
+            </CardContent>
+            <CardFooter>
+              <Button type="submit" disabled={loggingIn} className="w-full">
+                {loggingIn && <Spinner />}
+                {loggingIn ? "Entrando…" : "Entrar"}
+              </Button>
+            </CardFooter>
+          </form>
+        </Card>
       </main>
     );
   }
@@ -117,14 +112,17 @@ export default function Home() {
         <h1 className="font-display text-xl font-bold text-foreground tracking-tight">Reportes Notion</h1>
       </header>
 
-      <Link href="/asistente" data-tour="menu-asistente"
-            className="flex items-center gap-4 rounded-xl border border-border bg-card p-5 transition hover:border-sky hover:bg-card/80">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue/15 text-sky"><ChatIcon /></span>
-        <div className="min-w-0 flex-1">
-          <h3 className="font-display text-lg font-bold text-foreground">Asistente IA</h3>
-          <p className="text-sm text-muted-foreground">Pregunta en lenguaje natural sobre tus bases de datos.</p>
-        </div>
-        <svg className="h-5 w-5 shrink-0 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+      <Link href="/asistente" data-tour="menu-asistente" className="block">
+        <Card className="flex flex-row items-center gap-4 p-5 transition hover:border-sky hover:bg-card/80">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue/15 text-sky">
+            <MessageSquare className="h-5 w-5 shrink-0" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h3 className="font-display text-lg font-bold text-foreground">Asistente IA</h3>
+            <p className="text-sm text-muted-foreground">Pregunta en lenguaje natural sobre tus bases de datos.</p>
+          </div>
+          <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+        </Card>
       </Link>
 
       <section className="space-y-3">
@@ -132,23 +130,25 @@ export default function Home() {
         {DATABASES.map((db, i) => (
           <Link key={db.slug} href={`/db/${db.slug}/reports`}
                 data-tour={i === 0 ? "menu-db-card" : undefined}
-                className="block rounded-xl border border-border bg-card p-5 transition hover:border-sky hover:bg-card/80">
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <h3 className="flex items-center gap-2 font-display text-lg font-bold text-foreground">
-                  <span className="text-sky">{DB_ICONS[db.slug]}</span>
-                  {db.name}
-                </h3>
-                <p className="text-sm text-muted-foreground">{db.description}</p>
+                className="block">
+            <Card className="p-5 transition hover:border-sky hover:bg-card/80">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <h3 className="flex items-center gap-2 font-display text-lg font-bold text-foreground">
+                    <span className="text-sky">{DB_ICONS[db.slug]}</span>
+                    {db.name}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">{db.description}</p>
+                </div>
+                <div className="text-right">
+                  <p className="whitespace-nowrap font-display text-xl font-bold text-sky tabular-nums">
+                    {(status?.meta.count ?? 0).toLocaleString("es-MX")}
+                    <span className="ml-1.5 text-sm font-medium">registros</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground whitespace-nowrap">sync {fmtAgo(status?.meta.lastIncrementalAt ?? status?.meta.lastFullAt ?? null)}</p>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="whitespace-nowrap font-display text-xl font-bold text-sky tabular-nums">
-                  {(status?.meta.count ?? 0).toLocaleString("es-MX")}
-                  <span className="ml-1.5 text-sm font-medium">registros</span>
-                </p>
-                <p className="text-xs text-muted-foreground whitespace-nowrap">sync {fmtAgo(status?.meta.lastIncrementalAt ?? status?.meta.lastFullAt ?? null)}</p>
-              </div>
-            </div>
+            </Card>
           </Link>
         ))}
         <p className="pt-1 text-sm text-muted-foreground">Próximamente más bases de datos.</p>
