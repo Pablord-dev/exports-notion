@@ -43,6 +43,12 @@
 - [202606101335_doc_gap_report.md](reports/202606101335_doc_gap_report.md) — auditoría documental FL-DOC-01: cobertura, gaps y contradicciones.
 - [202606101335_update_plan.md](reports/202606101335_update_plan.md) — plan priorizado de actualización documental (UP-01…UP-08 pendientes).
 
+## superpowers/ — specs y planes de features (flujo brainstorming → plan)
+
+- [specs/2026-07-23-chat-ia-bd-tiempos-design.md](superpowers/specs/2026-07-23-chat-ia-bd-tiempos-design.md) — diseño del Asistente IA (tool-calling, proveedores intercambiables), ya implementado.
+- [plans/2026-07-23-chat-ia-bd-tiempos.md](superpowers/plans/2026-07-23-chat-ia-bd-tiempos.md) — plan de implementación del Asistente IA.
+- [specs/2026-07-29-onboarding-guiado-design.md](superpowers/specs/2026-07-29-onboarding-guiado-design.md) — **vigente, pendiente de implementar**: onboarding con spotlight por página, botón "?" permanente y disparo tras iniciar sesión.
+
 ## archive/ — instantáneas congeladas (no se actualizan)
 
 - [202605170000_notion_export_webapp_design_spec.md](archive/202605170000_notion_export_webapp_design_spec.md) — spec de diseño original pre-implementación (2026-05-17; dice Next 15, crons 6h).
