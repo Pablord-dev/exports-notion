@@ -363,7 +363,12 @@ export default function Reports() {
   const inputCls = "mt-1 block w-full rounded-lg border border-border bg-dark-blue px-3 py-2 text-sm text-fg outline-none transition [color-scheme:dark] focus:border-blue focus:ring-2 focus:ring-blue/30";
 
   return (
-    <AppShell onLogout={() => setAuthed(false)}>
+    <AppShell onLogout={() => setAuthed(false)}
+              tour={{ id: "reports", actions: {
+                openExportModal: () => setModal("export"),
+                openSyncModal: () => setModal("sync"),
+                closeModal: () => setModal(null),
+              } }}>
     <main className="max-w-7xl mx-auto p-4 sm:p-5 space-y-5">
       <header className="space-y-2 border-b border-border pb-5">
         <Breadcrumb items={[{ label: "Menú", href: "/" }, { label: "BD Tiempos" }]} />
@@ -371,7 +376,7 @@ export default function Reports() {
       </header>
 
       {/* Snapshot: registros + última sync + acciones (abren modals no bloqueantes) */}
-      <section className="rounded-xl border border-border bg-surface p-5">
+      <section data-tour="reports-snapshot" className="rounded-xl border border-border bg-surface p-5">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-0.5">
             <p className="whitespace-nowrap font-display text-xl font-bold text-sky tabular-nums">
@@ -417,7 +422,7 @@ export default function Reports() {
       </div>
 
       {/* Filtros: una fila, rango + 4 dimensiones */}
-      <section className="rounded-xl border border-border bg-surface p-5">
+      <section data-tour="reports-filters" className="rounded-xl border border-border bg-surface p-5">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           <label className="text-sm text-muted">Desde
             <input type="date" value={filters.from} max={filters.to}
@@ -441,7 +446,7 @@ export default function Reports() {
       </section>
 
       {/* Totales del rango filtrado */}
-      <section className="grid grid-cols-3 gap-4">
+      <section data-tour="reports-totals" className="grid grid-cols-3 gap-4">
         {[
           { label: "Horas registradas", value: fmtHours(totals.hours) },
           { label: "Registros", value: totals.count.toLocaleString("es-MX") },
@@ -455,7 +460,7 @@ export default function Reports() {
       </section>
 
       {/* Evolución temporal */}
-      <section className="rounded-xl border border-border bg-surface p-5 space-y-4">
+      <section data-tour="reports-timeline" className="rounded-xl border border-border bg-surface p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="font-display text-base font-semibold text-fg">Evolución de horas</h2>
           <div className="flex rounded-lg border border-border p-0.5 text-sm">
@@ -523,7 +528,7 @@ export default function Reports() {
       )}
 
       {/* Tablas de agregados: apiladas, cada una a lo ancho completo */}
-      <div className="space-y-5">
+      <div data-tour="reports-tables" className="space-y-5">
         <section className="rounded-xl border border-border bg-surface p-5 space-y-3">
           <h2 className="font-display text-base font-semibold text-fg">Horas por persona</h2>
           <AggTable
@@ -564,7 +569,7 @@ export default function Reports() {
 
       {/* Modal de exportación (no bloqueante: click fuera o Esc regresa al reporte) */}
       {modal === "export" && (
-        <Modal title="Exportar CSV" onClose={() => setModal(null)}>
+        <Modal title="Exportar CSV" anchor="export-modal" onClose={() => setModal(null)}>
           <p className="text-sm text-muted">
             Rango opcional por fecha de creación. Con ambos campos vacíos se exporta todo el snapshot.
           </p>
@@ -587,7 +592,7 @@ export default function Reports() {
 
       {/* Modal de sincronización (no bloqueante) */}
       {modal === "sync" && (
-        <Modal title="Sincronización" onClose={() => setModal(null)}>
+        <Modal title="Sincronización" anchor="sync-modal" onClose={() => setModal(null)}>
           <dl className="grid grid-cols-3 gap-4">
             <div>
               <dt className="text-xs uppercase tracking-wide text-muted">Full</dt>
@@ -722,13 +727,13 @@ export default function Reports() {
 
 // Modal no bloqueante: click en el backdrop (o Esc, manejado por el caller) cierra
 // y regresa al reporte sin perder estado.
-function Modal({ title, onClose, children }: {
-  title: string; onClose: () => void; children: React.ReactNode;
+function Modal({ title, onClose, anchor, children }: {
+  title: string; onClose: () => void; anchor?: string; children: React.ReactNode;
 }) {
   return (
     <div className="fixed inset-0 z-30 flex items-start justify-center overflow-y-auto bg-dark-blue/80 p-4 sm:p-10"
          onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="w-full max-w-lg rounded-2xl border border-border bg-surface shadow-2xl">
+      <div data-tour={anchor} className="w-full max-w-lg rounded-2xl border border-border bg-surface shadow-2xl">
         <div className="flex items-center justify-between border-b border-border p-5">
           <h2 className="font-display text-base font-semibold text-fg">{title}</h2>
           <button onClick={onClose}

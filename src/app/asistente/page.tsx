@@ -166,13 +166,14 @@ export default function AsistentePage() {
   // y botón enviar en una fila dentro del mismo recuadro. openUp = dirección del
   // menú de los dropdowns (abajo en el estado inicial; arriba en la barra al pie).
   const renderComposer = (openUp: boolean) => (
-    <div className="rounded-2xl border border-border bg-dark-blue transition focus-within:border-blue focus-within:ring-2 focus-within:ring-blue/30">
+    <div data-tour="chat-composer"
+         className="rounded-2xl border border-border bg-dark-blue transition focus-within:border-blue focus-within:ring-2 focus-within:ring-blue/30">
       <textarea
         value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={onKeyDown}
         rows={1} disabled={noProvider} placeholder="Escribe tu pregunta…"
         className="block max-h-40 min-h-[48px] w-full resize-none bg-transparent px-4 py-3 text-sm text-fg outline-none placeholder:text-muted [color-scheme:dark] disabled:opacity-60"
       />
-      <div className="flex items-center gap-2 px-2.5 pb-2.5">
+      <div data-tour="chat-selectors" className="flex items-center gap-2 px-2.5 pb-2.5">
         <Dropdown value={db} options={dbOptions} onChange={setDb} ariaLabel="Base de datos" openUp={openUp} />
         <Dropdown value={provider} options={providerOptions} onChange={setProvider} disabled={noProvider} ariaLabel="Modelo" openUp={openUp} />
         <button onClick={() => void send()} disabled={sending || noProvider || !input.trim()}
@@ -184,7 +185,7 @@ export default function AsistentePage() {
   );
 
   return (
-    <AppShell onLogout={() => setAuthed(false)}>
+    <AppShell onLogout={() => setAuthed(false)} tour={{ id: "asistente" }}>
       <div className="flex h-[100dvh] flex-col overflow-hidden">
         {/* Header a lo ancho. El espaciador (ancho del panel) alinea el breadcrumb
             y el título con la conversación, para que no queden pegados a la izquierda. */}
@@ -208,7 +209,8 @@ export default function AsistentePage() {
           {drawerOpen && <div className="absolute inset-0 z-20 bg-dark-blue/50 md:hidden" onClick={() => setDrawerOpen(false)} aria-hidden />}
 
           {/* Panel fijo de chats: columna estática en md+; cajón off-canvas en móvil. */}
-          <aside className={`absolute inset-y-0 left-0 z-30 flex w-64 shrink-0 flex-col border-r border-border bg-dark-blue transition-transform duration-200 md:static md:z-auto md:translate-x-0 ${drawerOpen ? "translate-x-0" : "-translate-x-full"}`}>
+          <aside data-tour="chat-history"
+                 className={`absolute inset-y-0 left-0 z-30 flex w-64 shrink-0 flex-col border-r border-border bg-dark-blue transition-transform duration-200 md:static md:z-auto md:translate-x-0 ${drawerOpen ? "translate-x-0" : "-translate-x-full"}`}>
             <div className="flex items-center justify-between p-3">
               <button onClick={newChat}
                       className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-blue px-3 py-2 text-sm font-medium text-white transition hover:brightness-110">

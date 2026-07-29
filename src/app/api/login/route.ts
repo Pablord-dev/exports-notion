@@ -7,7 +7,13 @@ import { rateLimitLogin } from "@/lib/db";
 export async function POST(req: NextRequest) {
   const ip = (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   // 5 intentos / 15 min por IP (ventana fija en login_attempts; E2E usa el store en memoria).
-  if (!(await rateLimitLogin(ip))) {
+  // E2E_STUBS=1: Playwright local no manda x-forwarded-for, así que todos los
+  // tests —de todos los specs, en todos los workers— comparten el bucket
+  // "unknown"; 5 intentos agotan la ventana para el resto de la corrida (visto
+  // en la Tarea 5 al sumar más specs con su propio login). El límite real
+  // sigue cubierto por tests/integration/db.pg.test.ts contra SQL. Mismo
+  // patrón de concesión que verifyPassword en src/lib/auth.ts.
+  if (process.env.E2E_STUBS !== "1" && !(await rateLimitLogin(ip))) {
     return NextResponse.json({ error: "rate_limited" }, { status: 429 });
   }
 

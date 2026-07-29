@@ -2,6 +2,23 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Git — flujo obligatorio
+
+Toda sesión que modifique código sigue estas reglas, sin excepciones y sin que haga falta recordarlas:
+
+- Git workflow: @docs/instruccionesGit.md
+
+Equivalencias con los scripts reales de este repo (no hay `npm run typecheck`):
+
+```bash
+npm test              # vitest run
+npm run lint          # eslint .
+npx tsc --noEmit      # typecheck (no hay script npm)
+```
+
+En Windows el `&&` funciona igual en PowerShell 7+; para el gate previo a dar algo por terminado:
+`npm test && npm run lint && npx tsc --noEmit`.
+
 ## Comandos
 
 ```bash
@@ -81,6 +98,8 @@ Chat en lenguaje natural que responde consultando **las mismas funciones de repo
 - `/asistente` — Asistente IA (top-level, hermano del menú): chat estilo Claude (burbujas usuario/IA, markdown con `react-markdown`, historial en `localStorage` con borrado, selectores BD/modelo). `/db/tiempos/chat` — redirect legacy a `/asistente`.
 - `/reports` — redirect legacy a `/db/tiempos/reports`.
 - **`src/app/components/app-shell.tsx`** — shell de las páginas autenticadas: sidebar de navegación anclable/ocultable (preferencia en `localStorage` key `sidebar-pinned`; overlay con hamburguesa en móvil o desanclada). La navegación y el logout viven ahí; cada página la monta solo en su rama autenticada y pasa `onLogout` para resetear su estado local.
+- **Onboarding guiado** (`src/lib/tour/` + `src/app/components/tour/`) — spotlight por página: un `<div>` sobre el rect del ancla con `box-shadow: 0 0 0 9999px rgba(5,23,88,.8)` oscurece todo menos el recorte, más un blocker que se come los clicks (las sombras no capturan punteros). Tres guiones declarativos en `scripts.ts` (`menu` 5 pasos → `reports` 7 → `asistente` 4) con encadenado **opt-in** vía `?tour=<id>`. El tour entra a las páginas **por props de `AppShell`** (`tour={{id, actions}}`), no por contexto: `AppShell` es hijo de la página, así que un contexto declarado en el shell no alcanzaría al componente que tiene el `setModal`. Los pasos declaran `before`/`after` (`openSyncModal`/`closeModal`) para explicar los modals por dentro; el `after` corre también al abortar, así un tour cancelado no deja un modal abierto. El "?" flotante arriba a la derecha reinicia el recorrido de la página. La bienvenida se ofrece **una sola vez por navegador** en modal (`localStorage` key `onboarding-v1`) y como tira discreta en los logins siguientes; sólo cuenta un `POST /api/login` exitoso, no un F5 con la cookie viva. ⚠️ Los E2E que inician sesión deben usar `login()` de `tests/e2e/helpers.ts`: sin sembrar `welcomeSeen`, el modal intercepta los clicks.
+  - ⚠️ Dos trampas del motor, ambas con test de regresión en `tests/e2e/onboarding.spec.ts`: `runAction` lee las acciones **por ref**, no por closure (la página de reportes hace polling de sync y recrea `tour`/`shellActions` en cada render; con la identidad en las deps, el efecto de entrada al paso se re-disparaba y cerraba y reabría el modal del paso vigente), y la medición busca el ancla durante `ANCHOR_FRAMES` frames en vez de uno (el `before` abre el modal con un setState de la página y React comita ese render **después** de que el efecto ya corrió).
 - **El backend sigue single-DB**: agregar una entrada a `databases.ts` solo agrega la tarjeta al menú; soportar otra BD real es MB-02 en `docs/to-dos.md` (config/snapshot/sync/APIs por BD).
 
 ### Auth
@@ -154,79 +173,3 @@ Herramientas en `scripts/` (leen credenciales de `.env.local`):
 node scripts/reset-sync-state.cjs        # destraba un sync trancado: borra keys de control, trunca pages_new y deja status idle. NO toca el snapshot vivo.
 node scripts/check-cache-drift.cjs [sinceISO]   # solo lectura: detecta filas del snapshot desactualizadas vs. Notion (default: últimas 24h)
 ```
-
-## ⚙️ Modo de trabajo: orchestrator vs. flujo normal
-
-### 0. Configuración (personalizable)
-
-> **PALABRA_CLAVE = `kiubo`**
-> Palabra que activa el orchestrator. Cámbiala si quieres otra (`orchestrator`, `pipeline`, etc.).
-
-> **AGENTS_ROOT = `~/kiubo`**
-> Ruta **base** donde vive la arquitectura de agentes, **fuera del proyecto actual** para no mezclarla.
-> Cámbiala a donde la tengas (ruta absoluta o relativa al home; p. ej. `~/kiubo`, `/opt/kiubo`, `../kiubo`).
-> Todas las rutas de abajo cuelgan de aquí:
->
-> | Recurso | Ruta |
-> |---|---|
-> | ROUTER | `${AGENTS_ROOT}/orchestrator/ROUTER.md` |
-> | Catálogo | `${AGENTS_ROOT}/catalog.yaml` |
-> | Flows | `${AGENTS_ROOT}/flows/` |
-> | Agentes compartidos | `${AGENTS_ROOT}/shared/` |
-> | Plantillas | `${AGENTS_ROOT}/_templates/` |
-
-**Regla de aislamiento (obligatoria):** la arquitectura de agentes se **lee** desde `AGENTS_ROOT`, nunca desde el proyecto actual. El asistente **NO** debe analizar, indexar, buscar, refactorizar ni crear estos archivos/carpetas dentro del repo donde interviene; si no existen bajo `AGENTS_ROOT`, avisa en vez de asumir que están en el proyecto. Todo el trabajo técnico (análisis, búsqueda, cambios de código) ocurre **solo** en el proyecto actual.
-
-### 1. Regla principal (obligatoria)
-
-**Al inicio de cada prompt que implique una tarea de trabajo** — es decir, cualquier solicitud que **algún flow del catálogo vigente** (`${AGENTS_ROOT}/catalog.yaml`) pueda atender, no una lista fija de dominios. El catálogo es la fuente de verdad del alcance y puede crecer; si los `triggers` de algún flow encajan con la solicitud, cuenta como trabajo:
-
-- Si el usuario **escribe la PALABRA_CLAVE** (`kiubo`) en su mensaje → ir directo por el **orchestrator**, sin preguntar.
-- Si **no** la escribe → **preguntar primero**: *"¿Quieres que use `kiubo` (orchestrator) o el flujo normal?"*
-  - Responde **orchestrator / `kiubo`** → enrutar con el ROUTER (`${AGENTS_ROOT}/orchestrator/ROUTER.md` + `${AGENTS_ROOT}/catalog.yaml`), emitir el plan JSON y **ejecutar automáticamente el/los flow(s)** siguiendo sus pipelines y quality gates, sin volver a pedir confirmación entre pasos (salvo los checkpoints humanos que el flow exija).
-  - Responde **flujo normal** → atender el prompt de forma directa, sin ROUTER ni flows.
-
-**Excepciones (no preguntar):** saludos, preguntas triviales, una sola acción mecánica obvia, o cuando el usuario ya indicó explícitamente en ese mismo prompt qué modo usar.
-
-### 1.1 Reutilización del brief de proyecto (obligatoria)
-
-El **análisis profundo del proyecto** (el "brief": entendimiento global del codebase, mapa de arquitectura, índice) es **caro y compartido por todos los flows**. Se construye **una sola vez** y se reutiliza; **no se re-analiza en cada invocación de un flow**.
-
-El brief se guarda con el **commit/hash de git y la fecha** con que se generó. Antes de ejecutar cualquier flow:
-
-- **No existe brief** → constrúyelo (este es el paso caro) y continúa con el flow.
-- **Existe y el código no ha cambiado** desde su commit/fecha → **reúsalo en silencio**, sin preguntar. Corre solo el flow pedido.
-- **Existe pero el código cambió** desde su commit/fecha → **pregunta**:
-  *"El brief se generó el `<fecha>` (commit `<hash>`) y el código cambió desde entonces. ¿Lo refresco (incremental, solo lo modificado), lo reconstruyo completo, o uso el brief existente tal cual?"*
-
-> Objetivo: el re-análisis profundo y completo del proyecto es una decisión explícita del usuario (o consecuencia de que no exista brief), **nunca el comportamiento por defecto**. El entregable propio de cada flow sí se genera normalmente en cada invocación, porque no sabemos cuándo cambia su alcance.
-
-### 2. Estructura de guardado de archivos
-
-Los artefactos y documentos fechados se guardan con **prefijo de timestamp**:
-
-```
-AAAAMMDDHHMM_nombre_descriptivo.md
-```
-
-- `AAAA`=año · `MM`=mes · `DD`=día · `HH`=hora (24h) · `MM`=minutos.
-- Separador timestamp↔nombre: guion bajo `_`. Nombre en `snake_case`, sin acentos ni espacios.
-- Ejemplo: `202605312214_documentacion.md` → 2026-05-31, 22:14.
-
-| Lleva prefijo de timestamp | NO lleva prefijo (nombre estable) |
-|---|---|
-| Reportes, planes, actas, entregables fechados, instantáneas | `README.md`, `CLAUDE.md`, índices, ADRs numerados |
-
-Estructura actual de la documentación **del proyecto** (no de los agentes):
-
-```
-docs/
-├── 00-index.md        # índice maestro (1 línea por documento) — mantenerlo al agregar docs
-├── architecture/adr/  # ADRs numerados (nombre estable, sin timestamp) — decisiones destiladas de las actas
-├── brief/             # brief vigente del proyecto (project_brief + architecture_map + doc_coverage), con fingerprint de commit
-├── guides/            # how-to (manual de usuario + screenshots, cambiar columnas)
-├── reports/           # reportes fechados (gap reports, incident reports, planes)
-└── archive/           # versiones congeladas y actas de sesión con prefijo de timestamp
-```
-
-El **brief** que exige la regla 1.1 vive en `docs/brief/` (el `project_brief.md` registra el commit con que se generó); las versiones anteriores se mueven a `docs/archive/`.
