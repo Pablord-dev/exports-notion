@@ -462,7 +462,7 @@ git commit -m "refactor(shell): restiliza la sidebar con primitivas shadcn y luc
 **Interfaces:**
 - Consumes: `Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle`, `Input`, `Button`, `Spinner`, lucide `Clock`, `MessageSquare`, `ChevronRight`.
 
-- [ ] **Step 1: Reemplazar el form de login** (rama `!authed`) por:
+- [x] **Step 1: Reemplazar el form de login** (rama `!authed`) por:
 
 ```tsx
 <main className="min-h-screen flex items-center justify-center p-6">
@@ -488,7 +488,7 @@ git commit -m "refactor(shell): restiliza la sidebar con primitivas shadcn y luc
 </main>
 ```
 
-- [ ] **Step 2: Tarjetas del menú.** Eliminar `ClockIcon`/`ChatIcon` a mano; `DB_ICONS.tiempos = <Clock className="h-5 w-5 shrink-0" />`. La tarjeta del Asistente y las de BD conservan estructura, textos, `data-tour` y hovers, cambiando el contenedor a `Card`:
+- [x] **Step 2: Tarjetas del menú.** Eliminar `ClockIcon`/`ChatIcon` a mano; `DB_ICONS.tiempos = <Clock className="h-5 w-5 shrink-0" />`. La tarjeta del Asistente y las de BD conservan estructura, textos, `data-tour` y hovers, cambiando el contenedor a `Card`:
 
 ```tsx
 <Link href="/asistente" data-tour="menu-asistente" className="block">
@@ -507,12 +507,12 @@ git commit -m "refactor(shell): restiliza la sidebar con primitivas shadcn y luc
 
 Tarjeta de BD análoga (misma información: contador `text-sky tabular-nums`, "sync hace…", `data-tour="menu-db-card"` en el `Link` de la primera).
 
-- [ ] **Step 3: Gate + E2E**
+- [x] **Step 3: Gate + E2E**
 
 Run: `npm test && npm run lint && npx tsc --noEmit && npm run test:e2e`
 Expected: PASS. Tests clave: smoke login + "el botón ? corre el recorrido del menú…".
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/app/page.tsx
