@@ -67,7 +67,8 @@ página. Una página que no pasa `tour` no tiene botón "?" ni overlay.
 ### El spotlight
 
 Un `<div>` posicionado sobre el rect del ancla con
-`box-shadow: 0 0 0 9999px rgba(11,29,58,.75)`: oscurece todo menos el recorte,
+`box-shadow: 0 0 0 9999px rgba(5,23,88,.8)` —el mismo tono que el
+`bg-dark-blue/80` de los modals existentes—: oscurece todo menos el recorte,
 sin máscaras SVG. El recorte es transparente y deja ver lo que haya debajo, así
 que ilumina elementos de cualquier `z-index` de la página — siempre que la capa
 del tour quede **por encima de todas**: la sidebar overlay usa `z-50` y su
