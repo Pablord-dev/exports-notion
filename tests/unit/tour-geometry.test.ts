@@ -71,4 +71,10 @@ describe("popoverPlacement", () => {
     expect(p.mobile).toBe(true);
     expect(p.top).toBe(844 - POPOVER_H - MARGIN);
   });
+
+  it("en móvil con un viewport más bajo que el globo no se sale por arriba", () => {
+    const p = popoverPlacement(rect(100, 20), { width: 390, height: 180 });
+    expect(p.mobile).toBe(true);
+    expect(p.top).toBe(MARGIN);
+  });
 });

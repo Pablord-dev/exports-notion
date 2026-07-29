@@ -37,7 +37,14 @@ export function popoverPlacement(
 ): Placement {
   // Móvil: el ancla puede quedar en cualquier parte; el globo siempre al pie.
   if (vp.width < MOBILE_MAX) {
-    return { top: vp.height - POPOVER_H - MARGIN, left: MARGIN, side: "bottom", mobile: true };
+    // El piso de MARGIN importa con viewports muy bajos (teclado abierto en
+    // horizontal): sin él el globo se iría por arriba de la pantalla.
+    return {
+      top: Math.max(MARGIN, vp.height - POPOVER_H - MARGIN),
+      left: MARGIN,
+      side: "bottom",
+      mobile: true,
+    };
   }
 
   if (!anchor) {
