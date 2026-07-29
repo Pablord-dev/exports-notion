@@ -59,6 +59,16 @@ test("el paso de navegación abre la sidebar y la deja como estaba al salir", as
   await expect(progress(page)).toHaveText("4 / 5");
   await expect(sidebar).toBeInViewport();
 
+  // El recorte tiene que terminar SOBRE la sidebar. La sidebar entra con una
+  // transición de 200ms: si sólo se midiera el primer frame, el recorte se
+  // quedaría en su posición de fuera de pantalla y la pantalla entera saldría
+  // oscurecida, justo en el paso que explica la navegación.
+  const spot = page.getByTestId("tour-spotlight");
+  await expect.poll(async () => (await spot.boundingBox())?.x, { timeout: 2000 })
+             .toBeGreaterThan(-8);
+  const [box, aside] = [await spot.boundingBox(), await sidebar.boundingBox()];
+  expect(Math.abs(box!.x - aside!.x)).toBeLessThanOrEqual(8);
+
   // Al salir del paso, el after la vuelve a cerrar.
   await page.keyboard.press("Escape");
   await expect(sidebar).not.toBeInViewport();

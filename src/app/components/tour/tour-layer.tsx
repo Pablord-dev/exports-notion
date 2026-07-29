@@ -30,6 +30,11 @@ const anchorSelector = (anchor: string) => `[data-tour="${anchor}"]`;
 
 /** Frames que se espera al ancla de un paso antes de darla por ausente (~160ms). */
 const ANCHOR_FRAMES = 10;
+/** Techo de frames re-midiendo un ancla que se está animando (~500ms). */
+const SETTLE_FRAMES = 30;
+
+const sameRect = (a: Rect | null, b: Rect | null) =>
+  !!a && !!b && a.top === b.top && a.left === b.left && a.width === b.width && a.height === b.height;
 
 function readRect(anchor: string): Rect | null {
   const el = document.querySelector<HTMLElement>(anchorSelector(anchor));
@@ -207,11 +212,25 @@ export function TourLayer({ tour, shellActions, justLoggedIn = false }: {
       // Scroll instantáneo a propósito: con "smooth" habría que esperar el
       // final de la animación para medir, y eso vuelve frágil el E2E.
       el.scrollIntoView({ block: "center", behavior: "auto" });
-      raf = requestAnimationFrame(() => {
+      // El ancla puede estar animándose: la sidebar entra con una transición de
+      // 200ms, así que el rect del primer frame es el de fuera de pantalla. Se
+      // re-mide hasta que deja de moverse (ni el scroll ni el resize se disparan
+      // con una transición de CSS, así que nadie corregiría el rect después).
+      let settling = 0;
+      let last: Rect | null = null;
+      const measure = () => {
         const r = readRect(s.anchor!);
-        setRect(r);
-        setPlacement(popoverPlacement(r, { width: window.innerWidth, height: window.innerHeight }, s.side));
-      });
+        if (!r) return;
+        const still = sameRect(r, last);
+        if (!still) {
+          setRect(r);
+          setPlacement(popoverPlacement(r, { width: window.innerWidth, height: window.innerHeight }, s.side));
+        }
+        last = r;
+        if (still || ++settling > SETTLE_FRAMES) return;
+        raf = requestAnimationFrame(measure);
+      };
+      raf = requestAnimationFrame(measure);
     };
     raf = requestAnimationFrame(look);
     return () => cancelAnimationFrame(raf);
@@ -279,7 +298,7 @@ export function TourLayer({ tour, shellActions, justLoggedIn = false }: {
               salir es explícito (Saltar, ✕ o Esc). */}
           <div className="fixed inset-0 z-[55]" aria-hidden />
           {rect ? (
-            <div aria-hidden
+            <div aria-hidden data-testid="tour-spotlight"
                  className="pointer-events-none fixed rounded-xl ring-2 ring-sky"
                  style={{
                    top: rect.top - 4, left: rect.left - 4,
