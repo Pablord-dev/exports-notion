@@ -22,3 +22,17 @@ export async function login(page: Page, opts: { welcome?: "skip" | "expect" } = 
     await expect(page.getByTestId("welcome-modal")).toBeHidden();
   }
 }
+
+/**
+ * Del menú a los reportes de BD Tiempos, esperando a que la navegación termine.
+ *
+ * El heading se pide por nivel 1: el matcheo de `name` es por substring, y en el
+ * menú tanto el h1 "Reportes Notion" como el h3 "BD Tiempos" de la tarjeta
+ * calzarían: la aserción pasaría sin haber navegado y el click siguiente
+ * correría contra la página vieja.
+ */
+export async function gotoReports(page: Page): Promise<void> {
+  await page.locator("main").getByRole("link", { name: "BD Tiempos" }).click();
+  await expect(page).toHaveURL(/\/db\/tiempos\/reports$/);
+  await expect(page.getByRole("heading", { level: 1, name: "BD Tiempos" })).toBeVisible();
+}

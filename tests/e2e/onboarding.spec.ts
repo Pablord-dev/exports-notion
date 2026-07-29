@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { login } from "./helpers";
+import { login, gotoReports } from "./helpers";
 
 // Todo este archivo depende del password del entorno stub. test.skip() dentro de
 // un hook aplica a cada test del archivo (llamarlo en el top-level lanzaría).
@@ -121,4 +121,68 @@ test("recargar con la sesión viva no vuelve a ofrecer el recorrido", async ({ p
   await expect(page.getByRole("heading", { name: "Bases de datos" })).toBeVisible();
   await expect(page.getByTestId("welcome-modal")).toBeHidden();
   await expect(page.getByTestId("welcome-banner")).toBeHidden();
+});
+
+test("el recorrido de reportes abre y cierra los modals por su cuenta", async ({ page }) => {
+  await login(page);
+  await gotoReports(page);
+
+  await page.getByRole("button", { name: /Ayuda/ }).click();
+
+  for (const [i, titulo] of [
+    "El estado de la copia",
+    "Filtros combinables",
+    "Totales del corte",
+    "Evolución de horas",
+    "Horas por persona y por subproyecto",
+  ].entries()) {
+    await expect(progress(page)).toHaveText(`${i + 1} / 7`);
+    await expect(popover(page).getByRole("heading", { name: titulo })).toBeVisible();
+    await page.getByRole("button", { name: "Siguiente" }).click();
+  }
+
+  // Paso 6: el before abre el modal de exportación.
+  await expect(progress(page)).toHaveText("6 / 7");
+  await expect(page.getByRole("button", { name: "Descargar" })).toBeVisible();
+
+  // Paso 7: el after del 6 cierra export y el before del 7 abre sync.
+  await page.getByRole("button", { name: "Siguiente" }).click();
+  await expect(progress(page)).toHaveText("7 / 7");
+  await expect(page.getByRole("button", { name: "Descargar" })).toBeHidden();
+  await expect(page.getByRole("button", { name: "Refrescar incremental" })).toBeVisible();
+
+  // Terminar corre el after pendiente: ningún modal queda abierto.
+  await page.getByRole("button", { name: "Terminar" }).click();
+  await expect(popover(page)).toBeHidden();
+  await expect(page.getByRole("button", { name: "Refrescar incremental" })).toBeHidden();
+});
+
+test("Esc en un paso que abrió un modal cierra ambos", async ({ page }) => {
+  await login(page);
+  await gotoReports(page);
+  await page.getByRole("button", { name: /Ayuda/ }).click();
+  for (let i = 0; i < 5; i++) await page.getByRole("button", { name: "Siguiente" }).click();
+  await expect(page.getByRole("button", { name: "Descargar" })).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(popover(page)).toBeHidden();
+  await expect(page.getByRole("button", { name: "Descargar" })).toBeHidden();
+  // La página sigue usable: el click llega, así que no quedó el blocker del
+  // tour comiéndose los eventos. Un heading visible no probaría nada — el
+  // overlay tapa los clicks sin ocultar el contenido.
+  await page.getByRole("button", { name: "Exportar" }).click();
+  await expect(page.getByRole("button", { name: "Descargar" })).toBeVisible();
+});
+
+test("Atrás desde el paso de sync regresa al de export", async ({ page }) => {
+  await login(page);
+  await gotoReports(page);
+  await page.getByRole("button", { name: /Ayuda/ }).click();
+  for (let i = 0; i < 6; i++) await page.getByRole("button", { name: "Siguiente" }).click();
+  await expect(page.getByRole("button", { name: "Refrescar incremental" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Atrás" }).click();
+  await expect(progress(page)).toHaveText("6 / 7");
+  await expect(page.getByRole("button", { name: "Refrescar incremental" })).toBeHidden();
+  await expect(page.getByRole("button", { name: "Descargar" })).toBeVisible();
 });

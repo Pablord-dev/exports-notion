@@ -27,6 +27,9 @@ type Actions = Partial<Record<TourActionId, () => void>>;
 
 const anchorSelector = (anchor: string) => `[data-tour="${anchor}"]`;
 
+/** Frames que se espera al ancla de un paso antes de darla por ausente (~160ms). */
+const ANCHOR_FRAMES = 10;
+
 function readRect(anchor: string): Rect | null {
   const el = document.querySelector<HTMLElement>(anchorSelector(anchor));
   if (!el) return null;
@@ -66,10 +69,23 @@ export function TourLayer({ tour, shellActions, justLoggedIn = false }: {
   const active = index !== null;
   const step = index === null ? null : steps[index];
 
+  // Últimos handlers recibidos, leídos por runAction() vía ref (no por
+  // closure): `tour` y `shellActions` son objetos literales que la página y
+  // AppShell recrean en cada render (polling de sync, ticks, etc.). Si
+  // runAction dependiera de su identidad, el efecto de abajo (que sólo debe
+  // correr al cambiar de paso) se re-disparía en cualquier render ajeno al
+  // tour, cerrando y reabriendo el modal del paso solo — justo lo que hace
+  // que un paso con ancla en un modal se salte al azar.
+  const actionsRef = useRef({ tour: tour.actions, shellActions });
+  useEffect(() => {
+    actionsRef.current = { tour: tour.actions, shellActions };
+  });
+
   const runAction = useCallback((id: TourActionId | null | undefined) => {
     if (!id) return;
-    (tour.actions?.[id] ?? shellActions[id])?.();
-  }, [tour, shellActions]);
+    const { tour: tourActions, shellActions: shell } = actionsRef.current;
+    (tourActions?.[id] ?? shell[id])?.();
+  }, []);
 
   const start = useCallback(() => {
     setWelcome("none");
@@ -144,9 +160,20 @@ export function TourLayer({ tour, shellActions, justLoggedIn = false }: {
       return;
     }
 
-    let raf = requestAnimationFrame(() => {
+    // El ancla se busca durante varios frames, no uno: el `before` de este paso
+    // pide abrir un modal con un setState de la página, y React comita ese
+    // render DESPUÉS de que este efecto ya corrió. Con un solo frame de
+    // oportunidad el paso se omitía según cómo se hubiera entrado a él (desde
+    // un click se perdía la carrera; desde un rAF la ganaba).
+    let raf = 0;
+    let frames = 0;
+    const look = () => {
       const el = document.querySelector<HTMLElement>(anchorSelector(s.anchor!));
-      if (!el) { skipFrom(index, s.anchor!); return; }
+      if (!el) {
+        if (++frames > ANCHOR_FRAMES) { skipFrom(index, s.anchor!); return; }
+        raf = requestAnimationFrame(look);
+        return;
+      }
       // Scroll instantáneo a propósito: con "smooth" habría que esperar el
       // final de la animación para medir, y eso vuelve frágil el E2E.
       el.scrollIntoView({ block: "center", behavior: "auto" });
@@ -155,7 +182,8 @@ export function TourLayer({ tour, shellActions, justLoggedIn = false }: {
         setRect(r);
         setPlacement(popoverPlacement(r, { width: window.innerWidth, height: window.innerHeight }, s.side));
       });
-    });
+    };
+    raf = requestAnimationFrame(look);
     return () => cancelAnimationFrame(raf);
   }, [index, steps, skipFrom]);
 
