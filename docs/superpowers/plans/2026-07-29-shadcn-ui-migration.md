@@ -122,7 +122,7 @@ git commit -m "chore(ui): configura shadcn/ui (components.json, cn, deps base)"
 - Produces: utilidades `bg-background`, `bg-card`, `text-foreground`, `text-muted-foreground`, `border-border`, `bg-primary`, etc. (semántica shadcn) + utilidades de marca `bg-blue`, `text-sky`, `text-danger`, `text-warning`, `text-success`, `font-display`.
 - **Elimina** las utilidades `bg-surface`, `text-fg`, `text-muted`, `bg-dark-blue` (renombradas en el sweep).
 
-- [ ] **Step 1: Reescribir `src/app/globals.css`** con este contenido exacto (conserva scrollbars y fuentes actuales):
+- [x] **Step 1: Reescribir `src/app/globals.css`** con este contenido exacto (conserva scrollbars y fuentes actuales):
 
 ```css
 @import "tailwindcss";
@@ -260,7 +260,7 @@ git commit -m "chore(ui): configura shadcn/ui (components.json, cn, deps base)"
 }
 ```
 
-- [ ] **Step 2: Sweep de clases en todos los `.tsx` de `src/app/`** (páginas, componentes y tour). Renombres, en este orden y con cuidado de no tocar `text-muted-foreground` ya generado:
+- [x] **Step 2: Sweep de clases en todos los `.tsx` de `src/app/`** (páginas, componentes y tour). Renombres, en este orden y con cuidado de no tocar `text-muted-foreground` ya generado:
 
 | Antes | Después |
 |---|---|
@@ -276,12 +276,12 @@ Archivos afectados (verificar con grep tras el sweep — `rg 'text-fg|bg-surface
 
 ⚠️ En `components.tsx` (BarChart SVG) hay hexes literales (`#1c3c84`, `#9a9a9a`, `#02b5d3`) — dejarlos: ese componente muere en la Tarea 7.
 
-- [ ] **Step 3: Gate + E2E**
+- [x] **Step 3: Gate + E2E**
 
 Run: `npm test && npm run lint && npx tsc --noEmit && npm run test:e2e`
 Expected: todo PASS — el sweep es un renombre puro; si un E2E falla, hay una clase mal renombrada.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/app
