@@ -72,11 +72,13 @@ function LogoutIcon() {
   );
 }
 
-export function AppShell({ children, onLogout, tour }: {
+export function AppShell({ children, onLogout, tour, justLoggedIn }: {
   children: React.ReactNode;
   onLogout: () => void;
   /** Guión de esta página. Sin él no hay botón "?" ni overlay. */
   tour?: TourBinding;
+  /** true sólo tras un login exitoso en esta carga de página. */
+  justLoggedIn?: boolean;
 }) {
   const [pinned, setPinned] = useState(true);
   const [open, setOpen] = useState(false);
@@ -197,7 +199,7 @@ export function AppShell({ children, onLogout, tour }: {
           desktop solo con la sidebar oculta) */}
       <div className={pinned ? "pt-12 lg:pl-60 lg:pt-0" : "pt-12"}>
         {tour && (
-          <TourLayer tour={tour}
+          <TourLayer tour={tour} justLoggedIn={justLoggedIn}
                      shellActions={{ openSidebar: () => setOpen(true), closeSidebar: () => setOpen(false) }} />
         )}
         {children}

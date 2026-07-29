@@ -1,16 +1,11 @@
 import { test, expect, type Page } from "@playwright/test";
+import { login } from "./helpers";
 
 // Todo este archivo depende del password del entorno stub. test.skip() dentro de
 // un hook aplica a cada test del archivo (llamarlo en el top-level lanzaría).
 test.beforeEach(() => {
   test.skip(process.env.E2E_REAL === "1", "password real desconocido");
 });
-
-async function login(page: Page) {
-  await page.goto("/");
-  await page.getByPlaceholder("Contraseña").fill("e2e-password");
-  await page.getByRole("button", { name: "Entrar" }).click();
-}
 
 const popover = (page: Page) => page.getByTestId("tour-popover");
 const progress = (page: Page) => page.getByTestId("tour-progress");
@@ -66,4 +61,48 @@ test("el paso de navegación abre la sidebar y la deja como estaba al salir", as
   // Al salir del paso, el after la vuelve a cerrar.
   await page.keyboard.press("Escape");
   await expect(sidebar).not.toBeInViewport();
+});
+
+test("el primer login de un navegador ofrece el recorrido en un modal", async ({ page }) => {
+  await login(page, { welcome: "expect" });
+  const modal = page.getByTestId("welcome-modal");
+  await expect(modal).toBeVisible();
+  await modal.getByRole("button", { name: "Empezar" }).click();
+  await expect(modal).toBeHidden();
+  await expect(progress(page)).toHaveText("1 / 5");
+});
+
+test("“Ahora no” cierra el modal y deja el ? como vía de entrada", async ({ page }) => {
+  await login(page, { welcome: "expect" });
+  await page.getByTestId("welcome-modal").getByRole("button", { name: "Ahora no" }).click();
+  await expect(page.getByTestId("welcome-modal")).toBeHidden();
+  await expect(popover(page)).toBeHidden();
+  await page.getByRole("button", { name: /Ayuda/ }).click();
+  await expect(progress(page)).toHaveText("1 / 5");
+});
+
+test("el segundo login muestra la tira discreta, no el modal", async ({ page }) => {
+  // Primer login: consume el modal (marca welcomeSeen en este navegador).
+  await login(page, { welcome: "expect" });
+  await page.getByTestId("welcome-modal").getByRole("button", { name: "Ahora no" }).click();
+  // Cerrar sesión y volver a entrar en el mismo contexto (mismo localStorage).
+  await page.getByRole("complementary", { name: "Navegación" })
+            .getByRole("button", { name: "Cerrar sesión" }).click();
+  await page.getByPlaceholder("Contraseña").fill("e2e-password");
+  await page.getByRole("button", { name: "Entrar" }).click();
+
+  await expect(page.getByTestId("welcome-modal")).toBeHidden();
+  const banner = page.getByTestId("welcome-banner");
+  await expect(banner).toBeVisible();
+  await banner.getByRole("button", { name: "Iniciar tutorial" }).click();
+  await expect(progress(page)).toHaveText("1 / 5");
+});
+
+test("recargar con la sesión viva no vuelve a ofrecer el recorrido", async ({ page }) => {
+  await login(page, { welcome: "expect" });
+  await page.getByTestId("welcome-modal").getByRole("button", { name: "Ahora no" }).click();
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Bases de datos" })).toBeVisible();
+  await expect(page.getByTestId("welcome-modal")).toBeHidden();
+  await expect(page.getByTestId("welcome-banner")).toBeHidden();
 });

@@ -12,8 +12,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { popoverPlacement, type Placement, type Rect } from "@/lib/tour/geometry";
 import { tourScript } from "@/lib/tour/scripts";
+import { hasSeenWelcome, markWelcomeSeen } from "@/lib/tour/storage";
 import type { TourActionId, TourId } from "@/lib/tour/types";
 import { TourPopover } from "./tour-popover";
+import { WelcomeBanner, WelcomeModal } from "./welcome";
 
 export interface TourBinding {
   id: TourId;
@@ -32,7 +34,12 @@ function readRect(anchor: string): Rect | null {
   return { top: r.top, left: r.left, width: r.width, height: r.height };
 }
 
-export function TourLayer({ tour, shellActions }: { tour: TourBinding; shellActions: Actions }) {
+export function TourLayer({ tour, shellActions, justLoggedIn = false }: {
+  tour: TourBinding;
+  shellActions: Actions;
+  /** true sólo tras un login exitoso en esta carga de página. */
+  justLoggedIn?: boolean;
+}) {
   const script = tourScript(tour.id);
   const steps = script.steps;
 
@@ -43,6 +50,19 @@ export function TourLayer({ tour, shellActions }: { tour: TourBinding; shellActi
   const cleanupRef = useRef<TourActionId | null>(null);
   const helpRef = useRef<HTMLButtonElement>(null);
 
+  // "none" hasta que se resuelve en cliente: localStorage no existe en SSR.
+  const [welcome, setWelcome] = useState<"none" | "modal" | "banner">("none");
+
+  useEffect(() => {
+    if (!justLoggedIn) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (hasSeenWelcome()) { setWelcome("banner"); return; }
+    // Se marca al MOSTRARLO, no al completarlo: la promesa es "una vez por
+    // navegador", incluso si eligen "Ahora no".
+    markWelcomeSeen();
+    setWelcome("modal");
+  }, [justLoggedIn]);
+
   const active = index !== null;
   const step = index === null ? null : steps[index];
 
@@ -52,6 +72,7 @@ export function TourLayer({ tour, shellActions }: { tour: TourBinding; shellActi
   }, [tour, shellActions]);
 
   const start = useCallback(() => {
+    setWelcome("none");
     dirRef.current = 1;
     setIndex(0);
   }, []);
@@ -181,6 +202,13 @@ export function TourLayer({ tour, shellActions }: { tour: TourBinding; shellActi
 
   return (
     <>
+      {welcome === "banner" && !active && (
+        <WelcomeBanner onStart={start} onDismiss={() => setWelcome("none")} />
+      )}
+      {welcome === "modal" && !active && (
+        <WelcomeModal onStart={start} onDismiss={() => setWelcome("none")} />
+      )}
+
       <button ref={helpRef} onClick={start} data-tour="help-button"
               aria-label="Ayuda: iniciar el recorrido guiado" title="Recorrido guiado"
               className="fixed top-4 right-4 z-30 flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-surface font-display text-base font-bold text-muted transition hover:border-blue hover:text-blue">

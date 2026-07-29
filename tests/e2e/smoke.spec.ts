@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { login } from "./helpers";
 
 test("login screen renders and rejects wrong password", async ({ page }) => {
   await page.goto("/");
@@ -12,9 +13,7 @@ test("login screen renders and rejects wrong password", async ({ page }) => {
 // Con E2E_REAL=1 se salta — no conocemos el password real.
 test("login shows main menu and sync/export modals work", async ({ page }) => {
   test.skip(process.env.E2E_REAL === "1", "password real desconocido");
-  await page.goto("/");
-  await page.getByPlaceholder("Contraseña").fill("e2e-password");
-  await page.getByRole("button", { name: "Entrar" }).click();
+  await login(page);
   // Menú principal: tarjeta de la BD + sidebar anclada (default desktop).
   await expect(page.getByRole("heading", { name: "Bases de datos" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "BD Tiempos" })).toBeVisible();
@@ -43,9 +42,7 @@ test("login shows main menu and sync/export modals work", async ({ page }) => {
 // con filtros visibles y estados vacíos — nunca romper.
 test("reports page renders filters and empty state", async ({ page }) => {
   test.skip(process.env.E2E_REAL === "1", "password real desconocido");
-  await page.goto("/");
-  await page.getByPlaceholder("Contraseña").fill("e2e-password");
-  await page.getByRole("button", { name: "Entrar" }).click();
+  await login(page);
   // La tarjeta completa de la BD es el link a sus reportes.
   await page.locator("main").getByRole("link", { name: "BD Tiempos" }).click();
   await expect(page.getByRole("heading", { name: "Reportes" })).toBeVisible();
@@ -58,9 +55,7 @@ test("reports page renders filters and empty state", async ({ page }) => {
 // volver a anclar la fija. La preferencia persiste (localStorage).
 test("sidebar can be unpinned, reopened and pinned again", async ({ page }) => {
   test.skip(process.env.E2E_REAL === "1", "password real desconocido");
-  await page.goto("/");
-  await page.getByPlaceholder("Contraseña").fill("e2e-password");
-  await page.getByRole("button", { name: "Entrar" }).click();
+  await login(page);
   const sidebar = page.getByRole("complementary", { name: "Navegación" });
   await expect(sidebar).toBeVisible();
   // Desanclar: la sidebar se esconde y aparece la hamburguesa.
@@ -87,9 +82,7 @@ test("sidebar can be unpinned, reopened and pinned again", async ({ page }) => {
 // modelo y caja de mensaje. No se envía nada (el LLM real no corre en E2E).
 test("chat page renders composer and model selector", async ({ page }) => {
   test.skip(process.env.E2E_REAL === "1", "password real desconocido");
-  await page.goto("/");
-  await page.getByPlaceholder("Contraseña").fill("e2e-password");
-  await page.getByRole("button", { name: "Entrar" }).click();
+  await login(page);
   // "Asistente IA" es entrada top-level del sidebar → /asistente.
   const sidebar = page.getByRole("complementary", { name: "Navegación" });
   await sidebar.getByRole("link", { name: "Asistente IA" }).click();

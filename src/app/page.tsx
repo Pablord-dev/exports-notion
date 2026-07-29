@@ -51,6 +51,7 @@ export default function Home() {
   const [loginErr, setLoginErr] = useState<string | null>(null);
   const [loggingIn, setLoggingIn] = useState(false);
   const [status, setStatus] = useState<Status | null>(null);
+  const [justLoggedIn, setJustLoggedIn] = useState(false);
 
   async function loadStatus() {
     const r = await fetch("/api/sync/status");
@@ -69,7 +70,7 @@ export default function Home() {
     setLoginErr(null); setLoggingIn(true);
     try {
       const r = await fetch("/api/login", { method: "POST", body: JSON.stringify({ password }) });
-      if (r.ok) { setPassword(""); await loadStatus(); }
+      if (r.ok) { setPassword(""); setJustLoggedIn(true); await loadStatus(); }
       else setLoginErr(r.status === 429 ? "Demasiados intentos, espera 15 min." : "Contraseña incorrecta.");
     } finally { setLoggingIn(false); }
   }
@@ -109,7 +110,8 @@ export default function Home() {
   }
 
   return (
-    <AppShell onLogout={() => { setAuthed(false); setStatus(null); }} tour={{ id: "menu" }}>
+    <AppShell onLogout={() => { setAuthed(false); setStatus(null); setJustLoggedIn(false); }}
+              tour={{ id: "menu" }} justLoggedIn={justLoggedIn}>
     <main className="max-w-2xl mx-auto p-6 sm:p-8 space-y-6">
       <header className="border-b border-border pb-5">
         <h1 className="font-display text-xl font-bold text-fg tracking-tight">Reportes Notion</h1>
