@@ -174,6 +174,29 @@ test("Esc en un paso que abrió un modal cierra ambos", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Descargar" })).toBeVisible();
 });
 
+test("el recorrido del asistente cubre compositor, selectores e historial", async ({ page }) => {
+  await login(page);
+  await page.getByRole("complementary", { name: "Navegación" })
+            .getByRole("link", { name: "Asistente IA" }).click();
+  await expect(page).toHaveURL(/\/asistente$/);
+
+  await page.getByRole("button", { name: /Ayuda/ }).click();
+  for (const [i, titulo] of [
+    "Pregunta en lenguaje natural",
+    "Base y modelo",
+    "Tus conversaciones",
+    "Cómo verificar una respuesta",
+  ].entries()) {
+    await expect(progress(page)).toHaveText(`${i + 1} / 4`);
+    await expect(popover(page).getByRole("heading", { name: titulo })).toBeVisible();
+    if (i < 3) await page.getByRole("button", { name: "Siguiente" }).click();
+  }
+  // Último guión de la cadena: no ofrece continuar en otra parte.
+  await expect(page.getByRole("button", { name: /Continuar en/ })).toBeHidden();
+  await page.getByRole("button", { name: "Terminar" }).click();
+  await expect(popover(page)).toBeHidden();
+});
+
 test("Atrás desde el paso de sync regresa al de export", async ({ page }) => {
   await login(page);
   await gotoReports(page);
