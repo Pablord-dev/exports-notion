@@ -384,7 +384,7 @@ git commit -m "feat(ui): agrega primitivas shadcn, AppModal no bloqueante y Spin
 - Consumes: `Button`, `Collapsible*` de `@/components/ui`, iconos lucide, `Spinner`.
 - Produces: `AppShell({ children, onLogout, tour?, justLoggedIn? })` — API idéntico al actual; `<aside role complementary aria-label="Navegación">`, botones "Abrir menú"/"Anclar menú"/"Desanclar menú"/"Cerrar menú"/"Cerrar sesión", key `sidebar-pinned`, `shellActions {openSidebar, closeSidebar}` al TourLayer.
 
-- [ ] **Step 1: Reescribir el componente.** Estado (`pinned`/`open`/`dbsOpen`/`loggingOut`), efectos, `togglePin`, `logout`, el `<aside data-tour="shell-sidebar">` con sus transforms y el bloque final `<div className={pinned ? "pt-12 lg:pl-60 lg:pt-0" : "pt-12"}>` + `TourLayer` quedan EXACTAMENTE como hoy. Cambian los internos:
+- [x] **Step 1: Reescribir el componente.** Estado (`pinned`/`open`/`dbsOpen`/`loggingOut`), efectos, `togglePin`, `logout`, el `<aside data-tour="shell-sidebar">` con sus transforms y el bloque final `<div className={pinned ? "pt-12 lg:pl-60 lg:pt-0" : "pt-12"}>` + `TourLayer` quedan EXACTAMENTE como hoy. Cambian los internos:
 
   - Eliminar los componentes de iconos SVG a mano (`HomeIcon`, `DatabaseIcon`, `TableIcon`, `ChatIcon`, `LogoutIcon`) e importar de lucide: `Home`, `Database`, `Table2`, `MessageSquare`, `LogOut`, `Menu`, `X`, `Pin`, `PinOff`, `ChevronRight` — siempre con `className="h-4 w-4 shrink-0"` (hamburguesa `h-5 w-5`).
   - Hamburguesa:
@@ -440,12 +440,12 @@ git commit -m "feat(ui): agrega primitivas shadcn, AppModal no bloqueante y Spin
 </Button>
 ```
 
-- [ ] **Step 2: Gate + E2E**
+- [x] **Step 2: Gate + E2E**
 
 Run: `npm test && npm run lint && npx tsc --noEmit && npm run test:e2e`
 Expected: PASS completo. Tests clave: smoke "sidebar can be unpinned, reopened and pinned again" y onboarding "el paso de navegación abre la sidebar…".
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/app/components/app-shell.tsx
