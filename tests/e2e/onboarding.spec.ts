@@ -72,6 +72,22 @@ test("el primer login de un navegador ofrece el recorrido en un modal", async ({
   await expect(progress(page)).toHaveText("1 / 5");
 });
 
+test("el modal de bienvenida atrapa el foco: Tab no escapa al fondo", async ({ page }) => {
+  await login(page, { welcome: "expect" });
+  const modal = page.getByTestId("welcome-modal");
+  const dismiss = modal.getByRole("button", { name: "Ahora no" });
+  const start = modal.getByRole("button", { name: "Empezar" });
+
+  // Al abrir, el foco parte en "Empezar" (último botón del modal).
+  await expect(start).toBeFocused();
+  // Tab desde el último botón recicla al primero, no al botón "?" de atrás.
+  await page.keyboard.press("Tab");
+  await expect(dismiss).toBeFocused();
+  // Shift+Tab desde el primero recicla al último.
+  await page.keyboard.press("Shift+Tab");
+  await expect(start).toBeFocused();
+});
+
 test("“Ahora no” cierra el modal y deja el ? como vía de entrada", async ({ page }) => {
   await login(page, { welcome: "expect" });
   await page.getByTestId("welcome-modal").getByRole("button", { name: "Ahora no" }).click();

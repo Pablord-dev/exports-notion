@@ -6,6 +6,7 @@ import { useEffect, useRef } from "react";
 
 export function WelcomeModal({ onStart, onDismiss }: { onStart: () => void; onDismiss: () => void }) {
   const startRef = useRef<HTMLButtonElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
   useEffect(() => { startRef.current?.focus(); }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onDismiss(); };
@@ -13,10 +14,25 @@ export function WelcomeModal({ onStart, onDismiss }: { onStart: () => void; onDi
     return () => document.removeEventListener("keydown", onKey);
   }, [onDismiss]);
 
+  // Trampa de Tab: mantiene el foco dentro del modal (mismo patrón que
+  // TourPopover). Sin ella, Tab escapa al backdrop y llega a elementos
+  // enfocables tapados por él (el botón "?", los enlaces del menú de atrás).
+  function onKeyDown(e: React.KeyboardEvent) {
+    if (e.key !== "Tab" || !boxRef.current) return;
+    const focusables = boxRef.current.querySelectorAll<HTMLElement>("button");
+    if (focusables.length === 0) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    const active = document.activeElement;
+    if (e.shiftKey && active === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
+  }
+
   return (
     <div className="fixed inset-0 z-[58] flex items-center justify-center bg-dark-blue/80 p-4"
          onClick={(e) => { if (e.target === e.currentTarget) onDismiss(); }}>
-      <div role="dialog" aria-modal="true" aria-labelledby="welcome-title" data-testid="welcome-modal"
+      <div ref={boxRef} onKeyDown={onKeyDown}
+           role="dialog" aria-modal="true" aria-labelledby="welcome-title" data-testid="welcome-modal"
            className="w-full max-w-md space-y-4 rounded-2xl border border-border bg-surface p-6 shadow-2xl">
         <h2 id="welcome-title" className="font-display text-xl font-bold text-fg">
           Bienvenido a ExportNotion
