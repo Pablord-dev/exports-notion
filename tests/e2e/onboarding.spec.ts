@@ -30,8 +30,9 @@ test("el botón ? corre el recorrido del menú paso por paso", async ({ page }) 
     if (i < 4) await page.getByRole("button", { name: "Siguiente" }).click();
   }
 
-  // El último paso ofrece encadenar; "Terminar" cierra el recorrido.
-  await page.getByRole("button", { name: "Terminar" }).click();
+  // El último paso del menú encadena en vez de terminar.
+  await expect(page.getByRole("button", { name: "Continuar en BD Tiempos" })).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect(popover(page)).toBeHidden();
 });
 
@@ -151,8 +152,10 @@ test("el recorrido de reportes abre y cierra los modals por su cuenta", async ({
   await expect(page.getByRole("button", { name: "Descargar" })).toBeHidden();
   await expect(page.getByRole("button", { name: "Refrescar incremental" })).toBeVisible();
 
-  // Terminar corre el after pendiente: ningún modal queda abierto.
-  await page.getByRole("button", { name: "Terminar" }).click();
+  // El último paso de reportes encadena al asistente; salir con Esc corre el
+  // after pendiente, así que no queda ningún modal abierto.
+  await expect(page.getByRole("button", { name: "Continuar en el Asistente IA" })).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect(popover(page)).toBeHidden();
   await expect(page.getByRole("button", { name: "Refrescar incremental" })).toBeHidden();
 });
@@ -172,6 +175,36 @@ test("Esc en un paso que abrió un modal cierra ambos", async ({ page }) => {
   // overlay tapa los clicks sin ocultar el contenido.
   await page.getByRole("button", { name: "Exportar" }).click();
   await expect(page.getByRole("button", { name: "Descargar" })).toBeVisible();
+});
+
+test("el encadenado lleva del menú a reportes y de ahí al asistente", async ({ page }) => {
+  await login(page);
+  await page.getByRole("button", { name: /Ayuda/ }).click();
+  for (let i = 0; i < 4; i++) await page.getByRole("button", { name: "Siguiente" }).click();
+  await expect(progress(page)).toHaveText("5 / 5");
+
+  await page.getByRole("button", { name: "Continuar en BD Tiempos" }).click();
+  await expect(page).toHaveURL(/\/db\/tiempos\/reports$/);   // la URL queda limpia
+  await expect(progress(page)).toHaveText("1 / 7");
+
+  for (let i = 0; i < 6; i++) await page.getByRole("button", { name: "Siguiente" }).click();
+  await expect(progress(page)).toHaveText("7 / 7");
+  await page.getByRole("button", { name: "Continuar en el Asistente IA" }).click();
+  await expect(page).toHaveURL(/\/asistente$/);
+  await expect(progress(page)).toHaveText("1 / 4");
+  // El modal que abrió el paso 7 de reportes no viaja con nosotros.
+  await expect(page.getByRole("button", { name: "Refrescar incremental" })).toBeHidden();
+});
+
+test("recargar después del encadenado no re-arranca el recorrido", async ({ page }) => {
+  await login(page);
+  await page.getByRole("button", { name: /Ayuda/ }).click();
+  for (let i = 0; i < 4; i++) await page.getByRole("button", { name: "Siguiente" }).click();
+  await page.getByRole("button", { name: "Continuar en BD Tiempos" }).click();
+  await expect(progress(page)).toHaveText("1 / 7");
+  await page.reload();
+  await expect(page.getByRole("heading", { level: 1, name: "BD Tiempos" })).toBeVisible();
+  await expect(popover(page)).toBeHidden();
 });
 
 test("el recorrido del asistente cubre compositor, selectores e historial", async ({ page }) => {

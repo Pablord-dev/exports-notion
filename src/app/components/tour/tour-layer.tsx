@@ -9,6 +9,7 @@
 // clicks (las box-shadow no capturan punteros) y encima un recorte con una
 // sombra gigante que oscurece todo menos el ancla. Por eso ilumina elementos de
 // cualquier z-index de la página: el recorte es transparente.
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { popoverPlacement, type Placement, type Rect } from "@/lib/tour/geometry";
 import { tourScript } from "@/lib/tour/scripts";
@@ -45,6 +46,7 @@ export function TourLayer({ tour, shellActions, justLoggedIn = false }: {
 }) {
   const script = tourScript(tour.id);
   const steps = script.steps;
+  const router = useRouter();
 
   const [index, setIndex] = useState<number | null>(null);
   const [rect, setRect] = useState<Rect | null>(null);
@@ -102,6 +104,19 @@ export function TourLayer({ tour, shellActions, justLoggedIn = false }: {
     helpRef.current?.focus();
   }, [runAction]);
 
+  // Llegada por encadenado: /ruta?tour=<id>. Se lee de window.location en vez
+  // de useSearchParams() porque ese hook obligaría a envolver cada página en un
+  // Suspense para el prerender de Next 16, y aquí no hace falta. La URL se
+  // limpia para que un refresh no vuelva a arrancar el recorrido.
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("tour");
+    if (requested !== tour.id) return;
+    dirRef.current = 1;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIndex(0);
+    router.replace(window.location.pathname);
+  }, [tour.id, router]);
+
   const goTo = useCallback((i: number, dir: 1 | -1) => {
     if (i < 0 || i >= steps.length) { stop(); return; }
     dirRef.current = dir;
@@ -118,6 +133,21 @@ export function TourLayer({ tour, shellActions, justLoggedIn = false }: {
     if (index === null || index === 0) return;
     goTo(index - 1, -1);
   }, [index, goTo]);
+
+  /**
+   * Encadenado opt-in: cierra este recorrido corriendo su after pendiente y
+   * navega al siguiente guión, que arranca solo por el `?tour=` de la URL.
+   */
+  const goNextTour = useCallback(() => {
+    const n = script.next;
+    if (!n) { stop(); return; }
+    runAction(cleanupRef.current);
+    cleanupRef.current = null;
+    setIndex(null);
+    setRect(null);
+    setPlacement(null);
+    router.push(`${n.href}?tour=${n.tour}`);
+  }, [script.next, stop, runAction, router]);
 
   /**
    * Un paso cuyo ancla no está en el DOM se omite en la dirección en la que
@@ -264,8 +294,8 @@ export function TourLayer({ tour, shellActions, justLoggedIn = false }: {
             title={step.title} body={step.body}
             index={index} total={steps.length}
             placement={placement}
-            nextLabel={isLast ? "Terminar" : "Siguiente"}
-            onNext={next}
+            nextLabel={isLast ? (script.next?.label ?? "Terminar") : "Siguiente"}
+            onNext={isLast && script.next ? goNextTour : next}
             onPrev={index > 0 ? prev : undefined}
             onSkip={stop}
           />
