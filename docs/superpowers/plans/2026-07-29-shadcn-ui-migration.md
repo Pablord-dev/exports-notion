@@ -531,7 +531,7 @@ git commit -m "refactor(menu): migra login y menú principal a Card/Input/Button
 - Consumes: `AppModal` (Task 3), `Input`, `Button`, `Label`, `Separator`, `Popover*`, `Command*`, `Badge`, shadcn `Breadcrumb*`.
 - Produces: `MultiSelect({ label, options: {value,label}[], selected: string[], onChange })` — mismo API que el actual.
 
-- [ ] **Step 1: Nuevo `MultiSelect` en `components.tsx`** (reemplaza al actual; conservar `MultiSelectOption`):
+- [x] **Step 1: Nuevo `MultiSelect` en `components.tsx`** (reemplaza al actual; conservar `MultiSelectOption`):
 
 ```tsx
 export function MultiSelect({ label, options, selected, onChange }: {
@@ -587,7 +587,7 @@ export function MultiSelect({ label, options, selected, onChange }: {
 
 (Imports nuevos en `components.tsx`: `Badge`, `Button`, `Command*`, `Popover*`, `Check`, `ChevronsUpDown`. El `useEffect/useRef` del viejo dropdown se elimina.)
 
-- [ ] **Step 2: En `page.tsx`, migrar los dos modals a `AppModal`.** Borrar la función local `Modal` y los dos `useEffect` de Escape (líneas de `if (!detail) return` y `if (!modal) return` — Radix maneja Esc). Export:
+- [x] **Step 2: En `page.tsx`, migrar los dos modals a `AppModal`.** Borrar la función local `Modal` y los dos `useEffect` de Escape (líneas de `if (!detail) return` y `if (!modal) return` — Radix maneja Esc). Export:
 
 ```tsx
 <AppModal open={modal === "export"} onClose={() => setModal(null)} title="Exportar CSV" anchor="export-modal">
@@ -612,9 +612,9 @@ export function MultiSelect({ label, options, selected, onChange }: {
 
 Sync: mismo traslado 1:1 del contenido actual dentro de `<AppModal open={modal === "sync"} … title="Sincronización" anchor="sync-modal">`; los `border-t border-border pt-…` interiores pueden pasar a `<Separator />` + spacing; los botones: "Refrescar incremental" → `<Button>`, "Full" → `<Button variant="outline">`, "Cancelar y guardar lo cargado" → `<Button variant="outline" className="border-danger text-danger hover:bg-danger hover:text-white">`. Textos y estados (`triggering`, `cancelling`, contadores) EXACTAMENTE iguales.
 
-- [ ] **Step 3: Filtros.** Fechas con `Label`+`Input type="date"` (mismos `min`/`max`/handlers). Los cuatro `MultiSelect` no cambian de invocación. El `inputCls` compartido desaparece (lo cubre `Input`).
+- [x] **Step 3: Filtros.** Fechas con `Label`+`Input type="date"` (mismos `min`/`max`/handlers). Los cuatro `MultiSelect` no cambian de invocación. El `inputCls` compartido desaparece (lo cubre `Input`).
 
-- [ ] **Step 4: Breadcrumb.** Sustituir `<Breadcrumb items={…} />` custom por el de shadcn:
+- [x] **Step 4: Breadcrumb.** Sustituir `<Breadcrumb items={…} />` custom por el de shadcn:
 
 ```tsx
 <Breadcrumb>
@@ -630,14 +630,16 @@ Sync: mismo traslado 1:1 del contenido actual dentro de `<AppModal open={modal =
 
 Botones del snapshot: "Exportar" → `<Button variant="outline">`, "Sincronizar" → `<Button>`.
 
-- [ ] **Step 5: Gate + E2E**
+- [x] **Step 5: Gate + E2E**
 
 Run: `npm test && npm run lint && npx tsc --noEmit && npm run test:e2e`
 Expected: PASS. Tests clave: smoke "sync/export modals work" (Esc + click en backdrop `div.fixed.inset-0`), "reports page renders filters" (botones "Persona"/"Subproyecto"), onboarding "el recorrido de reportes abre y cierra los modals por su cuenta", "Esc en un paso que abrió un modal cierra ambos", "Atrás desde el paso de sync…".
 
+> Nota (2026-07-29): el ⚠️ de abajo se quedó corto — el dismiss de Radix por pointerdown-outside se despacha DESPUÉS del click del popover, cuando el tour ya avanzó y abrió el modal siguiente, así que "el propio flujo del tour lo reabre" no aplica: el onClose tardío pisaba el setModal del guión y el paso se saltaba. Además el popover enfoca su botón al montar y un Dialog no-modal se cierra por focus-outside, y el centrado vertical del DialogContent sacaba el globo del tour del viewport (POPOVER_H=200 es estimado; el real mide ~380). Los tres puntos se resolvieron en AppModal: onPointerDownOutside condicionado al tour, onFocusOutside/onOpenAutoFocus prevenidos y top-10 en vez de centrado.
+
 ⚠️ Si el click de "Siguiente" del tour cerrara el modal antes de tiempo (pointerdown-outside de Radix) el propio flujo del tour lo reabre en el paso siguiente; los E2E validan el resultado neto. Si un test falla aquí, revisar `onInteractOutside`/`onOpenAutoFocus` del `DialogContent` antes de tocar el motor del tour (que está prohibido).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/app/db/tiempos/reports
