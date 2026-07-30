@@ -93,6 +93,7 @@ Chat en lenguaje natural que responde consultando **las mismas funciones de repo
 
 ### Páginas (UI)
 
+- **La UI usa shadcn/ui** (Tailwind v4 + CSS variables, **dark fijo** tematizado con la paleta iU en `src/app/globals.css` — sin clase `.dark` ni toggle). Las primitivas viven en `src/components/ui/` (generadas por la CLI, se ajustan como código propio). `src/components/app-modal.tsx` (`AppModal`) es un Dialog **no-modal** (`modal={false}`, backdrop propio): el onboarding guiado necesita clickear su popover con un modal abierto y un Dialog modal vuelve inert todo lo de afuera; además previene `onFocusOutside`/`onOpenAutoFocus` y condiciona `onPointerDownOutside` al tour. El shell conserva su máquina de estados anclada/overlay hecha a mano — el Sidebar de shadcn no la soporta.
 - `/` — login + **menú principal**: tarjeta del Asistente IA + tarjetas de BDs desde el registro `src/lib/databases.ts` (hoy solo `tiempos`). Cada tarjeta de BD es un link directo a sus reportes.
 - `/db/tiempos/reports` — UI de reportes (export y sync viven en **modals** ahí). `/db/tiempos` — **redirect** legacy a `/db/tiempos/reports` (el dashboard viejo se fusionó con reportes).
 - `/asistente` — Asistente IA (top-level, hermano del menú): chat estilo Claude (burbujas usuario/IA, markdown con `react-markdown`, historial en `localStorage` con borrado, selectores BD/modelo). `/db/tiempos/chat` — redirect legacy a `/asistente`.
