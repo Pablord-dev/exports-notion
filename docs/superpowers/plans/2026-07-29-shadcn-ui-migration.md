@@ -859,16 +859,16 @@ git commit -m "refactor(asistente): composer con Select/Textarea shadcn e histor
 - Consumes: `Button`, lucide `X`.
 - Produces: mismos testids (`tour-popover`, `tour-progress`, `welcome-modal`, `welcome-banner`) y textos de botones ("Siguiente", "Atrás", "Terminar", "Continuar en …", "Empezar", "Ahora no", "Iniciar tutorial").
 
-- [ ] **Step 1: `tour-popover.tsx`** — conservar posicionamiento, z-index `z-[57]` y estructura; sustituir los `<button>` a mano por `Button` (`size="sm"`: "Siguiente"/"Terminar"/"Continuar en…" → variante default; "Atrás" → `variant="ghost"`; cierre X → `variant="ghost" size="icon"` con `<X className="h-4 w-4" />`). Mantener cualquier lógica de foco/teclado tal cual (React 19 pasa `ref` a `Button` sin forwardRef).
+- [x] **Step 1: `tour-popover.tsx`** — conservar posicionamiento, z-index `z-[57]` y estructura; sustituir los `<button>` a mano por `Button` (`size="sm"`: "Siguiente"/"Terminar"/"Continuar en…" → variante default; "Atrás" → `variant="ghost"`; cierre X → `variant="ghost" size="icon"` con `<X className="h-4 w-4" />`). Mantener cualquier lógica de foco/teclado tal cual (React 19 pasa `ref` a `Button` sin forwardRef).
 
-- [ ] **Step 2: `welcome.tsx`** — ⚠️ NO convertir a Radix Dialog: el E2E fija el foco inicial en "Empezar" y el ciclo Tab/Shift+Tab del trap propio. Solo: contenedor con look de Card (`rounded-xl border bg-card p-6 shadow-lg`), botones → `Button` ("Empezar" default, "Ahora no" `variant="outline"`, banner "Iniciar tutorial" `variant="outline" size="sm"`). El z-index `z-[58]` y los testids no cambian.
+- [x] **Step 2: `welcome.tsx`** — ⚠️ NO convertir a Radix Dialog: el E2E fija el foco inicial en "Empezar" y el ciclo Tab/Shift+Tab del trap propio. Solo: contenedor con look de Card (`rounded-xl border bg-card p-6 shadow-lg`), botones → `Button` ("Empezar" default, "Ahora no" `variant="outline"`, banner "Iniciar tutorial" `variant="outline" size="sm"`). El z-index `z-[58]` y los testids no cambian.
 
-- [ ] **Step 3: Gate + E2E**
+- [x] **Step 3: Gate + E2E**
 
 Run: `npm test && npm run lint && npx tsc --noEmit && npm run test:e2e`
 Expected: PASS completo — onboarding.spec.ts entero es el test de esta tarea (incluye "el modal de bienvenida atrapa el foco").
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/app/components/tour
