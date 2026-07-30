@@ -784,7 +784,7 @@ git commit -m "refactor(reports): totales, gráfica Recharts y tablas shadcn"
 **Interfaces:**
 - Consumes: `Select*`, `Textarea`, `Button`, `Sheet*`, shadcn `Breadcrumb*`, lucide `Menu`, `Plus`, `Trash2`, `X`.
 
-- [ ] **Step 1: Composer.** Eliminar el prop/render `openUp` (Radix posiciona solo) y el import de `Dropdown`:
+- [x] **Step 1: Composer.** Eliminar el prop/render `openUp` (Radix posiciona solo) y el import de `Dropdown`:
 
 ```tsx
 const composer = (
@@ -821,12 +821,12 @@ const composer = (
 
 ⚠️ Radix `SelectItem` prohíbe `value=""` — por eso la rama `noProvider` va por `placeholder` y NO por un item vacío (borrar `providerOptions`; usar `providers` directo). Ambos usos de `renderComposer(...)` pasan a usar `composer`.
 
-- [ ] **Step 2: Historial.** Extraer el contenido del panel a una constante `historyPanel` (botón "Nuevo chat" → `<Button className="flex-1"><Plus className="h-4 w-4" />Nuevo chat</Button>`, items con sus clases actuales, borrar → `Button variant="ghost" size="icon"` + `Trash2 h-3.5 w-3.5`, aria-label "Borrar chat"). Renderizarla dos veces:
+- [x] **Step 2: Historial.** Extraer el contenido del panel a una constante `historyPanel` (botón "Nuevo chat" → `<Button className="flex-1"><Plus className="h-4 w-4" />Nuevo chat</Button>`, items con sus clases actuales, borrar → `Button variant="ghost" size="icon"` + `Trash2 h-3.5 w-3.5`, aria-label "Borrar chat"). Renderizarla dos veces:
   - Desktop: `<aside data-tour="chat-history" className="hidden w-64 shrink-0 flex-col border-r border-border bg-background md:flex">{historyPanel}</aside>` (columna estática; ya no necesita transform).
   - Móvil: `<Sheet open={drawerOpen} onOpenChange={setDrawerOpen}><SheetContent side="left" className="w-64 bg-background p-0">{historyPanel}</SheetContent></Sheet>`. El `useEffect` de Esc del drawer y el backdrop manual se borran (Radix los cubre); el botón "Cerrar historial" manual también (SheetContent trae X).
-- [ ] **Step 3: Breadcrumb** shadcn (como en Task 6, con "Asistente IA" como `BreadcrumbPage`). Botón hamburguesa del historial (`aria-label="Historial de chats"`) → `Button variant="outline" size="icon"` + `Menu h-4 w-4`, visible sólo `md:hidden`.
+- [x] **Step 3: Breadcrumb** shadcn (como en Task 6, con "Asistente IA" como `BreadcrumbPage`). Botón hamburguesa del historial (`aria-label="Historial de chats"`) → `Button variant="outline" size="icon"` + `Menu h-4 w-4`, visible sólo `md:hidden`.
 
-- [ ] **Step 4: Actualizar `tests/e2e/smoke.spec.ts`** — test "chat page renders composer and model selector", los dos últimos expects:
+- [x] **Step 4: Actualizar `tests/e2e/smoke.spec.ts`** — test "chat page renders composer and model selector", los dos últimos expects:
 
 ```ts
 // Selects de shadcn/Radix dentro del cuadro de texto (rol combobox).
@@ -834,12 +834,12 @@ await expect(page.getByRole("combobox", { name: "Modelo" })).toBeVisible();
 await expect(page.getByRole("combobox", { name: "Base de datos" })).toBeVisible();
 ```
 
-- [ ] **Step 5: Gate + E2E**
+- [x] **Step 5: Gate + E2E**
 
 Run: `npm test && npm run lint && npx tsc --noEmit && npm run test:e2e`
 Expected: PASS. Tests clave: smoke chat + onboarding "el recorrido del asistente cubre compositor, selectores e historial".
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/app/asistente/page.tsx tests/e2e/smoke.spec.ts
