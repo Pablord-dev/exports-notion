@@ -8,7 +8,19 @@ import Link from "next/link";
 import type { FlatRow } from "@/lib/types";
 import { REPORT_PROPS, type PersonTotal, type SubprojectTotal, type TimelineBucket, type MatrixCell, type FilterOptions } from "@/lib/store-shared";
 import { AppShell } from "@/app/components/app-shell";
-import { Breadcrumb } from "@/app/components/breadcrumb";
+import { AppModal } from "@/components/app-modal";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { BarChart, MultiSelect, Spinner, fmtHours } from "./components";
 
 type Granularity = "month" | "week";
@@ -319,20 +331,6 @@ export default function Reports() {
     return { from, to: filters.to && toISO > filters.to ? filters.to : toISO };
   }
 
-  useEffect(() => {
-    if (!detail) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setDetail(null); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [detail]);
-
-  useEffect(() => {
-    if (!modal) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setModal(null); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [modal]);
-
   const totals = useMemo(() => ({
     hours: byPerson.reduce((a, r) => a + r.hours, 0),
     count: byPerson.reduce((a, r) => a + r.count, 0),
@@ -360,8 +358,6 @@ export default function Reports() {
     );
   }
 
-  const inputCls = "mt-1 block w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none transition [color-scheme:dark] focus:border-blue focus:ring-2 focus:ring-blue/30";
-
   return (
     <AppShell onLogout={() => setAuthed(false)}
               tour={{ id: "reports", actions: {
@@ -371,7 +367,15 @@ export default function Reports() {
               } }}>
     <main className="max-w-7xl mx-auto p-4 sm:p-5 space-y-5">
       <header className="space-y-2 border-b border-border pb-5">
-        <Breadcrumb items={[{ label: "Menú", href: "/" }, { label: "BD Tiempos" }]} />
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink asChild><Link href="/">Menú</Link></BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem><BreadcrumbPage>BD Tiempos</BreadcrumbPage></BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
         <h1 className="font-display text-xl font-bold text-foreground tracking-tight">BD Tiempos</h1>
       </header>
 
@@ -395,14 +399,8 @@ export default function Reports() {
             )}
           </div>
           <div className="flex gap-3">
-            <button onClick={() => setModal("export")}
-                    className="rounded-lg border border-blue px-4 py-2 text-sm font-medium text-blue transition hover:bg-blue hover:text-white">
-              Exportar
-            </button>
-            <button onClick={() => setModal("sync")}
-                    className="rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white transition hover:brightness-110">
-              Sincronizar
-            </button>
+            <Button variant="outline" onClick={() => setModal("export")}>Exportar</Button>
+            <Button onClick={() => setModal("sync")}>Sincronizar</Button>
           </div>
         </div>
       </section>
@@ -424,14 +422,14 @@ export default function Reports() {
       {/* Filtros: una fila, rango + 4 dimensiones */}
       <section data-tour="reports-filters" className="rounded-xl border border-border bg-card p-5">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          <label className="text-sm text-muted-foreground">Desde
-            <input type="date" value={filters.from} max={filters.to}
-                   onChange={(e) => setFilters({ ...filters, from: e.target.value })} className={inputCls} />
-          </label>
-          <label className="text-sm text-muted-foreground">Hasta
-            <input type="date" value={filters.to} min={filters.from}
-                   onChange={(e) => setFilters({ ...filters, to: e.target.value })} className={inputCls} />
-          </label>
+          <Label className="flex-col items-start text-sm text-muted-foreground">Desde
+            <Input type="date" value={filters.from} max={filters.to}
+                   onChange={(e) => setFilters({ ...filters, from: e.target.value })} />
+          </Label>
+          <Label className="flex-col items-start text-sm text-muted-foreground">Hasta
+            <Input type="date" value={filters.to} min={filters.from}
+                   onChange={(e) => setFilters({ ...filters, to: e.target.value })} />
+          </Label>
           <div className="pt-6"><MultiSelect label="Persona" options={options?.people ?? []} selected={filters.people}
                                              onChange={(v) => setFilters({ ...filters, people: v })} /></div>
           <div className="pt-6"><MultiSelect label="Subproyecto" options={asOptions(options?.subprojects)} selected={filters.subprojects}
@@ -568,47 +566,45 @@ export default function Reports() {
       </div>
 
       {/* Modal de exportación (no bloqueante: click fuera o Esc regresa al reporte) */}
-      {modal === "export" && (
-        <Modal title="Exportar CSV" anchor="export-modal" onClose={() => setModal(null)}>
-          <p className="text-sm text-muted-foreground">
-            Rango opcional por fecha de creación. Con ambos campos vacíos se exporta todo el snapshot.
-          </p>
-          <div className="flex gap-3">
-            <label className="flex-1 text-sm text-muted-foreground">Desde
-              <input type="date" value={exportFrom} onChange={(e) => setExportFrom(e.target.value)} className={inputCls} />
-            </label>
-            <label className="flex-1 text-sm text-muted-foreground">Hasta
-              <input type="date" value={exportTo} onChange={(e) => setExportTo(e.target.value)} className={inputCls} />
-            </label>
-          </div>
-          <button onClick={download} disabled={downloading}
-                  className="flex items-center gap-2 rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60">
-            {downloading && <Spinner className="h-3.5 w-3.5" />}
-            {downloading ? "Descargando…" : "Descargar"}
-          </button>
-          {downloadErr && <p className="text-sm font-medium text-danger">{downloadErr}</p>}
-        </Modal>
-      )}
+      <AppModal open={modal === "export"} onClose={() => setModal(null)} title="Exportar CSV" anchor="export-modal">
+        <p className="text-sm text-muted-foreground">
+          Rango opcional por fecha de creación. Con ambos campos vacíos se exporta todo el snapshot.
+        </p>
+        <div className="flex gap-3">
+          <Label className="flex-1 flex-col items-start text-sm text-muted-foreground">Desde
+            <Input type="date" value={exportFrom} onChange={(e) => setExportFrom(e.target.value)} />
+          </Label>
+          <Label className="flex-1 flex-col items-start text-sm text-muted-foreground">Hasta
+            <Input type="date" value={exportTo} onChange={(e) => setExportTo(e.target.value)} />
+          </Label>
+        </div>
+        <Button onClick={download} disabled={downloading} className="w-fit">
+          {downloading && <Spinner className="h-3.5 w-3.5" />}
+          {downloading ? "Descargando…" : "Descargar"}
+        </Button>
+        {downloadErr && <p className="text-sm font-medium text-danger">{downloadErr}</p>}
+      </AppModal>
 
       {/* Modal de sincronización (no bloqueante) */}
-      {modal === "sync" && (
-        <Modal title="Sincronización" anchor="sync-modal" onClose={() => setModal(null)}>
-          <dl className="grid grid-cols-3 gap-4">
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-muted-foreground">Full</dt>
-              <dd className="text-sm text-foreground">{fmtAgo(syncStatus?.meta.lastFullAt ?? null)}</dd>
-            </div>
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-muted-foreground">Incremental</dt>
-              <dd className="text-sm text-foreground">{fmtAgo(syncStatus?.meta.lastIncrementalAt ?? null)}</dd>
-            </div>
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-muted-foreground">Registros</dt>
-              <dd className="font-display text-xl font-bold text-sky">{(syncStatus?.meta.count ?? 0).toLocaleString("es-MX")}</dd>
-            </div>
-          </dl>
-          {syncStatus?.status.lastResult && (
-            <p className="border-t border-border pt-3 text-sm text-muted-foreground">
+      <AppModal open={modal === "sync"} onClose={() => setModal(null)} title="Sincronización" anchor="sync-modal">
+        <dl className="grid grid-cols-3 gap-4">
+          <div>
+            <dt className="text-xs uppercase tracking-wide text-muted-foreground">Full</dt>
+            <dd className="text-sm text-foreground">{fmtAgo(syncStatus?.meta.lastFullAt ?? null)}</dd>
+          </div>
+          <div>
+            <dt className="text-xs uppercase tracking-wide text-muted-foreground">Incremental</dt>
+            <dd className="text-sm text-foreground">{fmtAgo(syncStatus?.meta.lastIncrementalAt ?? null)}</dd>
+          </div>
+          <div>
+            <dt className="text-xs uppercase tracking-wide text-muted-foreground">Registros</dt>
+            <dd className="font-display text-xl font-bold text-sky">{(syncStatus?.meta.count ?? 0).toLocaleString("es-MX")}</dd>
+          </div>
+        </dl>
+        {syncStatus?.status.lastResult && (
+          <>
+            <Separator />
+            <p className="text-sm text-muted-foreground">
               Último sync ({syncStatus.status.lastResult.kind}, {fmtAgo(syncStatus.status.lastResult.finishedAt)}):{" "}
               <span className="font-medium text-foreground">{syncStatus.status.lastResult.upserted} actualizados</span>
               {" · "}
@@ -617,51 +613,50 @@ export default function Reports() {
                 <> · <span className="font-medium text-warning">{syncStatus.status.lastResult.skipped} omitidos</span></>
               ) : null}
             </p>
-          )}
-          {running ? (
-            <div className="space-y-3 border-t border-border pt-4">
-              <h3 className="flex items-center gap-2 font-display text-sm font-semibold text-foreground">
-                <Spinner className="text-sky" />
-                Sync en progreso <span className="font-sans font-normal text-muted-foreground">({syncStatus?.status.kind})</span>
-              </h3>
-              {/* Sin denominador a propósito: Notion no expone un total de antemano, así
-                  que `status.total` es sólo done + un page_size cuando queda más. Mostrarlo
-                  como "1,200 / 1,300" fingía un progreso que nadie conoce. */}
-              <p className="font-display text-xl font-bold text-foreground">
-                {(syncStatus?.status.done ?? 0).toLocaleString("es-MX")}
-                <span className="ml-1.5 font-sans text-sm font-normal text-muted-foreground">
-                  {(syncStatus?.status.total ?? 0) > (syncStatus?.status.done ?? 0) ? "registros y contando…" : "registros"}
-                </span>
-              </p>
-              {syncStatus?.status.skipped ? <p className="text-sm font-medium text-warning">Omitidos: {syncStatus.status.skipped}</p> : null}
-              <button onClick={cancelSync} disabled={cancelling}
-                      className="flex items-center gap-2 rounded-lg border border-danger px-3 py-2 text-sm font-medium text-danger transition hover:bg-danger hover:text-white disabled:cursor-not-allowed disabled:opacity-60">
-                {cancelling && <Spinner className="h-3.5 w-3.5" />}
-                {cancelling ? "Cancelando…" : "Cancelar y guardar lo cargado"}
-              </button>
+          </>
+        )}
+        <Separator />
+        {running ? (
+          <div className="space-y-3">
+            <h3 className="flex items-center gap-2 font-display text-sm font-semibold text-foreground">
+              <Spinner className="text-sky" />
+              Sync en progreso <span className="font-sans font-normal text-muted-foreground">({syncStatus?.status.kind})</span>
+            </h3>
+            {/* Sin denominador a propósito: Notion no expone un total de antemano, así
+                que `status.total` es sólo done + un page_size cuando queda más. Mostrarlo
+                como "1,200 / 1,300" fingía un progreso que nadie conoce. */}
+            <p className="font-display text-xl font-bold text-foreground">
+              {(syncStatus?.status.done ?? 0).toLocaleString("es-MX")}
+              <span className="ml-1.5 font-sans text-sm font-normal text-muted-foreground">
+                {(syncStatus?.status.total ?? 0) > (syncStatus?.status.done ?? 0) ? "registros y contando…" : "registros"}
+              </span>
+            </p>
+            {syncStatus?.status.skipped ? <p className="text-sm font-medium text-warning">Omitidos: {syncStatus.status.skipped}</p> : null}
+            <Button variant="outline" onClick={cancelSync} disabled={cancelling}
+                    className="border-danger text-danger hover:bg-danger hover:text-white">
+              {cancelling && <Spinner className="h-3.5 w-3.5" />}
+              {cancelling ? "Cancelando…" : "Cancelar y guardar lo cargado"}
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex gap-8">
+              <p className="text-sm text-muted-foreground">Incremental en <span className="font-medium text-foreground tabular-nums">{syncStatus?.next.incremental ? fmtCountdown(syncStatus.next.incremental) : "—"}</span></p>
+              <p className="text-sm text-muted-foreground">Full <span className="font-medium text-foreground">{syncStatus?.next.full ? <>en <span className="tabular-nums">{fmtCountdown(syncStatus.next.full)}</span></> : "sólo manual"}</span></p>
             </div>
-          ) : (
-            <div className="space-y-3 border-t border-border pt-4">
-              <div className="flex gap-8">
-                <p className="text-sm text-muted-foreground">Incremental en <span className="font-medium text-foreground tabular-nums">{syncStatus?.next.incremental ? fmtCountdown(syncStatus.next.incremental) : "—"}</span></p>
-                <p className="text-sm text-muted-foreground">Full <span className="font-medium text-foreground">{syncStatus?.next.full ? <>en <span className="tabular-nums">{fmtCountdown(syncStatus.next.full)}</span></> : "sólo manual"}</span></p>
-              </div>
-              <div className="flex gap-3">
-                <button onClick={() => trigger("incremental")} disabled={triggering !== null}
-                        className="flex items-center gap-2 rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60">
-                  {triggering === "incremental" && <Spinner className="h-3.5 w-3.5" />}
-                  {triggering === "incremental" ? "Iniciando…" : "Refrescar incremental"}
-                </button>
-                <button onClick={() => trigger("full")} disabled={triggering !== null}
-                        className="flex items-center gap-2 rounded-lg border border-blue px-4 py-2 text-sm font-medium text-blue transition hover:bg-blue hover:text-white disabled:cursor-not-allowed disabled:opacity-60">
-                  {triggering === "full" && <Spinner className="h-3.5 w-3.5" />}
-                  {triggering === "full" ? "Iniciando…" : "Full"}
-                </button>
-              </div>
+            <div className="flex gap-3">
+              <Button onClick={() => trigger("incremental")} disabled={triggering !== null}>
+                {triggering === "incremental" && <Spinner className="h-3.5 w-3.5" />}
+                {triggering === "incremental" ? "Iniciando…" : "Refrescar incremental"}
+              </Button>
+              <Button variant="outline" onClick={() => trigger("full")} disabled={triggering !== null}>
+                {triggering === "full" && <Spinner className="h-3.5 w-3.5" />}
+                {triggering === "full" ? "Iniciando…" : "Full"}
+              </Button>
             </div>
-          )}
-        </Modal>
-      )}
+          </div>
+        )}
+      </AppModal>
 
       {/* Panel de detalle (drill-down) */}
       {detail && (
@@ -722,28 +717,6 @@ export default function Reports() {
       )}
     </main>
     </AppShell>
-  );
-}
-
-// Modal no bloqueante: click en el backdrop (o Esc, manejado por el caller) cierra
-// y regresa al reporte sin perder estado.
-function Modal({ title, onClose, anchor, children }: {
-  title: string; onClose: () => void; anchor?: string; children: React.ReactNode;
-}) {
-  return (
-    <div className="fixed inset-0 z-30 flex items-start justify-center overflow-y-auto bg-background/80 p-4 sm:p-10"
-         onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div data-tour={anchor} className="w-full max-w-lg rounded-2xl border border-border bg-card shadow-2xl">
-        <div className="flex items-center justify-between border-b border-border p-5">
-          <h2 className="font-display text-base font-semibold text-foreground">{title}</h2>
-          <button onClick={onClose}
-                  className="rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:border-blue hover:text-blue">
-            Cerrar
-          </button>
-        </div>
-        <div className="space-y-4 p-5">{children}</div>
-      </div>
-    </div>
   );
 }
 
