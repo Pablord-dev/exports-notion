@@ -883,21 +883,21 @@ git commit -m "refactor(tour): restiliza popover y bienvenida con Button/Card de
 - Delete: `src/app/components/dropdown.tsx`, `src/app/components/breadcrumb.tsx`
 - Modify: `CLAUDE.md`, `docs/to-dos.md` si aplica
 
-- [ ] **Step 1: Borrar componentes muertos** y verificar que nada los importa:
+- [x] **Step 1: Borrar componentes muertos** y verificar que nada los importa:
 
 Run: `rg "components/dropdown|components/breadcrumb" src tests`
 Expected: sin resultados. Luego `git rm src/app/components/dropdown.tsx src/app/components/breadcrumb.tsx`.
 
-- [ ] **Step 2: Actualizar `CLAUDE.md`** — en "Páginas (UI)" agregar un bullet: la UI usa shadcn/ui (Tailwind v4 + CSS variables, dark fijo tematizado con la paleta iU en `globals.css`; primitivas en `src/components/ui/`, código propio ajustable; `AppModal` = Dialog no-modal porque el tour necesita clickear su popover con modals abiertos; el shell conserva su máquina de estados anclada/overlay — el Sidebar de shadcn no la soporta).
+- [x] **Step 2: Actualizar `CLAUDE.md`** — en "Páginas (UI)" agregar un bullet: la UI usa shadcn/ui (Tailwind v4 + CSS variables, dark fijo tematizado con la paleta iU en `globals.css`; primitivas en `src/components/ui/`, código propio ajustable; `AppModal` = Dialog no-modal porque el tour necesita clickear su popover con modals abiertos; el shell conserva su máquina de estados anclada/overlay — el Sidebar de shadcn no la soporta).
 
-- [ ] **Step 3: Verificación final completa**
+- [x] **Step 3: Verificación final completa**
 
 Run: `npm test && npm run lint && npx tsc --noEmit && npm run test:e2e && npm run build`
 Expected: todo PASS, build sin warnings nuevos.
 
-- [ ] **Step 4: Revisión visual** — levantar `npm run dev` (después del build E2E, borra `.next` si el dev server da 404 fantasma — ver memoria del repo) y recorrer: login → menú → reportes (filtros, gráfica, drill-down, modals export/sync) → asistente (selects, historial) → tour completo con "?" en las tres páginas. Confirmar contraste y que nada quedó con fondo/texto ilegible.
+- [x] **Step 4: Revisión visual** — levantar `npm run dev` (después del build E2E, borra `.next` si el dev server da 404 fantasma — ver memoria del repo) y recorrer: login → menú → reportes (filtros, gráfica, drill-down, modals export/sync) → asistente (selects, historial) → tour completo con "?" en las tres páginas. Confirmar contraste y que nada quedó con fondo/texto ilegible.
 
-- [ ] **Step 5: Commit + cierre**
+- [x] **Step 5: Commit + cierre**
 
 ```bash
 git add -A
