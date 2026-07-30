@@ -89,9 +89,9 @@ test("chat page renders composer and model selector", async ({ page }) => {
   await expect(page).toHaveURL(/\/asistente$/);
   await expect(page.getByRole("heading", { name: "Asistente IA" })).toBeVisible();
   await expect(page.getByPlaceholder("Escribe tu pregunta…")).toBeVisible();
-  // Dropdowns propios dentro del cuadro de texto (botones que abren un listbox).
-  await expect(page.getByRole("button", { name: "Modelo" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Base de datos" })).toBeVisible();
+  // Selects de shadcn/Radix dentro del cuadro de texto (rol combobox).
+  await expect(page.getByRole("combobox", { name: "Modelo" })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Base de datos" })).toBeVisible();
 });
 
 // La ruta vieja /reports redirige a la nueva ubicación bajo su BD.

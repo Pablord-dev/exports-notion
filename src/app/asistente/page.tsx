@@ -1,16 +1,27 @@
 "use client";
 // Asistente IA (top-level): chat con tool-calling sobre los reportes de la BD
 // seleccionada. Estilo tipo Claude — header (breadcrumb + título) a lo ancho;
-// debajo, panel FIJO de historial (columna estática en desktop; cajón en móvil)
-// + conversación. Selectores (BD/modelo) como dropdowns propios redondeados
-// dentro del composer. Chats en localStorage. Respuestas en markdown.
+// debajo, panel FIJO de historial (columna estática en desktop; Sheet en móvil)
+// + conversación. Selectores (BD/modelo) como Select de shadcn dentro del
+// composer. Chats en localStorage. Respuestas en markdown.
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { Menu, Plus, Trash2 } from "lucide-react";
 import { AppShell } from "@/app/components/app-shell";
-import { Breadcrumb } from "@/app/components/breadcrumb";
-import { Dropdown } from "@/app/components/dropdown";
 import { MarkdownMessage } from "@/app/components/markdown-message";
 import { Spinner } from "@/app/components/spinner";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Textarea } from "@/components/ui/textarea";
 import { DATABASES } from "@/lib/databases";
 import {
   loadChats, saveChat, deleteChat, deriveTitle, newChatId,
@@ -60,13 +71,6 @@ export default function AsistentePage() {
   }, []);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, sending]);
-
-  useEffect(() => {
-    if (!drawerOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setDrawerOpen(false); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [drawerOpen]);
 
   const dbName = (slug: string) => DATABASES.find((d) => d.slug === slug)?.name ?? slug;
   const noProvider = providers.length === 0;
@@ -160,28 +164,71 @@ export default function AsistentePage() {
   }
 
   const dbOptions = DATABASES.map((d) => ({ value: d.slug, label: d.name }));
-  const providerOptions = noProvider ? [{ value: "", label: "— sin modelo —" }] : providers.map((p) => ({ value: p.id, label: p.label }));
 
-  // Cuadro de texto estilo Claude: textarea arriba, dropdowns propios (BD/modelo)
-  // y botón enviar en una fila dentro del mismo recuadro. openUp = dirección del
-  // menú de los dropdowns (abajo en el estado inicial; arriba en la barra al pie).
-  const renderComposer = (openUp: boolean) => (
+  // Cuadro de texto estilo Claude: textarea arriba, Selects (BD/modelo) y botón
+  // enviar en una fila dentro del mismo recuadro. Radix posiciona los menús solo.
+  // ⚠️ Radix SelectItem prohíbe value="" — la rama sin proveedores va por el
+  // placeholder del SelectValue, no por un item vacío.
+  const composer = (
     <div data-tour="chat-composer"
          className="rounded-2xl border border-border bg-background transition focus-within:border-blue focus-within:ring-2 focus-within:ring-blue/30">
-      <textarea
-        value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={onKeyDown}
-        rows={1} disabled={noProvider} placeholder="Escribe tu pregunta…"
-        className="block max-h-40 min-h-[48px] w-full resize-none bg-transparent px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground [color-scheme:dark] disabled:opacity-60"
-      />
+      <Textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={onKeyDown}
+                rows={1} disabled={noProvider} placeholder="Escribe tu pregunta…"
+                className="max-h-40 min-h-[48px] resize-none border-0 bg-transparent px-4 py-3 shadow-none focus-visible:ring-0 [color-scheme:dark]" />
       <div data-tour="chat-selectors" className="flex items-center gap-2 px-2.5 pb-2.5">
-        <Dropdown value={db} options={dbOptions} onChange={setDb} ariaLabel="Base de datos" openUp={openUp} />
-        <Dropdown value={provider} options={providerOptions} onChange={setProvider} disabled={noProvider} ariaLabel="Modelo" openUp={openUp} />
-        <button onClick={() => void send()} disabled={sending || noProvider || !input.trim()}
-                className="ml-auto flex items-center gap-2 rounded-full bg-blue px-4 py-1.5 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60">
+        <Select value={db} onValueChange={setDb}>
+          <SelectTrigger size="sm" aria-label="Base de datos" className="w-auto rounded-full bg-card text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {dbOptions.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={provider || undefined} onValueChange={setProvider} disabled={noProvider}>
+          <SelectTrigger size="sm" aria-label="Modelo" className="w-auto rounded-full bg-card text-xs">
+            <SelectValue placeholder="— sin modelo —" />
+          </SelectTrigger>
+          <SelectContent>
+            {providers.map((p) => <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Button size="sm" onClick={() => void send()} disabled={sending || noProvider || !input.trim()}
+                className="ml-auto rounded-full">
           {sending ? <Spinner className="h-4 w-4" /> : "Enviar"}
-        </button>
+        </Button>
       </div>
     </div>
+  );
+
+  // Panel de historial: se renderiza dos veces (columna estática en desktop,
+  // Sheet en móvil). El botón de cerrar y el Esc los aporta el Sheet de Radix.
+  const historyPanel = (
+    <>
+      <div className="flex items-center justify-between p-3">
+        <Button onClick={newChat} className="flex-1">
+          <Plus className="h-4 w-4" />
+          Nuevo chat
+        </Button>
+      </div>
+      <div className="flex-1 space-y-0.5 overflow-y-auto px-2 pb-3">
+        {chats.length === 0 && <p className="px-2 py-4 text-center text-xs text-muted-foreground">Sin chats guardados.</p>}
+        {chats.map((c) => (
+          <div key={c.id} onClick={() => openChat(c)}
+               className={`group flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition ${
+                 c.id === activeId ? "bg-card text-foreground" : "text-muted-foreground hover:bg-card/60 hover:text-foreground"
+               }`}>
+            <div className="min-w-0 flex-1">
+              <div className="truncate">{c.title}</div>
+              <div className="text-[11px] text-muted-foreground">{dbName(c.db)} · {fmtWhen(c.updatedAt)}</div>
+            </div>
+            <Button variant="ghost" size="icon" onClick={(e) => removeChatHandler(c.id, e)} aria-label="Borrar chat"
+                    className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition hover:text-danger group-hover:opacity-100">
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        ))}
+      </div>
+    </>
   );
 
   return (
@@ -192,12 +239,20 @@ export default function AsistentePage() {
         <header className="flex border-b border-border">
           <div className="hidden w-64 shrink-0 md:block" />
           <div className="flex-1 space-y-2 px-4 py-4 sm:px-5">
-            <Breadcrumb items={[{ label: "Menú", href: "/" }, { label: "Asistente IA" }]} />
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem>
+                  <BreadcrumbLink asChild><Link href="/">Menú</Link></BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator />
+                <BreadcrumbItem><BreadcrumbPage>Asistente IA</BreadcrumbPage></BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
             <div className="flex items-center gap-3">
-              <button onClick={() => setDrawerOpen(true)} aria-label="Historial de chats"
-                      className="rounded-lg border border-border p-1.5 text-muted-foreground transition hover:border-blue hover:text-foreground md:hidden">
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
-              </button>
+              <Button variant="outline" size="icon" onClick={() => setDrawerOpen(true)}
+                      aria-label="Historial de chats" className="md:hidden">
+                <Menu className="h-4 w-4" />
+              </Button>
               <h1 className="font-display text-base font-bold tracking-tight text-foreground">Asistente IA</h1>
             </div>
           </div>
@@ -205,42 +260,16 @@ export default function AsistentePage() {
 
         {/* Debajo del título: panel de historial + conversación */}
         <div className="relative flex flex-1 overflow-hidden">
-          {/* Backdrop solo en móvil cuando el panel está abierto como cajón */}
-          {drawerOpen && <div className="absolute inset-0 z-20 bg-background/50 md:hidden" onClick={() => setDrawerOpen(false)} aria-hidden />}
-
-          {/* Panel fijo de chats: columna estática en md+; cajón off-canvas en móvil. */}
+          {/* Panel fijo de chats: columna estática en md+; Sheet en móvil. */}
           <aside data-tour="chat-history"
-                 className={`absolute inset-y-0 left-0 z-30 flex w-64 shrink-0 flex-col border-r border-border bg-background transition-transform duration-200 md:static md:z-auto md:translate-x-0 ${drawerOpen ? "translate-x-0" : "-translate-x-full"}`}>
-            <div className="flex items-center justify-between p-3">
-              <button onClick={newChat}
-                      className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-blue px-3 py-2 text-sm font-medium text-white transition hover:brightness-110">
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
-                Nuevo chat
-              </button>
-              <button onClick={() => setDrawerOpen(false)} aria-label="Cerrar historial"
-                      className="ml-2 rounded p-1 text-muted-foreground transition hover:text-foreground md:hidden">
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
-              </button>
-            </div>
-            <div className="flex-1 space-y-0.5 overflow-y-auto px-2 pb-3">
-              {chats.length === 0 && <p className="px-2 py-4 text-center text-xs text-muted-foreground">Sin chats guardados.</p>}
-              {chats.map((c) => (
-                <div key={c.id} onClick={() => openChat(c)}
-                     className={`group flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition ${
-                       c.id === activeId ? "bg-card text-foreground" : "text-muted-foreground hover:bg-card/60 hover:text-foreground"
-                     }`}>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate">{c.title}</div>
-                    <div className="text-[11px] text-muted-foreground">{dbName(c.db)} · {fmtWhen(c.updatedAt)}</div>
-                  </div>
-                  <button onClick={(e) => removeChatHandler(c.id, e)} aria-label="Borrar chat"
-                          className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition hover:text-danger group-hover:opacity-100">
-                    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" /></svg>
-                  </button>
-                </div>
-              ))}
-            </div>
+                 className="hidden w-64 shrink-0 flex-col border-r border-border bg-background md:flex">
+            {historyPanel}
           </aside>
+          <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+            <SheetContent side="left" className="w-64 bg-background p-0">
+              {historyPanel}
+            </SheetContent>
+          </Sheet>
 
           {/* Columna de conversación */}
           <div className="flex min-w-0 flex-1 flex-col">
@@ -248,7 +277,7 @@ export default function AsistentePage() {
               <div className="flex flex-1 flex-col items-center justify-center p-4 sm:p-5">
                 <div className="w-full max-w-3xl space-y-4">
                   <h2 className="text-center font-display text-2xl font-bold text-foreground">¿Qué quieres saber de {dbName(db)}?</h2>
-                  {renderComposer(false)}
+                  {composer}
                   {noProvider ? (
                     <p className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
                       No hay ningún modelo configurado. Define <code className="font-mono text-sky">LLM_OLLAMA_MODEL</code> (Ollama) o las variables de MiniMax en <code className="font-mono">.env.local</code> y reinicia el servidor.
@@ -290,7 +319,7 @@ export default function AsistentePage() {
                 <div className="px-4 pb-4 sm:px-5 sm:pb-5">
                   <div className="mx-auto max-w-3xl space-y-2">
                     {error && <p className="text-sm text-danger">{error}</p>}
-                    {renderComposer(true)}
+                    {composer}
                   </div>
                 </div>
               </>
