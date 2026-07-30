@@ -18,10 +18,21 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { BarChart, MultiSelect, Spinner, fmtHours } from "./components";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { MultiSelect, Spinner, TimelineChart, fmtHours } from "./components";
 
 type Granularity = "month" | "week";
 interface Filters {
@@ -450,10 +461,12 @@ export default function Reports() {
           { label: "Registros", value: totals.count.toLocaleString("es-MX") },
           { label: "Personas activas", value: String(totals.people) },
         ].map((t) => (
-          <div key={t.label} className="rounded-xl border border-border bg-card p-5">
+          <Card key={t.label} className="gap-1 p-5">
             <p className="text-xs uppercase tracking-wide text-muted-foreground">{t.label}</p>
-            <p className="mt-1 font-display text-2xl font-bold text-sky">{loading ? "…" : t.value}</p>
-          </div>
+            {loading
+              ? <Skeleton className="mt-1 h-8 w-24" />
+              : <p className="mt-1 font-display text-2xl font-bold text-sky">{t.value}</p>}
+          </Card>
         ))}
       </section>
 
@@ -461,19 +474,17 @@ export default function Reports() {
       <section data-tour="reports-timeline" className="rounded-xl border border-border bg-card p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="font-display text-base font-semibold text-foreground">Evolución de horas</h2>
-          <div className="flex rounded-lg border border-border p-0.5 text-sm">
-            {(["week", "month"] as const).map((g) => (
-              <button key={g} onClick={() => setGranularity(g)}
-                      className={`rounded-md px-3 py-1 font-medium transition ${granularity === g ? "bg-blue text-white" : "text-muted-foreground hover:text-foreground"}`}>
-                {g === "week" ? "Semana" : "Mes"}
-              </button>
-            ))}
-          </div>
+          <Tabs value={granularity} onValueChange={(v) => setGranularity(v as Granularity)}>
+            <TabsList>
+              <TabsTrigger value="week">Semana</TabsTrigger>
+              <TabsTrigger value="month">Mes</TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
         {loading
           ? <div className="flex h-60 items-center justify-center text-muted-foreground"><Spinner className="text-sky" /></div>
-          : <BarChart buckets={timeline} granularity={granularity}
-                      onBarClick={(b) => { const r = barToRange(b); void openDetail(`Registros · ${fmtDate(r.from)} — ${fmtDate(r.to)}`, {}, r); }} />}
+          : <TimelineChart buckets={timeline} granularity={granularity}
+                           onBarClick={(b) => { const r = barToRange(b); void openDetail(`Registros · ${fmtDate(r.from)} — ${fmtDate(r.to)}`, {}, r); }} />}
       </section>
 
       {/* Reporte dinámico: matriz dimensión × semana (1 persona o 1 subproyecto) */}
@@ -488,39 +499,37 @@ export default function Reports() {
           ) : !matrixView ? (
             <p className="py-8 text-center text-sm text-muted-foreground">Sin registros en el rango seleccionado.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="text-xs uppercase tracking-wide text-muted-foreground">
-                    <th className="sticky left-0 bg-card pb-2 pr-3 font-medium">{matrixMode.rowLabel}</th>
-                    {matrixView.weeks.map((w) => (
-                      <th key={w} className="whitespace-nowrap px-2 pb-2 text-right font-medium">{fmtWeek(w)}</th>
-                    ))}
-                    <th className="pb-2 pl-3 text-right font-medium">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {matrixView.rows.map((r) => (
-                    <tr key={r.group ?? "__sin_grupo__"} className="border-t border-border/60">
-                      <td className={`sticky left-0 min-w-44 max-w-72 bg-card py-2 pr-3 [overflow-wrap:anywhere] ${r.group ? "text-foreground" : "italic text-muted-foreground"}`}>
-                        {/* grupo sin valor: nunca mostrar el label (mezclaría personas) */}
-                        {r.group ? (r.label ?? r.group) : matrixMode.nullLabel}
-                      </td>
-                      {matrixView.weeks.map((w) => {
-                        const v = r.cells.get(w);
-                        return (
-                          <td key={w} style={v ? { backgroundColor: heatBg(v, matrixView.max) } : undefined}
-                              className="whitespace-nowrap px-2 py-2 text-right tabular-nums text-foreground">
-                            {v ? fmtHours(v) : <span className="text-muted-foreground/40">—</span>}
-                          </td>
-                        );
-                      })}
-                      <td className="whitespace-nowrap py-2 pl-3 text-right font-medium tabular-nums text-sky">{fmtHours(r.total)}</td>
-                    </tr>
+            <Table className="text-left">
+              <TableHeader>
+                <TableRow className="text-xs uppercase tracking-wide text-muted-foreground">
+                  <TableHead className="sticky left-0 h-auto bg-card px-0 pb-2 pr-3 font-medium text-muted-foreground">{matrixMode.rowLabel}</TableHead>
+                  {matrixView.weeks.map((w) => (
+                    <TableHead key={w} className="h-auto whitespace-nowrap px-2 pb-2 text-right font-medium text-muted-foreground">{fmtWeek(w)}</TableHead>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                  <TableHead className="h-auto px-0 pb-2 pl-3 text-right font-medium text-muted-foreground">Total</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {matrixView.rows.map((r) => (
+                  <TableRow key={r.group ?? "__sin_grupo__"} className="border-border/60">
+                    <TableCell className={`sticky left-0 min-w-44 max-w-72 bg-card p-0 py-2 pr-3 whitespace-normal [overflow-wrap:anywhere] ${r.group ? "text-foreground" : "italic text-muted-foreground"}`}>
+                      {/* grupo sin valor: nunca mostrar el label (mezclaría personas) */}
+                      {r.group ? (r.label ?? r.group) : matrixMode.nullLabel}
+                    </TableCell>
+                    {matrixView.weeks.map((w) => {
+                      const v = r.cells.get(w);
+                      return (
+                        <TableCell key={w} style={v ? { backgroundColor: heatBg(v, matrixView.max) } : undefined}
+                            className="whitespace-nowrap px-2 py-2 text-right tabular-nums text-foreground">
+                          {v ? fmtHours(v) : <span className="text-muted-foreground/40">—</span>}
+                        </TableCell>
+                      );
+                    })}
+                    <TableCell className="whitespace-nowrap p-0 py-2 pl-3 text-right font-medium tabular-nums text-sky">{fmtHours(r.total)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </section>
       )}
@@ -660,60 +669,47 @@ export default function Reports() {
 
       {/* Panel de detalle (drill-down) */}
       {detail && (
-        <div className="fixed inset-0 z-30 flex items-start justify-center overflow-y-auto bg-background/80 p-4 sm:p-10"
-             onClick={(e) => { if (e.target === e.currentTarget) setDetail(null); }}>
-          <div className="w-full max-w-4xl rounded-2xl border border-border bg-card shadow-2xl">
-            <div className="flex items-center justify-between border-b border-border p-5">
-              <h2 className="font-display text-base font-semibold text-foreground">{detail.title}</h2>
-              <button onClick={() => setDetail(null)}
-                      className="rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:border-blue hover:text-blue">
-                Cerrar
-              </button>
-            </div>
-            <div className="max-h-[70vh] overflow-y-auto p-5">
-              {detail.loading && detail.rows.length === 0
-                ? <div className="flex justify-center py-10"><Spinner className="text-sky" /></div>
-                : detail.rows.length === 0
-                  ? <p className="py-8 text-center text-sm text-muted-foreground">Sin registros para este corte.</p>
-                  : (
-                    <table className="w-full text-left text-sm">
-                      <thead>
-                        <tr className="text-xs uppercase tracking-wide text-muted-foreground">
-                          <th className="pb-2 pr-3 font-medium">ID</th>
-                          <th className="pb-2 pr-3 font-medium">Fecha</th>
-                          <th className="pb-2 pr-3 font-medium">Persona</th>
-                          <th className="pb-2 pr-3 font-medium">Tarea</th>
-                          <th className="pb-2 pr-3 font-medium">Descripción</th>
-                          <th className="pb-2 text-right font-medium">Horas</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {detail.rows.map((r) => (
-                          <tr key={r["ID"]} className="border-t border-border/60 align-top">
-                            <td className="py-2 pr-3 whitespace-nowrap text-muted-foreground">{r["ID"]}</td>
-                            <td className="py-2 pr-3 whitespace-nowrap text-foreground">{fmtDate(r["Hora de creación"])}</td>
-                            {/* La columna "Persona" muestra el nombre (personLabel), no el ID de la relación */}
-                            <td className="py-2 pr-3 text-foreground">{r[REPORT_PROPS.personLabel]}</td>
-                            <td className="py-2 pr-3 text-foreground">{r["Tarea"]}</td>
-                            <td className="py-2 pr-3 text-muted-foreground">{r["Breve descripción"]}</td>
-                            <td className="py-2 text-right font-medium text-sky whitespace-nowrap">{fmtHours(Number(r["Registro de horas"]) || 0)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-              {detail.nextCursor && (
-                <div className="pt-4 text-center">
-                  <button disabled={detail.loading}
-                          onClick={() => { setDetail({ ...detail, loading: true }); void loadDetailPage({ ...detail, loading: true }); }}
-                          className="rounded-lg border border-blue px-4 py-2 text-sm font-medium text-blue transition hover:bg-blue hover:text-white disabled:opacity-60">
-                    {detail.loading ? "Cargando…" : "Cargar más"}
-                  </button>
-                </div>
+        <AppModal open onClose={() => setDetail(null)} title={detail.title} wide>
+          {detail.loading && detail.rows.length === 0
+            ? <div className="flex justify-center py-10"><Spinner className="text-sky" /></div>
+            : detail.rows.length === 0
+              ? <p className="py-8 text-center text-sm text-muted-foreground">Sin registros para este corte.</p>
+              : (
+                <Table className="text-left">
+                  <TableHeader>
+                    <TableRow className="text-xs uppercase tracking-wide text-muted-foreground">
+                      <TableHead className="h-auto px-0 pb-2 pr-3 font-medium text-muted-foreground">ID</TableHead>
+                      <TableHead className="h-auto px-0 pb-2 pr-3 font-medium text-muted-foreground">Fecha</TableHead>
+                      <TableHead className="h-auto px-0 pb-2 pr-3 font-medium text-muted-foreground">Persona</TableHead>
+                      <TableHead className="h-auto px-0 pb-2 pr-3 font-medium text-muted-foreground">Tarea</TableHead>
+                      <TableHead className="h-auto px-0 pb-2 pr-3 font-medium text-muted-foreground">Descripción</TableHead>
+                      <TableHead className="h-auto px-0 pb-2 text-right font-medium text-muted-foreground">Horas</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {detail.rows.map((r) => (
+                      <TableRow key={r["ID"]} className="border-border/60">
+                        <TableCell className="p-0 py-2 pr-3 align-top whitespace-nowrap text-muted-foreground">{r["ID"]}</TableCell>
+                        <TableCell className="p-0 py-2 pr-3 align-top whitespace-nowrap text-foreground">{fmtDate(r["Hora de creación"])}</TableCell>
+                        {/* La columna "Persona" muestra el nombre (personLabel), no el ID de la relación */}
+                        <TableCell className="p-0 py-2 pr-3 align-top whitespace-normal text-foreground">{r[REPORT_PROPS.personLabel]}</TableCell>
+                        <TableCell className="p-0 py-2 pr-3 align-top whitespace-normal text-foreground">{r["Tarea"]}</TableCell>
+                        <TableCell className="p-0 py-2 pr-3 align-top whitespace-normal text-muted-foreground">{r["Breve descripción"]}</TableCell>
+                        <TableCell className="p-0 py-2 text-right align-top font-medium text-sky whitespace-nowrap">{fmtHours(Number(r["Registro de horas"]) || 0)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               )}
+          {detail.nextCursor && (
+            <div className="pt-2 text-center">
+              <Button variant="outline" disabled={detail.loading}
+                      onClick={() => { setDetail({ ...detail, loading: true }); void loadDetailPage({ ...detail, loading: true }); }}>
+                {detail.loading ? "Cargando…" : "Cargar más"}
+              </Button>
             </div>
-          </div>
-        </div>
+          )}
+        </AppModal>
       )}
     </main>
     </AppShell>
@@ -732,38 +728,41 @@ function AggTable({ head, rows, empty, heatCol }: {
   if (!rows.length) return <p className="py-8 text-center text-sm text-muted-foreground">{empty}</p>;
   const maxHeat = Math.max(...rows.map((r) => r.heat ?? 0));
   return (
-    <div className="max-h-96 overflow-y-auto">
-      <table className="w-full text-left text-sm">
-        <thead className="sticky top-0 bg-card">
-          <tr className="text-xs uppercase tracking-wide text-muted-foreground">
+    // El scroll vertical (max-h) debe vivir en el contenedor propio de Table
+    // (overflow-x-auto): un wrapper externo dejaría el sticky del thead pegado
+    // a un scrollport que no es el que desplaza las filas.
+    <div className="[&>div]:max-h-96 [&>div]:overflow-y-auto">
+      <Table className="text-left">
+        <TableHeader className="sticky top-0 bg-card">
+          <TableRow className="text-xs uppercase tracking-wide text-muted-foreground">
             {head.map((h, i) => (
-              <th key={h} className={`pb-2 font-medium ${i >= head.length - 2 ? "text-right pl-3" : "pr-3"}`}>{h}</th>
+              <TableHead key={h} className={`h-auto px-0 pb-2 font-medium text-muted-foreground ${i >= head.length - 2 ? "text-right pl-3" : "pr-3"}`}>{h}</TableHead>
             ))}
-          </tr>
-        </thead>
-        <tbody>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {rows.map((r) => (
-            <tr key={r.key}
+            <TableRow key={r.key}
                 onClick={r.onClick}
                 title={r.onClick ? "Ver registros" : undefined}
-                className={`border-t border-border/60 ${r.onClick ? "cursor-pointer transition hover:bg-background/50" : ""}`}>
+                className={`border-border/60 ${r.onClick ? "cursor-pointer transition hover:bg-background/50" : ""}`}>
               {r.cells.map((c, i) => (
-                <td key={i}
+                <TableCell key={i}
                     style={heatCol === i ? { backgroundColor: heatBg(r.heat ?? 0, maxHeat) } : undefined}
-                    className={`py-2 ${i >= r.cells.length - 2
+                    className={`p-0 py-2 ${i >= r.cells.length - 2
                       ? "text-right pl-3 tabular-nums whitespace-nowrap"
                       // [overflow-wrap:anywhere]: los códigos largos de subproyecto
                       // (SubProy-…::NO-3510) no tienen espacios y desbordaban la tarjeta.
-                      : "pr-3 [overflow-wrap:anywhere]"}
+                      : "pr-3 whitespace-normal [overflow-wrap:anywhere]"}
                       ${heatCol === i ? "px-3" : ""}
                       ${i === 0 ? (r.mutedFirst ? "italic text-muted-foreground" : "text-foreground") : i >= r.cells.length - 2 ? "text-foreground" : "text-muted-foreground"}`}>
                   {c}
-                </td>
+                </TableCell>
               ))}
-            </tr>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }
