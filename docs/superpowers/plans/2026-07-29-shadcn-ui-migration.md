@@ -658,7 +658,7 @@ git commit -m "refactor(reports): modals a AppModal y MultiSelect a Popover+Comm
 - Consumes: `Card`, `Skeleton`, `Tabs*`, `Table*`, `ChartContainer`, `ChartTooltip`, tipo `ChartConfig`, Recharts (`BarChart`, `Bar`, `XAxis`, `YAxis`, `CartesianGrid`), `AppModal`.
 - Produces: `TimelineChart({ buckets, granularity, onBarClick? })` — reemplaza a `BarChart` (mismo contrato semántico).
 
-- [ ] **Step 1: `TimelineChart` en `components.tsx`** (borrar `BarChart` SVG y sus constantes `W/H/PAD_*`; conservar `bucketLabel` y `fmtHours`):
+- [x] **Step 1: `TimelineChart` en `components.tsx`** (borrar `BarChart` SVG y sus constantes `W/H/PAD_*`; conservar `bucketLabel` y `fmtHours`):
 
 ```tsx
 const chartConfig = {
@@ -711,7 +711,7 @@ export function TimelineChart({ buckets, granularity, onBarClick }: {
 
 (En Recharts, el primer argumento del `onClick` de `<Bar>` es el datum con las props originales — incluye `bucket`.)
 
-- [ ] **Step 2: Sección de timeline en `page.tsx`.** Import `BarChart` → `TimelineChart` (misma invocación). Toggle Semana/Mes con Tabs:
+- [x] **Step 2: Sección de timeline en `page.tsx`.** Import `BarChart` → `TimelineChart` (misma invocación). Toggle Semana/Mes con Tabs:
 
 ```tsx
 <Tabs value={granularity} onValueChange={(v) => setGranularity(v as Granularity)}>
@@ -722,7 +722,7 @@ export function TimelineChart({ buckets, granularity, onBarClick }: {
 </Tabs>
 ```
 
-- [ ] **Step 3: Totales con Card + Skeleton:**
+- [x] **Step 3: Totales con Card + Skeleton:**
 
 ```tsx
 <section data-tour="reports-totals" className="grid grid-cols-3 gap-4">
@@ -737,9 +737,9 @@ export function TimelineChart({ buckets, granularity, onBarClick }: {
 </section>
 ```
 
-- [ ] **Step 4: Tablas con componentes `Table`.** `AggTable` y la matriz conservan TODA su lógica (heatBg inline, `mutedFirst`, sticky, `[overflow-wrap:anywhere]`, onClick de fila) cambiando etiquetas: `<table>`→`<Table>`, `<thead>`→`<TableHeader>`, `<tbody>`→`<TableBody>`, `<tr>`→`<TableRow>`, `<th>`→`<TableHead>`, `<td>`→`<TableCell>`, trasladando las clases actuales (las de shadcn se combinan; el `hover:bg-background/50` de filas clickeables se conserva). El `sticky left-0 bg-card` de la matriz y el `sticky top-0 bg-card` del thead se mantienen.
+- [x] **Step 4: Tablas con componentes `Table`.** `AggTable` y la matriz conservan TODA su lógica (heatBg inline, `mutedFirst`, sticky, `[overflow-wrap:anywhere]`, onClick de fila) cambiando etiquetas: `<table>`→`<Table>`, `<thead>`→`<TableHeader>`, `<tbody>`→`<TableBody>`, `<tr>`→`<TableRow>`, `<th>`→`<TableHead>`, `<td>`→`<TableCell>`, trasladando las clases actuales (las de shadcn se combinan; el `hover:bg-background/50` de filas clickeables se conserva). El `sticky left-0 bg-card` de la matriz y el `sticky top-0 bg-card` del thead se mantienen.
 
-- [ ] **Step 5: Panel de detalle → `AppModal wide`.** Reemplazar el overlay/manual por:
+- [x] **Step 5: Panel de detalle → `AppModal wide`.** Reemplazar el overlay/manual por:
 
 ```tsx
 {detail && (
@@ -761,12 +761,12 @@ export function TimelineChart({ buckets, granularity, onBarClick }: {
 )}
 ```
 
-- [ ] **Step 6: Gate + E2E**
+- [x] **Step 6: Gate + E2E**
 
 Run: `npm test && npm run lint && npx tsc --noEmit && npm run test:e2e`
 Expected: PASS. Tests clave: smoke "reports page renders filters and empty state" (`Sin registros en el rango seleccionado.` lo emite ahora `TimelineChart`).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/app/db/tiempos/reports
