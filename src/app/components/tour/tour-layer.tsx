@@ -32,6 +32,10 @@ const anchorSelector = (anchor: string) => `[data-tour="${anchor}"]`;
 const ANCHOR_FRAMES = 10;
 /** Techo de frames re-midiendo un ancla que se está animando (~500ms). */
 const SETTLE_FRAMES = 30;
+/** Frames quietos consecutivos para dar el rect por asentado. Con uno solo,
+    un ancla cuya animación de entrada aún no arranca (React no comiteó el
+    render del `before` bajo carga) se daba por quieta fuera de pantalla. */
+const STILL_FRAMES = 3;
 
 const sameRect = (a: Rect | null, b: Rect | null) =>
   !!a && !!b && a.top === b.top && a.left === b.left && a.width === b.width && a.height === b.height;
@@ -217,17 +221,24 @@ export function TourLayer({ tour, shellActions, justLoggedIn = false }: {
       // re-mide hasta que deja de moverse (ni el scroll ni el resize se disparan
       // con una transición de CSS, así que nadie corregiría el rect después).
       let settling = 0;
+      let stillFrames = 0;
       let last: Rect | null = null;
       const measure = () => {
         const r = readRect(s.anchor!);
         if (!r) return;
         const still = sameRect(r, last);
+        stillFrames = still ? stillFrames + 1 : 0;
         if (!still) {
           setRect(r);
           setPlacement(popoverPlacement(r, { width: window.innerWidth, height: window.innerHeight }, s.side));
         }
         last = r;
-        if (still || ++settling > SETTLE_FRAMES) return;
+        // Un rect quieto pero completamente fuera del viewport no está asentado:
+        // es un ancla cuya transición de entrada todavía no empieza. Se sigue
+        // midiendo hasta agotar el techo.
+        const offscreen = r.left + r.width <= 0 || r.top + r.height <= 0
+          || r.left >= window.innerWidth || r.top >= window.innerHeight;
+        if ((stillFrames >= STILL_FRAMES && !offscreen) || ++settling > SETTLE_FRAMES) return;
         raf = requestAnimationFrame(measure);
       };
       raf = requestAnimationFrame(measure);

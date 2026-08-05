@@ -12,7 +12,7 @@ const progress = (page: Page) => page.getByTestId("tour-progress");
 
 test("el botón ? corre el recorrido del menú paso por paso", async ({ page }) => {
   await login(page);
-  await expect(page.getByRole("heading", { name: "Bases de datos" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Menú principal" })).toBeVisible();
 
   await page.getByRole("button", { name: /Ayuda/ }).click();
 
@@ -129,7 +129,7 @@ test("recargar con la sesión viva no vuelve a ofrecer el recorrido", async ({ p
   await login(page, { welcome: "expect" });
   await page.getByTestId("welcome-modal").getByRole("button", { name: "Ahora no" }).click();
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Bases de datos" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Menú principal" })).toBeVisible();
   await expect(page.getByTestId("welcome-modal")).toBeHidden();
   await expect(page.getByTestId("welcome-banner")).toBeHidden();
 });
