@@ -18,6 +18,10 @@ export async function login(page: Page, opts: { welcome?: "skip" | "expect" } = 
   await page.goto("/");
   await page.getByPlaceholder("Contraseña").fill(STUB_PASSWORD);
   await page.getByRole("button", { name: "Entrar" }).click();
+  // Esperar el shell autenticado, no sólo el click: el POST /api/login es
+  // asíncrono y sin esto el helper regresa antes de que la cookie exista —
+  // un test que navegue de inmediato aterriza en "necesitas iniciar sesión".
+  await expect(page.getByRole("complementary", { name: "Navegación" })).toBeAttached();
   if ((opts.welcome ?? "skip") === "skip") {
     await expect(page.getByTestId("welcome-modal")).toBeHidden();
   }

@@ -31,9 +31,9 @@ const menu: TourScript = {
       anchor: "menu-db-card",
       title: "Tus bases de datos",
       body:
-        "Cada tarjeta es una base. El número son los registros que tiene la copia y abajo dice " +
-        "hace cuánto se sincronizó. “Ver reportes” abre sus reportes; “Exportar CSV” va directo " +
-        "a la descarga.",
+        "Cada tarjeta es una base y toda ella es clickeable: te lleva a sus reportes, donde también " +
+        "viven la exportación a CSV y la sincronización. El número son los registros que tiene la " +
+        "copia y abajo dice hace cuánto se sincronizó.",
     },
     {
       anchor: "shell-sidebar",

@@ -1,14 +1,14 @@
 "use client";
 // Menú principal: login + grilla de accesos a lo que ofrece la app.
 // La grilla ocupa el ancho real del contenedor (3 columnas desde xl, apilada
-// abajo): la tarjeta de la BD abarca dos columnas y lleva sus acciones en el
-// footer (Ver reportes / Exportar CSV), el Asistente es el tile de una
-// columna, y una tira punteada anuncia las BDs por venir.
+// abajo). Cada celda es un link completo — la BD abarca dos columnas y lleva
+// a sus reportes, el Asistente es el tile de una columna — y una tira
+// punteada anuncia las BDs por venir.
 // El backend sigue siendo single-DB: el estado del snapshot (/api/sync/status)
 // aplica a la única BD registrada, BD Tiempos.
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronRight, Clock, Download, Lock, MessageSquare, Plus } from "lucide-react";
+import { ChevronRight, Clock, Lock, MessageSquare, Plus } from "lucide-react";
 import { AppShell } from "@/app/components/app-shell";
 import { Spinner } from "@/app/components/spinner";
 import { Button } from "@/components/ui/button";
@@ -153,41 +153,35 @@ export default function Home() {
 
       <div className="grid gap-4 xl:grid-cols-3">
         {DATABASES.map((db, i) => (
-          <Card key={db.slug} data-tour={i === 0 ? "menu-db-card" : undefined}
-                className="gap-0 overflow-hidden p-0 xl:col-span-2">
-            <div className="flex flex-1 items-start justify-between gap-6 p-4">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2.5">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent text-sky">
-                    {DB_ICONS[db.slug]}
-                  </span>
-                  <h3 className="text-[15px] font-semibold text-foreground">{db.name}</h3>
+          <Link key={db.slug} href={`/db/${db.slug}/reports`} data-tour={i === 0 ? "menu-db-card" : undefined}
+                aria-label={`Ver reportes de ${db.name}`} className="group block xl:col-span-2">
+            <Card className="flex h-full flex-col gap-0 overflow-hidden p-0 transition group-hover:border-border-strong group-hover:bg-card/80">
+              <div className="flex flex-1 items-start justify-between gap-6 p-4">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2.5">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent text-sky">
+                      {DB_ICONS[db.slug]}
+                    </span>
+                    <h3 className="text-[15px] font-semibold text-foreground">{db.name}</h3>
+                  </div>
+                  <p className="mt-2 max-w-[52ch] text-[13px] leading-relaxed text-muted-foreground">{db.description}</p>
                 </div>
-                <p className="mt-2 max-w-[52ch] text-[13px] leading-relaxed text-muted-foreground">{db.description}</p>
+                <div className="shrink-0 text-right">
+                  <p className="font-display text-[28px] font-extrabold leading-none tracking-tight text-sky tabular-nums">
+                    {(status?.meta.count ?? 0).toLocaleString("es-MX")}
+                  </p>
+                  <p className="mt-1 text-[11.5px] uppercase tracking-wider text-subtle">registros</p>
+                </div>
               </div>
-              <div className="shrink-0 text-right">
-                <p className="font-display text-[28px] font-extrabold leading-none tracking-tight text-sky tabular-nums">
-                  {(status?.meta.count ?? 0).toLocaleString("es-MX")}
-                </p>
-                <p className="mt-1 text-[11.5px] uppercase tracking-wider text-subtle">registros</p>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2.5 border-t border-border px-4 py-2.5">
-              <Button asChild size="sm">
-                <Link href={`/db/${db.slug}/reports`} aria-label={`Ver reportes de ${db.name}`}>
+              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 border-t border-border px-4 py-2.5">
+                <span className="flex items-center gap-1 text-[12.5px] font-medium text-link">
                   Ver reportes
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </Link>
-              </Button>
-              <Button asChild size="sm" variant="outline" className="border-border-strong">
-                <Link href={`/db/${db.slug}/reports?modal=export`}>
-                  <Download className="h-3.5 w-3.5" />
-                  Exportar CSV
-                </Link>
-              </Button>
-              <span className="ml-auto text-[11.5px] text-subtle">Sincronizado {fmtAgo(lastSync)}</span>
-            </div>
-          </Card>
+                  <ChevronRight className="h-3.5 w-3.5 shrink-0 transition group-hover:translate-x-0.5" />
+                </span>
+                <span className="ml-auto text-[11.5px] text-subtle">Sincronizado {fmtAgo(lastSync)}</span>
+              </div>
+            </Card>
+          </Link>
         ))}
 
         <ActionTile href="/asistente" tour="menu-asistente"

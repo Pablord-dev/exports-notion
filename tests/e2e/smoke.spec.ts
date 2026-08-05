@@ -51,13 +51,13 @@ test("reports page renders filters and empty state", async ({ page }) => {
   await expect(page.getByText("Sin registros en el rango seleccionado.")).toBeVisible();
 });
 
-// "Exportar CSV" del menú abre el modal de exportación en la página de
-// reportes (deep-link ?modal=export). Sin esto, ese acceso puede quedar
-// apuntando a un parámetro que la página ignora y nadie se entera.
-test("menu export tile deep-links into the export modal", async ({ page }) => {
+// ?modal=export abre el modal de exportación al cargar la página. Ya no hay
+// botón en el menú que lo use, pero la URL sigue siendo compartible y sin
+// prueba se rompería en silencio.
+test("?modal=export opens the export modal on load", async ({ page }) => {
   test.skip(process.env.E2E_REAL === "1", "password real desconocido");
   await login(page);
-  await page.locator("main").getByRole("link", { name: "Exportar CSV" }).click();
+  await page.goto("/db/tiempos/reports?modal=export");
   await expect(page.getByRole("button", { name: "Descargar" })).toBeVisible();
 });
 
