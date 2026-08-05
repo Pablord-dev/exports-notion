@@ -8,7 +8,9 @@
    ============================================================ */
 
 /* Tokens de marca que shadcn no cubre (acentos y estados).
-   Generan bg-blue, text-sky, text-danger, font-display, etc. */
+   Generan bg-blue, text-sky, text-danger, font-display, etc.
+   Regla de acento del sistema: blue = acción clickeable, sky = dato numérico.
+   Nada más lleva color. */
 @theme {
   --color-blue: #0f40ef;        /* Unique Blue — acciones */
   --color-sky: #02b5d3;         /* Unique Sky Blue — cifras y serie de datos */
@@ -25,38 +27,51 @@
   --color-success: #66b169;     /* Unique Green 500 */
   --color-warning: #b57ed1;     /* Unique Purple 400 */
 
-  /* Tipografía brandbook: Raleway (títulos) + Poppins (cuerpo). */
+  /* Texto terciario (metadatos, ejes, hints) — 5.3:1 sobre la tarjeta */
+  --color-subtle: #8090b5;
+  /* Borde de controles interactivos prominentes (outline buttons, tooltips) */
+  --color-border-strong: #1c4488;
+
+  /* Tipografía brandbook: Raleway (títulos) + Poppins (cuerpo) +
+     JetBrains Mono (cifras tabulares y datos técnicos). */
   --font-display: var(--font-raleway), Lato, Arial, sans-serif;
   --font-sans: var(--font-poppins), Lato, Arial, sans-serif;
+  --font-mono: var(--font-jetbrains), Consolas, ui-monospace, monospace;
 }
 
-/* Tokens semánticos shadcn — dark fijo, definidos una sola vez. */
+/* Tokens semánticos shadcn — dark fijo, definidos una sola vez.
+   Rampa de 4 superficies (misma marca, con profundidad): el lienzo baja a
+   tinta azul, la tarjeta sube y los campos se hunden. El borde deja de ser
+   lo único que separa planos. */
 :root {
   --radius: 0.625rem;
-  --background: #051758;            /* Unique Dark Blue — fondo de página */
-  --foreground: #f4f4f4;            /* texto principal */
-  --card: #0a2468;                  /* tarjetas — dark-blue elevado */
-  --card-foreground: #f4f4f4;
-  --popover: #0a2468;
-  --popover-foreground: #f4f4f4;
+  --background: #02091c;            /* canvas — tinta azul, fondo de página */
+  --foreground: #eef1f7;            /* texto principal */
+  --card: #071b40;                  /* tarjetas */
+  --card-foreground: #eef1f7;
+  --popover: #0c2452;               /* flotantes sobre la tarjeta — raised */
+  --popover-foreground: #eef1f7;
   --primary: #0f40ef;               /* Unique Blue */
   --primary-foreground: #ffffff;
-  --secondary: #1c3c84;
-  --secondary-foreground: #f4f4f4;
-  --muted: #0a2468;
-  --muted-foreground: #9a9a9a;      /* texto secundario */
-  --accent: #051758;                /* hover de items en menús/popovers */
-  --accent-foreground: #f4f4f4;
+  --secondary: #0c2452;             /* superficie raised: item activo, chips */
+  --secondary-foreground: #dce4f2;
+  --muted: #02091c;                 /* hundido: TabsList, campos, wells */
+  --muted-foreground: #9fb0cf;      /* texto secundario — gris azulado, 7.7:1 */
+  --accent: #0c2452;                /* item activo / hover en menús */
+  --accent-foreground: #eef1f7;
   --destructive: #f05347;
   --destructive-foreground: #ffffff;
-  --border: #1c3c84;
-  --input: #1c3c84;
+  --border: #12305f;
+  --input: #16386b;
   --ring: #0f40ef;
   --chart-1: #02b5d3;
   --chart-2: #0f40ef;
   --chart-3: #b57ed1;
   --chart-4: #66b169;
   --chart-5: #f05347;
+  --sidebar: #04122f;               /* chrome — sidebar de navegación */
+  --sidebar-foreground: #eef1f7;
+  --sidebar-border: #12305f;
 }
 
 @theme inline {
@@ -84,6 +99,9 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-border: var(--sidebar-border);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
