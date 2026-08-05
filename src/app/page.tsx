@@ -1,12 +1,14 @@
 "use client";
-// Menú principal: login + lista de bases de Notion disponibles (src/lib/databases.ts).
-// Cada tarjeta de BD lleva sus acciones en el footer (Ver reportes / Exportar CSV);
-// la tarjeta del Asistente sigue siendo un link completo.
+// Menú principal: login + grilla de accesos a lo que ofrece la app.
+// La grilla ocupa el ancho real del contenedor (3 columnas desde xl, apilada
+// abajo): la tarjeta de la BD abarca dos columnas y lleva sus acciones en el
+// footer (Ver reportes / Exportar CSV), el Asistente es el tile de una
+// columna, y una tira punteada anuncia las BDs por venir.
 // El backend sigue siendo single-DB: el estado del snapshot (/api/sync/status)
 // aplica a la única BD registrada, BD Tiempos.
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronRight, Clock, Download, Lock, MessageSquare } from "lucide-react";
+import { ChevronRight, Clock, Download, Lock, MessageSquare, Plus } from "lucide-react";
 import { AppShell } from "@/app/components/app-shell";
 import { Spinner } from "@/app/components/spinner";
 import { Button } from "@/components/ui/button";
@@ -31,6 +33,31 @@ function fmtAgo(iso: string | null): string {
   const h = Math.floor(mins / 60);
   if (h < 48) return `hace ${h} h`;
   return `hace ${Math.floor(h / 24)} días`;
+}
+
+// Tile de una columna: link completo con icono, copy y llamada a la acción.
+// h-full para que iguale la altura de la fila; sin min-h, así el bloque no
+// crece más de lo que pide su contenido.
+function ActionTile({ href, tour, icon, title, body, cta }: {
+  href: string; tour?: string; icon: React.ReactNode; title: string; body: string; cta: string;
+}) {
+  return (
+    <Link href={href} data-tour={tour} className="group block">
+      <Card className="flex h-full flex-col gap-0 p-4 transition group-hover:border-border-strong group-hover:bg-card/80">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent text-sky">
+            {icon}
+          </span>
+          <h3 className="text-[15px] font-semibold text-foreground">{title}</h3>
+        </div>
+        <p className="mt-2 text-[12.5px] leading-relaxed text-muted-foreground">{body}</p>
+        <span className="mt-auto flex items-center gap-1 pt-2.5 text-[12.5px] font-medium text-link">
+          {cta}
+          <ChevronRight className="h-3.5 w-3.5 shrink-0 transition group-hover:translate-x-0.5" />
+        </span>
+      </Card>
+    </Link>
+  );
 }
 
 export default function Home() {
@@ -115,34 +142,37 @@ export default function Home() {
   return (
     <AppShell onLogout={() => { setAuthed(false); setStatus(null); setJustLoggedIn(false); }}
               tour={{ id: "menu" }} justLoggedIn={justLoggedIn}>
-    <main className="mx-auto max-w-[75rem] space-y-6 px-6 py-7 sm:px-8">
-      <header className="space-y-1 border-b border-border pb-5">
-        <p className="text-[10.5px] font-semibold uppercase tracking-widest text-subtle">Panel</p>
-        <h1 className="font-display text-[22px] font-bold tracking-tight text-foreground">Menú principal</h1>
+    <main className="mx-auto max-w-[75rem] space-y-5 px-6 py-7 sm:px-8">
+      <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-1 border-b border-border pb-4">
+        <div>
+          <p className="text-[10.5px] font-semibold uppercase tracking-widest text-subtle">Panel</p>
+          <h1 className="mt-1 font-display text-[22px] font-bold tracking-tight text-foreground">Menú principal</h1>
+        </div>
         <p className="text-[12.5px] text-muted-foreground">Bases de Notion disponibles para reportar y exportar.</p>
       </header>
 
-      <div className="max-w-2xl space-y-4">
+      <div className="grid gap-4 xl:grid-cols-3">
         {DATABASES.map((db, i) => (
-          <Card key={db.slug} data-tour={i === 0 ? "menu-db-card" : undefined} className="gap-0 overflow-hidden p-0">
-            <div className="flex items-start justify-between gap-6 p-5">
-              <div className="min-w-0 space-y-2">
+          <Card key={db.slug} data-tour={i === 0 ? "menu-db-card" : undefined}
+                className="gap-0 overflow-hidden p-0 xl:col-span-2">
+            <div className="flex flex-1 items-start justify-between gap-6 p-4">
+              <div className="min-w-0">
                 <div className="flex items-center gap-2.5">
                   <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent text-sky">
                     {DB_ICONS[db.slug]}
                   </span>
                   <h3 className="text-[15px] font-semibold text-foreground">{db.name}</h3>
                 </div>
-                <p className="max-w-[44ch] text-[13px] leading-relaxed text-muted-foreground">{db.description}</p>
+                <p className="mt-2 max-w-[52ch] text-[13px] leading-relaxed text-muted-foreground">{db.description}</p>
               </div>
               <div className="shrink-0 text-right">
-                <p className="font-display text-[32px] font-extrabold leading-none tracking-tight text-sky tabular-nums">
+                <p className="font-display text-[28px] font-extrabold leading-none tracking-tight text-sky tabular-nums">
                   {(status?.meta.count ?? 0).toLocaleString("es-MX")}
                 </p>
-                <p className="mt-1.5 text-[11.5px] uppercase tracking-wider text-subtle">registros</p>
+                <p className="mt-1 text-[11.5px] uppercase tracking-wider text-subtle">registros</p>
               </div>
             </div>
-            <div className="flex items-center gap-2.5 border-t border-border px-5 py-3">
+            <div className="flex flex-wrap items-center gap-2.5 border-t border-border px-4 py-2.5">
               <Button asChild size="sm">
                 <Link href={`/db/${db.slug}/reports`} aria-label={`Ver reportes de ${db.name}`}>
                   Ver reportes
@@ -160,20 +190,18 @@ export default function Home() {
           </Card>
         ))}
 
-        <Link href="/asistente" data-tour="menu-asistente" className="block">
-          <Card className="flex flex-row items-center gap-4 p-5 transition hover:border-border-strong hover:bg-card/80">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent text-sky">
-              <MessageSquare className="h-4 w-4 shrink-0" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <h3 className="text-[15px] font-semibold text-foreground">Asistente IA</h3>
-              <p className="mt-0.5 text-[12.5px] text-muted-foreground">Pregunta en lenguaje natural sobre tus bases de datos.</p>
-            </div>
-            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-          </Card>
-        </Link>
+        <ActionTile href="/asistente" tour="menu-asistente"
+                    icon={<MessageSquare className="h-4 w-4 shrink-0" />}
+                    title="Asistente IA"
+                    body="Pregunta en lenguaje natural y responde consultando los mismos reportes."
+                    cta="Abrir chat" />
 
-        <p className="pt-1 text-[12.5px] text-subtle">Próximamente más bases de datos.</p>
+        {/* Tira punteada, no tile: anuncia lo que viene sin robar alto */}
+        <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 rounded-xl border border-dashed border-border px-4 py-3 text-center xl:col-span-3">
+          <Plus className="h-3.5 w-3.5 shrink-0 text-subtle" aria-hidden />
+          <p className="text-[12.5px] font-medium text-muted-foreground">Próximamente más bases de datos</p>
+          <p className="text-[12px] text-subtle">— cada base registrada aparece aquí con sus reportes y su exportación.</p>
+        </div>
       </div>
     </main>
     </AppShell>

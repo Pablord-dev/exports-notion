@@ -51,6 +51,16 @@ test("reports page renders filters and empty state", async ({ page }) => {
   await expect(page.getByText("Sin registros en el rango seleccionado.")).toBeVisible();
 });
 
+// "Exportar CSV" del menú abre el modal de exportación en la página de
+// reportes (deep-link ?modal=export). Sin esto, ese acceso puede quedar
+// apuntando a un parámetro que la página ignora y nadie se entera.
+test("menu export tile deep-links into the export modal", async ({ page }) => {
+  test.skip(process.env.E2E_REAL === "1", "password real desconocido");
+  await login(page);
+  await page.locator("main").getByRole("link", { name: "Exportar CSV" }).click();
+  await expect(page.getByRole("button", { name: "Descargar" })).toBeVisible();
+});
+
 // Sidebar anclable/ocultable: desanclar la esconde tras la hamburguesa;
 // volver a anclar la fija. La preferencia persiste (localStorage).
 test("sidebar can be unpinned, reopened and pinned again", async ({ page }) => {
