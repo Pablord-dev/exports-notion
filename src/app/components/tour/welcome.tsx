@@ -1,7 +1,9 @@
 "use client";
 // Dos formas de ofrecer el recorrido tras iniciar sesión:
 // - Modal: sólo el primer login de este navegador (ahí sí interrumpe).
-// - Tira: en los siguientes. Siempre hay una vía visible, sin estorbar.
+// - Notificación: en los siguientes. Entra flotando abajo a la derecha unos
+//   segundos después del login y se queda hasta que la cierren o cambien de
+//   página (el aviso sólo se ofrece en la carga donde ocurrió el login).
 import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -56,19 +58,31 @@ export function WelcomeModal({ onStart, onDismiss }: { onStart: () => void; onDi
   );
 }
 
+// z-30: por encima del contenido, por debajo del backdrop de la sidebar en
+// overlay (z-40) y del spotlight del recorrido (z-55) — que además no coexiste
+// con el aviso.
 export function WelcomeBanner({ onStart, onDismiss }: { onStart: () => void; onDismiss: () => void }) {
   return (
-    <div data-testid="welcome-banner"
-         className="flex items-center gap-3 border-b border-border bg-card px-4 py-2.5 text-sm sm:px-5">
-      <span className="h-2 w-2 shrink-0 rounded-full bg-sky" aria-hidden />
-      <p className="min-w-0 flex-1 text-muted-foreground">¿Nuevo por aquí?</p>
-      <Button variant="outline" size="sm" onClick={onStart} className="shrink-0 text-sky hover:text-sky">
-        Iniciar tutorial
-      </Button>
-      <Button variant="ghost" size="icon" onClick={onDismiss} aria-label="Ocultar el aviso del tutorial"
-              className="h-7 w-7 shrink-0 text-muted-foreground hover:bg-transparent hover:text-foreground">
-        <X className="h-4 w-4" />
-      </Button>
+    <div data-testid="welcome-banner" role="status"
+         className="fixed bottom-4 left-4 right-4 z-30 animate-in fade-in slide-in-from-right-6 duration-300 sm:left-auto sm:w-[30rem]">
+      <div className="flex items-center gap-3 rounded-xl border border-border-strong bg-popover px-4 py-2.5 shadow-lg shadow-black/40">
+        <span className="h-2 w-2 shrink-0 rounded-full bg-sky" aria-hidden />
+        <p className="min-w-0 flex-1 text-[12.5px] leading-snug text-muted-foreground">
+          <span className="font-semibold text-foreground">¿Nuevo por aquí?</span>{" "}
+          Te muestro las pantallas en menos de un minuto.
+        </p>
+        {/* El hover del variant default baja la opacidad del azul, que sobre
+            este fondo oscuro lo apaga en vez de destacarlo: aquí se aclara y
+            gana un halo, que sí se lee como estado activo. */}
+        <Button size="sm" onClick={onStart}
+                className="h-8 shrink-0 hover:bg-primary hover:brightness-125 hover:ring-2 hover:ring-blue/50 hover:ring-offset-2 hover:ring-offset-popover">
+          Iniciar tutorial
+        </Button>
+        <Button variant="ghost" size="icon" onClick={onDismiss} aria-label="Ocultar el aviso del tutorial"
+                className="-mr-1 h-7 w-7 shrink-0 text-muted-foreground hover:bg-transparent hover:text-foreground">
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
     </div>
   );
 }

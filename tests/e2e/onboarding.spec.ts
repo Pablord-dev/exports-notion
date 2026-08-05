@@ -119,10 +119,40 @@ test("el segundo login muestra la tira discreta, no el modal", async ({ page }) 
   await page.getByRole("button", { name: "Entrar" }).click();
 
   await expect(page.getByTestId("welcome-modal")).toBeHidden();
+  // El aviso entra unos segundos después del login (BANNER_DELAY_MS), flotando
+  // en la esquina inferior derecha: se afirma la posición, no sólo que exista.
   const banner = page.getByTestId("welcome-banner");
-  await expect(banner).toBeVisible();
+  await expect(banner).toBeVisible({ timeout: 10_000 });
+  const box = (await banner.boundingBox())!;
+  const vp = page.viewportSize()!;
+  expect(vp.width - (box.x + box.width)).toBeLessThanOrEqual(24);
+  expect(vp.height - (box.y + box.height)).toBeLessThanOrEqual(24);
   await banner.getByRole("button", { name: "Iniciar tutorial" }).click();
   await expect(progress(page)).toHaveText("1 / 5");
+});
+
+test("el aviso del tutorial se queda hasta cerrarlo o cambiar de página", async ({ page }) => {
+  // Segundo login: el modal ya se consumió, así que toca la notificación.
+  await login(page, { welcome: "expect" });
+  await page.getByTestId("welcome-modal").getByRole("button", { name: "Ahora no" }).click();
+  await page.getByRole("complementary", { name: "Navegación" })
+            .getByRole("button", { name: "Cerrar sesión" }).click();
+  await page.getByPlaceholder("Contraseña").fill("e2e-password");
+  await page.getByRole("button", { name: "Entrar" }).click();
+
+  const banner = page.getByTestId("welcome-banner");
+  await expect(banner).toBeVisible({ timeout: 10_000 });
+  // No se auto-cierra: sigue ahí un rato después de aparecer.
+  await page.waitForTimeout(2000);
+  await expect(banner).toBeVisible();
+  // La ✕ lo quita para lo que queda de la sesión en esta página.
+  await banner.getByRole("button", { name: "Ocultar el aviso del tutorial" }).click();
+  await expect(banner).toBeHidden();
+  // Y al cambiar de página no reaparece.
+  await page.getByRole("complementary", { name: "Navegación" })
+            .getByRole("link", { name: "Asistente IA" }).click();
+  await expect(page).toHaveURL(/\/asistente$/);
+  await expect(banner).toBeHidden();
 });
 
 test("recargar con la sesión viva no vuelve a ofrecer el recorrido", async ({ page }) => {

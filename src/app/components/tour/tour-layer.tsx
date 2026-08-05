@@ -36,6 +36,8 @@ const SETTLE_FRAMES = 30;
     un ancla cuya animación de entrada aún no arranca (React no comiteó el
     render del `before` bajo carga) se daba por quieta fuera de pantalla. */
 const STILL_FRAMES = 3;
+/** Espera antes de asomar el aviso del recorrido tras un login (ms). */
+const BANNER_DELAY_MS = 3000;
 
 const sameRect = (a: Rect | null, b: Rect | null) =>
   !!a && !!b && a.top === b.top && a.left === b.left && a.width === b.width && a.height === b.height;
@@ -69,12 +71,19 @@ export function TourLayer({ tour, shellActions, justLoggedIn = false }: {
 
   useEffect(() => {
     if (!justLoggedIn) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (hasSeenWelcome()) { setWelcome("banner"); return; }
-    // Se marca al MOSTRARLO, no al completarlo: la promesa es "una vez por
-    // navegador", incluso si eligen "Ahora no".
-    markWelcomeSeen();
-    setWelcome("modal");
+    if (!hasSeenWelcome()) {
+      // Se marca al MOSTRARLO, no al completarlo: la promesa es "una vez por
+      // navegador", incluso si eligen "Ahora no".
+      markWelcomeSeen();
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setWelcome("modal");
+      return;
+    }
+    // El aviso de los logins siguientes entra como notificación unos segundos
+    // después, no junto con el primer render: así no compite con la pantalla
+    // que el usuario acaba de abrir. Se limpia al desmontar (navegar).
+    const t = setTimeout(() => setWelcome("banner"), BANNER_DELAY_MS);
+    return () => clearTimeout(t);
   }, [justLoggedIn]);
 
   const active = index !== null;
