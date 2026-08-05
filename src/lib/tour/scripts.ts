@@ -154,9 +154,9 @@ const asistente: TourScript = {
     {
       title: "Cómo verificar una respuesta",
       body:
-        "Debajo de cada respuesta hay un desplegable que dice “consultó N herramienta(s)”: ahí ves " +
-        "qué consultó para contestar. Si no aparece, el modelo respondió sin consultar datos y " +
-        "conviene desconfiar del número.",
+        "Debajo de cada respuesta aparecen etiquetas con las herramientas que consultó para " +
+        "contestar. Si no aparece ninguna, el modelo respondió sin consultar datos y conviene " +
+        "desconfiar del número.",
     },
   ],
 };

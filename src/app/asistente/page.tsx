@@ -1,12 +1,14 @@
 "use client";
 // Asistente IA (top-level): chat con tool-calling sobre los reportes de la BD
-// seleccionada. Estilo tipo Claude — header (breadcrumb + título) a lo ancho;
-// debajo, panel FIJO de historial (columna estática en desktop; Sheet en móvil)
-// + conversación. Selectores (BD/modelo) como Select de shadcn dentro del
-// composer. Chats en localStorage. Respuestas en markdown.
+// seleccionada. Header estándar (breadcrumb → título + Nuevo chat); debajo,
+// panel FIJO de historial agrupado por fecha (columna estática en desktop;
+// Sheet en móvil) + conversación. La respuesta no es burbuja: bloque a lo
+// ancho con etiqueta de rol y modelo, y el toolTrace como pills con check.
+// Selectores (BD/modelo) como Select de shadcn dentro del composer.
+// Chats en localStorage. Respuestas en markdown.
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Menu, Plus, Trash2 } from "lucide-react";
+import { ArrowUp, Check, Menu, MessageSquare, Plus, Trash2, X } from "lucide-react";
 import { AppShell } from "@/app/components/app-shell";
 import { MarkdownMessage } from "@/app/components/markdown-message";
 import { Spinner } from "@/app/components/spinner";
@@ -39,6 +41,17 @@ const fmtWhen = (ms: number): string => {
   return `hace ${Math.floor(h / 24)} d`;
 };
 
+const isToday = (ms: number): boolean =>
+  new Date(ms).toDateString() === new Date().toDateString();
+
+// Prompts sugeridos del estado vacío: llenan el composer al click.
+const SUGGESTIONS = [
+  "Horas por persona este mes",
+  "¿Quién cargó menos horas la semana pasada?",
+  "Comparar KHOR 3 vs GestionKhor",
+  "Horas de QUALITAS en junio",
+];
+
 export default function AsistentePage() {
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
@@ -53,6 +66,7 @@ export default function AsistentePage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const createdAtRef = useRef(0);
   const endRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     // localStorage no existe en SSR: se lee tras montar (evita hydration mismatch).
@@ -74,6 +88,7 @@ export default function AsistentePage() {
 
   const dbName = (slug: string) => DATABASES.find((d) => d.slug === slug)?.name ?? slug;
   const noProvider = providers.length === 0;
+  const providerLabel = providers.find((p) => p.id === provider)?.label ?? null;
 
   function newChat() {
     setActiveId(null);
@@ -165,96 +180,114 @@ export default function AsistentePage() {
 
   const dbOptions = DATABASES.map((d) => ({ value: d.slug, label: d.name }));
 
-  // Cuadro de texto estilo Claude: textarea arriba, Selects (BD/modelo) y botón
-  // enviar en una fila dentro del mismo recuadro. Radix posiciona los menús solo.
+  // Cuadro de texto estilo Claude: textarea arriba, Selects (BD/modelo) como
+  // pills y el botón de enviar circular en una fila dentro del mismo recuadro.
+  // Radix posiciona los menús solo.
   // ⚠️ Radix SelectItem prohíbe value="" — la rama sin proveedores va por el
   // placeholder del SelectValue, no por un item vacío.
   const composer = (
-    <div data-tour="chat-composer"
-         className="rounded-2xl border border-border bg-background transition focus-within:border-blue focus-within:ring-2 focus-within:ring-blue/30">
-      <Textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={onKeyDown}
-                rows={1} disabled={noProvider} placeholder="Escribe tu pregunta…"
-                className="max-h-40 min-h-[48px] resize-none border-0 bg-transparent px-4 py-3 shadow-none focus-visible:ring-0 [color-scheme:dark]" />
-      <div data-tour="chat-selectors" className="flex items-center gap-2 px-2.5 pb-2.5">
-        <Select value={db} onValueChange={setDb}>
-          <SelectTrigger size="sm" aria-label="Base de datos" className="w-auto rounded-full bg-card text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {dbOptions.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={provider || undefined} onValueChange={setProvider} disabled={noProvider}>
-          <SelectTrigger size="sm" aria-label="Modelo" className="w-auto rounded-full bg-card text-xs">
-            <SelectValue placeholder="— sin modelo —" />
-          </SelectTrigger>
-          <SelectContent>
-            {providers.map((p) => <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Button size="sm" onClick={() => void send()} disabled={sending || noProvider || !input.trim()}
-                className="ml-auto rounded-full">
-          {sending ? <Spinner className="h-4 w-4" /> : "Enviar"}
-        </Button>
+    <div>
+      <div data-tour="chat-composer"
+           className="rounded-2xl border border-border-strong bg-card transition focus-within:border-blue focus-within:ring-2 focus-within:ring-blue/30">
+        <Textarea ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={onKeyDown}
+                  rows={1} disabled={noProvider} placeholder="Escribe tu pregunta…"
+                  className="max-h-40 min-h-[48px] resize-none border-0 bg-transparent px-4 py-3 shadow-none focus-visible:ring-0 [color-scheme:dark]" />
+        <div data-tour="chat-selectors" className="flex items-center gap-2 px-2.5 pb-2.5">
+          <Select value={db} onValueChange={setDb}>
+            <SelectTrigger size="sm" aria-label="Base de datos"
+                           className="w-auto rounded-full border-border-strong bg-transparent text-xs text-muted-foreground">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {dbOptions.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={provider || undefined} onValueChange={setProvider} disabled={noProvider}>
+            <SelectTrigger size="sm" aria-label="Modelo"
+                           className="w-auto rounded-full border-border-strong bg-transparent text-xs text-muted-foreground">
+              {provider && <span className="h-1 w-1 shrink-0 rounded-full bg-success" aria-hidden />}
+              <SelectValue placeholder="— sin modelo —" />
+            </SelectTrigger>
+            <SelectContent>
+              {providers.map((p) => <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Button size="icon" onClick={() => void send()} disabled={sending || noProvider || !input.trim()}
+                  aria-label="Enviar" className="ml-auto h-8 w-8 rounded-full">
+            {sending ? <Spinner className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
+          </Button>
+        </div>
       </div>
+      <p className="pt-2 text-center text-[11px] text-subtle">Enter para enviar · Shift+Enter para salto de línea</p>
     </div>
   );
 
-  // Panel de historial: se renderiza dos veces (columna estática en desktop,
-  // Sheet en móvil). El botón de cerrar y el Esc los aporta el Sheet de Radix.
+  // Panel de historial agrupado por fecha (Hoy / Anteriores). Se renderiza dos
+  // veces (columna estática en desktop, Sheet en móvil). El botón de cerrar y
+  // el Esc los aporta el Sheet de Radix.
+  const chatGroups: [string, StoredChat[]][] = [
+    ["Hoy", chats.filter((c) => isToday(c.updatedAt))],
+    ["Anteriores", chats.filter((c) => !isToday(c.updatedAt))],
+  ];
   const historyPanel = (
-    <>
-      <div className="flex items-center justify-between p-3">
-        <Button onClick={newChat} className="flex-1">
-          <Plus className="h-4 w-4" />
-          Nuevo chat
-        </Button>
-      </div>
-      <div className="flex-1 space-y-0.5 overflow-y-auto px-2 pb-3">
-        {chats.length === 0 && <p className="px-2 py-4 text-center text-xs text-muted-foreground">Sin chats guardados.</p>}
-        {chats.map((c) => (
-          <div key={c.id} onClick={() => openChat(c)}
-               className={`group flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition ${
-                 c.id === activeId ? "bg-card text-foreground" : "text-muted-foreground hover:bg-card/60 hover:text-foreground"
-               }`}>
-            <div className="min-w-0 flex-1">
-              <div className="truncate">{c.title}</div>
-              <div className="text-[11px] text-muted-foreground">{dbName(c.db)} · {fmtWhen(c.updatedAt)}</div>
-            </div>
-            <Button variant="ghost" size="icon" onClick={(e) => removeChatHandler(c.id, e)} aria-label="Borrar chat"
-                    className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition hover:text-danger group-hover:opacity-100">
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
+    <div className="flex-1 space-y-4 overflow-y-auto px-2.5 py-4">
+      {chats.length === 0 && <p className="px-2 py-4 text-center text-xs text-muted-foreground">Sin chats guardados.</p>}
+      {chatGroups.map(([label, group]) => group.length > 0 && (
+        <div key={label}>
+          <p className="px-2 pb-1.5 text-[10.5px] font-semibold uppercase tracking-widest text-subtle">{label}</p>
+          <div className="space-y-0.5">
+            {group.map((c) => (
+              <div key={c.id} onClick={() => openChat(c)}
+                   className={`group flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 transition ${
+                     c.id === activeId ? "bg-accent" : "hover:bg-accent/50"
+                   }`}>
+                <div className="min-w-0 flex-1">
+                  <div className={`truncate text-[12.5px] leading-snug ${c.id === activeId ? "font-medium text-foreground" : "text-muted-foreground"}`}>
+                    {c.title}
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-subtle">{dbName(c.db)} · {fmtWhen(c.updatedAt)}</div>
+                </div>
+                <Button variant="ghost" size="icon" onClick={(e) => removeChatHandler(c.id, e)} aria-label="Borrar chat"
+                        className="h-6 w-6 shrink-0 text-muted-foreground opacity-0 transition hover:text-danger group-hover:opacity-100">
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-    </>
+        </div>
+      ))}
+    </div>
   );
 
   return (
     <AppShell onLogout={() => setAuthed(false)} tour={{ id: "asistente" }}>
       <div className="flex h-[100dvh] flex-col overflow-hidden">
-        {/* Header a lo ancho. El espaciador (ancho del panel) alinea el breadcrumb
-            y el título con la conversación, para que no queden pegados a la izquierda. */}
-        <header className="flex border-b border-border">
-          <div className="hidden w-64 shrink-0 md:block" />
-          <div className="flex-1 space-y-2 px-4 py-4 sm:px-5">
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem>
-                  <BreadcrumbLink asChild><Link href="/">Menú</Link></BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator />
-                <BreadcrumbItem><BreadcrumbPage>Asistente IA</BreadcrumbPage></BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
+        {/* Header estándar a lo ancho: breadcrumb → título + acción */}
+        <header className="space-y-3 border-b border-border px-6 pb-4 pt-6 sm:px-8">
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink asChild><Link href="/">Menú</Link></BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem><BreadcrumbPage>Asistente IA</BreadcrumbPage></BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+          <div className="flex flex-wrap items-end justify-between gap-3">
             <div className="flex items-center gap-3">
               <Button variant="outline" size="icon" onClick={() => setDrawerOpen(true)}
                       aria-label="Historial de chats" className="md:hidden">
                 <Menu className="h-4 w-4" />
               </Button>
-              <h1 className="font-display text-base font-bold tracking-tight text-foreground">Asistente IA</h1>
+              <div>
+                <h1 className="font-display text-[22px] font-bold tracking-tight text-foreground">Asistente IA</h1>
+                <p className="mt-0.5 text-[12.5px] text-subtle">Consulta los reportes de {dbName(db)} en lenguaje natural.</p>
+              </div>
             </div>
+            <Button onClick={newChat} className="shrink-0">
+              <Plus className="h-4 w-4" />
+              Nuevo chat
+            </Button>
           </div>
         </header>
 
@@ -262,11 +295,11 @@ export default function AsistentePage() {
         <div className="relative flex flex-1 overflow-hidden">
           {/* Panel fijo de chats: columna estática en md+; Sheet en móvil. */}
           <aside data-tour="chat-history"
-                 className="hidden w-64 shrink-0 flex-col border-r border-border bg-background md:flex">
+                 className="hidden w-60 shrink-0 flex-col border-r border-border bg-background md:flex">
             {historyPanel}
           </aside>
           <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-            <SheetContent side="left" className="w-64 bg-background p-0">
+            <SheetContent side="left" className="w-64 bg-background p-0 pt-8">
               {historyPanel}
             </SheetContent>
           </Sheet>
@@ -274,49 +307,79 @@ export default function AsistentePage() {
           {/* Columna de conversación */}
           <div className="flex min-w-0 flex-1 flex-col">
             {messages.length === 0 ? (
-              <div className="flex flex-1 flex-col items-center justify-center p-4 sm:p-5">
+              <div className="flex flex-1 flex-col items-center justify-center gap-6 overflow-y-auto p-4 sm:p-6">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent text-sky">
+                  <MessageSquare className="h-5 w-5" />
+                </span>
+                <div className="space-y-1.5 text-center">
+                  <h2 className="font-display text-xl font-bold tracking-tight text-foreground">¿Qué quieres saber de {dbName(db)}?</h2>
+                  <p className="text-[13px] text-subtle">Responde con datos reales de tus bases de Notion.</p>
+                </div>
+                {!noProvider && (
+                  <div className="flex max-w-xl flex-wrap justify-center gap-2">
+                    {SUGGESTIONS.map((s) => (
+                      <button key={s} onClick={() => { setInput(s); inputRef.current?.focus(); }}
+                              className="rounded-full border border-input bg-card px-3.5 py-1.5 text-[12.5px] text-secondary-foreground transition hover:border-border-strong hover:bg-accent">
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <div className="w-full max-w-3xl space-y-4">
-                  <h2 className="text-center font-display text-2xl font-bold text-foreground">¿Qué quieres saber de {dbName(db)}?</h2>
                   {composer}
-                  {noProvider ? (
+                  {noProvider && (
                     <p className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
                       No hay ningún modelo configurado. Define <code className="font-mono text-sky">LLM_OLLAMA_MODEL</code> (Ollama) o las variables de MiniMax en <code className="font-mono">.env.local</code> y reinicia el servidor.
                     </p>
-                  ) : (
-                    <p className="text-center text-xs text-muted-foreground">Pregunta por totales de horas por persona o subproyecto, evolución semanal, etc.</p>
                   )}
                 </div>
               </div>
             ) : (
               <>
                 <div className="flex-1 overflow-y-auto">
-                  <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-5">
+                  <div className="mx-auto max-w-3xl space-y-6 p-4 sm:p-6">
                     {messages.map((m, i) => (
                       m.role === "user" ? (
                         <div key={i} className="flex justify-end">
-                          <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-blue px-4 py-2.5 text-sm text-white shadow-sm">{m.content}</div>
+                          <div className="max-w-[78%] whitespace-pre-wrap rounded-xl bg-secondary px-3.5 py-2.5 text-[13px] leading-relaxed text-foreground">{m.content}</div>
                         </div>
                       ) : (
-                        <div key={i} className="flex justify-start">
-                          <div className="max-w-[90%] space-y-2 rounded-2xl rounded-bl-md border border-border bg-card px-4 py-3 text-sm shadow-sm">
-                            <MarkdownMessage>{m.content}</MarkdownMessage>
-                            {m.trace && m.trace.length > 0 && (
-                              <details className="text-xs text-muted-foreground">
-                                <summary className="cursor-pointer">consultó {m.trace.length} herramienta(s)</summary>
-                                <ul className="mt-1 space-y-0.5">
-                                  {m.trace.map((t, j) => <li key={j} className="font-mono">{t.ok ? "✓" : "✗"} {t.name}</li>)}
-                                </ul>
-                              </details>
-                            )}
+                        // Respuesta sin burbuja: bloque a lo ancho con etiqueta de rol
+                        <div key={i} className="space-y-2.5">
+                          <div className="flex items-center gap-2">
+                            <span className="h-1.5 w-1.5 rounded-full bg-sky" aria-hidden />
+                            <span className="text-[10.5px] font-semibold uppercase tracking-widest text-subtle">Asistente</span>
+                            {providerLabel && <span className="font-mono text-[11px] text-subtle">{providerLabel}</span>}
                           </div>
+                          <div className="text-sm leading-relaxed">
+                            <MarkdownMessage>{m.content}</MarkdownMessage>
+                          </div>
+                          {m.trace && m.trace.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                              {m.trace.map((t, j) => (
+                                <span key={j}
+                                      className="flex h-6 items-center gap-1.5 rounded-full bg-secondary px-2.5 font-mono text-[10.5px] text-muted-foreground"
+                                      title={t.ok ? "Consulta exitosa" : "Consulta fallida"}>
+                                  {t.ok
+                                    ? <Check className="h-3 w-3 text-success" aria-label="ok" />
+                                    : <X className="h-3 w-3 text-danger" aria-label="falló" />}
+                                  {t.name}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       )
                     ))}
-                    {sending && <div className="flex items-center gap-2 text-sm text-muted-foreground"><Spinner className="text-sky" /> pensando…</div>}
+                    {sending && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Spinner className="text-sky" /> pensando…
+                      </div>
+                    )}
                     <div ref={endRef} />
                   </div>
                 </div>
-                <div className="px-4 pb-4 sm:px-5 sm:pb-5">
+                <div className="px-4 pb-4 sm:px-6 sm:pb-5">
                   <div className="mx-auto max-w-3xl space-y-2">
                     {error && <p className="text-sm text-danger">{error}</p>}
                     {composer}
