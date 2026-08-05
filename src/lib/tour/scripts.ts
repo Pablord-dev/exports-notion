@@ -32,13 +32,14 @@ const menu: TourScript = {
       title: "Tus bases de datos",
       body:
         "Cada tarjeta es una base. El número son los registros que tiene la copia y abajo dice " +
-        "hace cuánto se sincronizó. La tarjeta completa es un enlace a sus reportes.",
+        "hace cuánto se sincronizó. “Ver reportes” abre sus reportes; “Exportar CSV” va directo " +
+        "a la descarga.",
     },
     {
       anchor: "shell-sidebar",
       title: "Navegación",
       body:
-        "Desde aquí saltas entre pantallas y cierras sesión. El ícono de pin ancla la barra o la " +
+        "Desde aquí saltas entre pantallas y cierras sesión. El ícono de panel ancla la barra o la " +
         "esconde detrás del botón ☰; la app recuerda tu preferencia.",
       side: "right",
       before: "openSidebar",
@@ -94,9 +95,10 @@ const reports: TourScript = {
       anchor: "reports-tables",
       title: "Horas por persona y por subproyecto",
       body:
-        "Ordenadas de mayor a menor, con la intensidad de color según las horas. Click en una fila " +
-        "abre su detalle. Las filas “(sin persona)” y “(sin subproyecto)” agrupan lo que no tiene esa " +
-        "relación en Notion, y por eso no son clickeables.",
+        "Una sola tarjeta con pestañas para cambiar de dimensión, ordenada de mayor a menor y con " +
+        "una barra de participación por fila. Click en una fila abre su detalle. Las filas “(sin " +
+        "persona)” y “(sin subproyecto)” agrupan lo que no tiene esa relación en Notion, y por eso " +
+        "no son clickeables.",
     },
     {
       anchor: "export-modal",

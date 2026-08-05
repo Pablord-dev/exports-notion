@@ -3,7 +3,7 @@
 // serie de datos en sky (#02B5D3 — validado 3:1+ sobre surface); blue queda
 // reservado a acciones. Texto siempre en tokens de texto, nunca en el color
 // de la serie.
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, LabelList, XAxis, YAxis } from "recharts";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,7 +44,7 @@ export function MultiSelect({ label, options, selected, onChange }: {
     <Popover>
       <PopoverTrigger asChild>
         <Button variant="outline"
-                className={`w-full justify-between px-3 font-normal ${selected.length ? "border-sky/60" : "text-muted-foreground"}`}>
+                className={`justify-between px-3 font-normal ${selected.length ? "border-sky/60" : "text-muted-foreground"}`}>
           <span className="truncate">{label}</span>
           <span className="flex shrink-0 items-center gap-1.5">
             {selected.length > 0 && (
@@ -112,11 +112,13 @@ export function TimelineChart({ buckets, granularity, onBarClick }: {
   return (
     <ChartContainer config={chartConfig} className="h-60 w-full"
                     aria-label={`Horas por ${granularity === "month" ? "mes" : "semana"}`}>
-      <BarChart data={buckets} margin={{ top: 14, right: 8, left: 0, bottom: 0 }}>
-        <CartesianGrid vertical={false} stroke="var(--border)" />
-        <XAxis dataKey="bucket" tickLine={false} axisLine={false} fontSize={10}
+      <BarChart data={buckets} margin={{ top: 18, right: 8, left: 0, bottom: 0 }}>
+        <CartesianGrid vertical={false} stroke="var(--border)" strokeOpacity={0.55} />
+        <XAxis dataKey="bucket" tickLine={false} axisLine={false} fontSize={10.5}
+               tick={{ fill: "var(--color-subtle)" }}
                interval={every - 1} tickFormatter={(v: string) => bucketLabel(v, granularity)} />
-        <YAxis tickLine={false} axisLine={false} width={46} fontSize={10}
+        <YAxis tickLine={false} axisLine={false} width={46} fontSize={10.5}
+               tick={{ fill: "var(--color-subtle)", fontFamily: "var(--font-mono)" }}
                tickFormatter={(v: number) => fmtHours(v)} />
         <ChartTooltip cursor={{ fill: "var(--border)", opacity: 0.35 }}
           content={({ active, payload }) => {
@@ -131,12 +133,21 @@ export function TimelineChart({ buckets, granularity, onBarClick }: {
               </div>
             );
           }} />
-        <Bar dataKey="hours" fill="var(--color-hours)" radius={[4, 4, 0, 0]} maxBarSize={48}
+        <Bar dataKey="hours" fill="var(--color-hours)" radius={[5, 5, 0, 0]} maxBarSize={48}
              className={onBarClick ? "cursor-pointer" : undefined}
              onClick={(data: unknown) => {
                const bucket = (data as { bucket?: string })?.bucket;
                if (bucket) onBarClick?.(bucket);
-             }} />
+             }}>
+          {/* Valor sobre cada barra (regla de acento: sky = dato) — sólo cuando
+              caben sin encimarse; con muchas barras queda el tooltip. */}
+          {buckets.length <= 16 && (
+            <LabelList dataKey="hours" position="top" offset={6}
+                       formatter={(v: React.ReactNode) => fmtHours(Number(v))}
+                       fill="var(--color-sky)" fontSize={11}
+                       fontFamily="var(--font-mono)" />
+          )}
+        </Bar>
       </BarChart>
     </ChartContainer>
   );

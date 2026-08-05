@@ -15,14 +15,14 @@ test("login shows main menu and sync/export modals work", async ({ page }) => {
   test.skip(process.env.E2E_REAL === "1", "password real desconocido");
   await login(page);
   // Menú principal: tarjeta de la BD + sidebar anclada (default desktop).
-  await expect(page.getByRole("heading", { name: "Bases de datos" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Menú principal" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "BD Tiempos" })).toBeVisible();
   const sidebar = page.getByRole("complementary", { name: "Navegación" });
   await expect(sidebar).toBeVisible();
   await expect(sidebar.getByRole("button", { name: "Cerrar sesión" })).toBeVisible();
   // La página de la BD es la de reportes; sync y export viven en modals.
   await sidebar.getByRole("link", { name: "BD Tiempos" }).click();
-  await expect(page.getByRole("heading", { name: "Reportes" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Evolución de horas" })).toBeVisible();
   // Modal de sincronización: botones del viejo dashboard; Esc lo cierra.
   await page.getByRole("button", { name: "Sincronizar" }).click();
   await expect(page.getByRole("button", { name: "Refrescar incremental" })).toBeVisible();
@@ -30,12 +30,12 @@ test("login shows main menu and sync/export modals work", async ({ page }) => {
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "Full" })).toBeHidden();
   // Modal de exportación: click fuera (backdrop) regresa al reporte.
-  // Posición fuera de la sidebar anclada (0–240px) y del cuadro centrado del modal.
+  // Posición fuera de la sidebar anclada (0–256px) y del cuadro centrado del modal.
   await page.getByRole("button", { name: "Exportar" }).click();
   await expect(page.getByRole("button", { name: "Descargar" })).toBeVisible();
   await page.locator("div.fixed.inset-0").click({ position: { x: 300, y: 300 } });
   await expect(page.getByRole("button", { name: "Descargar" })).toBeHidden();
-  await expect(page.getByRole("heading", { name: "Reportes" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Evolución de horas" })).toBeVisible();
 });
 
 // Reportes (SB-13/14): con el store en memoria vacío la página debe cargar
@@ -43,9 +43,9 @@ test("login shows main menu and sync/export modals work", async ({ page }) => {
 test("reports page renders filters and empty state", async ({ page }) => {
   test.skip(process.env.E2E_REAL === "1", "password real desconocido");
   await login(page);
-  // La tarjeta completa de la BD es el link a sus reportes.
+  // "Ver reportes de BD Tiempos" es el link primario de la tarjeta de la BD.
   await page.locator("main").getByRole("link", { name: "BD Tiempos" }).click();
-  await expect(page.getByRole("heading", { name: "Reportes" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Evolución de horas" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Persona" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Subproyecto" })).toBeVisible();
   await expect(page.getByText("Sin registros en el rango seleccionado.")).toBeVisible();
