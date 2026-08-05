@@ -71,19 +71,18 @@ export function AppShell({ children, onLogout, tour, justLoggedIn }: {
   /** true sólo tras un login exitoso en esta carga de página. */
   justLoggedIn?: boolean;
 }) {
-  const [pinned, setPinned] = useState(true);
+  // La preferencia se lee en el initializer, no en un efecto. Todas las páginas
+  // montan AppShell sólo en su rama autenticada —después del fetch de sesión—,
+  // así que la sidebar nunca sale en el HTML del servidor y no hay hydration
+  // mismatch posible. Leerla después del primer paint hacía que con la barra
+  // desanclada entrara y saliera con su transición de 200ms en cada carga y en
+  // cada navegación.
+  const [pinned, setPinned] = useState(() =>
+    typeof window === "undefined" ? true : localStorage.getItem(PIN_KEY) !== "0");
   const [open, setOpen] = useState(false);
   const [dbsOpen, setDbsOpen] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
   const [count, setCount] = useState<number | null>(null);
-
-  // La preferencia se lee tras montar: localStorage no existe en SSR y leerla
-  // en el initializer del useState produciría un hydration mismatch.
-  useEffect(() => {
-    const saved = localStorage.getItem(PIN_KEY);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (saved !== null) setPinned(saved === "1");
-  }, []);
 
   // Contador de registros para el badge de la BD. El shell solo se monta en
   // ramas autenticadas; si el fetch falla, simplemente no hay badge.
