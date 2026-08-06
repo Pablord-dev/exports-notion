@@ -51,7 +51,7 @@ test("el paso de navegación abre la sidebar y la deja como estaba al salir", as
   await login(page);
   const sidebar = page.getByRole("complementary", { name: "Navegación" });
   // Desanclada, la sidebar está fuera de vista hasta que el tour la abra.
-  await sidebar.getByRole("button", { name: "Desanclar menú" }).click();
+  await sidebar.getByRole("button", { name: "Ocultar menú" }).click();
   await expect(sidebar).not.toBeInViewport();
 
   await page.getByRole("button", { name: /Ayuda/ }).click();
@@ -224,13 +224,16 @@ test("el encadenado lleva del menú a reportes y de ahí al asistente", async ({
   await expect(progress(page)).toHaveText("5 / 5");
 
   await page.getByRole("button", { name: "Continuar en BD Tiempos" }).click();
-  await expect(page).toHaveURL(/\/db\/tiempos\/reports$/);   // la URL queda limpia
-  await expect(progress(page)).toHaveText("1 / 7");
+  // Timeouts ampliados en los saltos de página: navegaciones reales contra el
+  // único server que comparten los workers, que con la suite completa en
+  // paralelo pasan de los 5s del default (aisladas tardan ~1s).
+  await expect(page).toHaveURL(/\/db\/tiempos\/reports$/, { timeout: 20_000 });   // la URL queda limpia
+  await expect(progress(page)).toHaveText("1 / 7", { timeout: 20_000 });
 
   for (let i = 0; i < 6; i++) await page.getByRole("button", { name: "Siguiente" }).click();
   await expect(progress(page)).toHaveText("7 / 7");
   await page.getByRole("button", { name: "Continuar en el Asistente IA" }).click();
-  await expect(page).toHaveURL(/\/asistente$/);
+  await expect(page).toHaveURL(/\/asistente$/, { timeout: 20_000 });
   await expect(progress(page)).toHaveText("1 / 4");
   // El modal que abrió el paso 7 de reportes no viaja con nosotros.
   await expect(page.getByRole("button", { name: "Refrescar incremental" })).toBeHidden();
@@ -241,9 +244,9 @@ test("recargar después del encadenado no re-arranca el recorrido", async ({ pag
   await page.getByRole("button", { name: /Ayuda/ }).click();
   for (let i = 0; i < 4; i++) await page.getByRole("button", { name: "Siguiente" }).click();
   await page.getByRole("button", { name: "Continuar en BD Tiempos" }).click();
-  await expect(progress(page)).toHaveText("1 / 7");
+  await expect(progress(page)).toHaveText("1 / 7", { timeout: 20_000 });
   await page.reload();
-  await expect(page.getByRole("heading", { level: 1, name: "BD Tiempos" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "BD Tiempos" })).toBeVisible({ timeout: 20_000 });
   await expect(popover(page)).toBeHidden();
 });
 

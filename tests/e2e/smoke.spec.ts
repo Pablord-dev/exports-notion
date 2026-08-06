@@ -61,31 +61,154 @@ test("?modal=export opens the export modal on load", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Descargar" })).toBeVisible();
 });
 
-// Sidebar anclable/ocultable: desanclar la esconde tras la hamburguesa;
-// volver a anclar la fija. La preferencia persiste (localStorage).
-test("sidebar can be unpinned, reopened and pinned again", async ({ page }) => {
+// Sidebar anclable/ocultable: ocultarla la esconde tras la hamburguesa; el
+// cursor encima la hace asomar flotando y sale sola; la hamburguesa la vuelve a
+// fijar. La preferencia persiste (localStorage).
+test("sidebar peeks on hover, hides on leave and can be pinned again", async ({ page }) => {
   test.skip(process.env.E2E_REAL === "1", "password real desconocido");
   await login(page);
   const sidebar = page.getByRole("complementary", { name: "Navegación" });
   await expect(sidebar).toBeVisible();
-  // Desanclar: la sidebar se esconde y aparece la hamburguesa.
-  await sidebar.getByRole("button", { name: "Desanclar menú" }).click();
+  // Ocultar desde su header: la sidebar se esconde y aparece la hamburguesa.
+  await sidebar.getByRole("button", { name: "Ocultar menú" }).click();
   await expect(sidebar).not.toBeInViewport();
   const burger = page.getByRole("button", { name: "Abrir menú" });
   await expect(burger).toBeVisible();
-  // Abrir como overlay y navegar (el overlay se cierra al navegar):
-  // la BD vive dentro del grupo desplegable "Bases de datos" (abierto por default).
-  await burger.click();
+  // Hover: asoma flotando y SIN backdrop (z-40) — lo de atrás sigue usable.
+  await burger.hover();
   await expect(sidebar).toBeInViewport();
+  await expect(page.locator("div.fixed.inset-0.z-40")).toHaveCount(0);
+  // Flotante de verdad: pegado al canto izquierdo y arrancando un aire FIJO
+  // (PANEL_GAP = 12px) debajo de la hamburguesa, que por eso sigue visible y
+  // clickeable con la barra asomada.
+  await expect(burger).toBeVisible();
+  // poll y no una medición seca: ocultar/anclar anima top y bottom, así que el
+  // gap se comprueba cuando la transición terminó, no en un frame intermedio.
+  await expect.poll(async () => {
+    const [panel, btn] = [await sidebar.boundingBox(), await burger.boundingBox()];
+    return { gap: panel!.y - (btn!.y + btn!.height), x: panel!.x };
+  }).toEqual({ gap: 12, x: 0 });
+  // Alejar el cursor la esconde sola, sin haber clickeado nada.
+  await page.mouse.move(900, 400);
+  await expect(sidebar).not.toBeInViewport();
+  // Navegar desde la barra asomada la esconde y la deja desanclada:
+  // la BD vive dentro del grupo desplegable "Bases de datos" (abierto por default).
+  await burger.hover();
   await expect(sidebar.getByRole("button", { name: "Bases de datos" })).toBeVisible();
   await sidebar.getByRole("link", { name: "BD Tiempos" }).click();
   await expect(page.getByRole("button", { name: "Sincronizar" })).toBeVisible();
   await expect(sidebar).not.toBeInViewport();
-  // Re-anclar: abrir overlay y fijar.
+  await expect(burger).toBeVisible();
+  // Re-anclar: el click en la hamburguesa, que el asomo deja siempre visible.
   await burger.click();
-  await sidebar.getByRole("button", { name: "Anclar menú" }).click();
   await expect(sidebar).toBeInViewport();
   await expect(burger).toBeHidden();
+});
+
+// El click en la hamburguesa fija la barra de una: con el hover ya mostrándola,
+// un click sólo puede querer decir "quédate". (En móvil abre el overlay, pero
+// este proyecto de Playwright es desktop.)
+test("clicking the hamburger pins the sidebar", async ({ page }) => {
+  test.skip(process.env.E2E_REAL === "1", "password real desconocido");
+  await login(page);
+  const sidebar = page.getByRole("complementary", { name: "Navegación" });
+  await sidebar.getByRole("button", { name: "Ocultar menú" }).click();
+  const burger = page.getByRole("button", { name: "Abrir menú" });
+  await expect(burger).toBeVisible();
+  await burger.click();
+  await expect(sidebar).toBeInViewport();
+  await expect(burger).toBeHidden();
+  // Fijada de verdad: sobrevive a una navegación, no es un asomo.
+  await sidebar.getByRole("link", { name: "BD Tiempos" }).click();
+  await expect(page.getByRole("button", { name: "Sincronizar" })).toBeVisible();
+  await expect(sidebar).toBeInViewport();
+});
+
+// Los botones de icono explican qué hacen con un tooltip propio (Radix), no con
+// el `title` del navegador: aparece en ~300ms, es tematizable y se lee con
+// lector de pantalla. El aria-label sigue siendo el nombre accesible.
+test("los botones de icono muestran tooltip al pasar el cursor", async ({ page }) => {
+  test.skip(process.env.E2E_REAL === "1", "password real desconocido");
+  await login(page);
+  const sidebar = page.getByRole("complementary", { name: "Navegación" });
+  await sidebar.getByRole("button", { name: "Cerrar sesión" }).hover();
+  const tip = page.locator('[data-slot="tooltip-content"]');
+  await expect(tip).toHaveText("Cerrar sesión");
+  // Superficie del sistema, no el bg-primary del default de shadcn.
+  await expect(tip).toHaveCSS("background-color", "rgb(12, 36, 82)");
+  // Se va al alejar el cursor: si quedara pegado taparía la navegación.
+  // Con pasos intermedios a propósito: Radix decide el cierre siguiendo el
+  // pointermove (mantiene abierto el contenido hoverable), y un salto de un
+  // solo evento —lo que hace mouse.move sin `steps`— no lo cierra. Un cursor
+  // real siempre produce el recorrido.
+  await page.mouse.move(900, 400, { steps: 10 });
+  await expect(tip).toBeHidden();
+});
+
+// La barra entra deslizándose, no de golpe. Regresión de un bug que no se veía
+// en ninguna aserción: en Tailwind v4 `-translate-x-full` compila a la propiedad
+// CSS `translate`, así que una transición que listaba `transform` se generaba
+// igual pero no animaba nada (medido por frame: -256 → 0, sin intermedios).
+test("la sidebar entra deslizándose, no de golpe", async ({ page }) => {
+  test.skip(process.env.E2E_REAL === "1", "password real desconocido");
+  await login(page);
+  const sidebar = page.getByRole("complementary", { name: "Navegación" });
+  await sidebar.getByRole("button", { name: "Ocultar menú" }).click();
+  await expect(sidebar).not.toBeInViewport();
+  await page.getByRole("button", { name: "Abrir menú" }).hover();
+  // 60 frames (~1s) cubren el retardo de intención del asomo más la animación.
+  const xs = await page.evaluate(async () => {
+    const el = document.querySelector('aside[aria-label="Navegación"]')!;
+    const out: number[] = [];
+    for (let i = 0; i < 60; i++) {
+      out.push(Math.round(el.getBoundingClientRect().x));
+      await new Promise((r) => requestAnimationFrame(r));
+    }
+    return out;
+  });
+  // Sin transición efectiva todos los valores serían -256 (fuera) o 0 (dentro).
+  expect(xs.some((x) => x > -256 && x < 0)).toBe(true);
+});
+
+// Anclar la barra sólo corre el contenido a la derecha. Con el `lg:pt-0` del
+// wrapper también lo subía 48px: un salto vertical en una acción que es
+// puramente horizontal.
+test("anclar la sidebar corre el contenido sin moverlo verticalmente", async ({ page }) => {
+  test.skip(process.env.E2E_REAL === "1", "password real desconocido");
+  await login(page);
+  const sidebar = page.getByRole("complementary", { name: "Navegación" });
+  const heading = page.getByRole("heading", { level: 1, name: "Menú principal" });
+  await sidebar.getByRole("button", { name: "Ocultar menú" }).click();
+  await expect(sidebar).not.toBeInViewport();
+  const before = await heading.boundingBox();
+  await page.getByRole("button", { name: "Abrir menú" }).click();
+  await expect(sidebar).toBeInViewport();
+  // El padding del contenido se anima: poll hasta que el corrimiento termine.
+  await expect.poll(async () => (await heading.boundingBox())!.x)
+             .toBeGreaterThan(before!.x);
+  expect((await heading.boundingBox())!.y).toBe(before!.y);
+});
+
+// El aire entre la hamburguesa y el panel es fijo en cualquier viewport, no
+// sólo en desktop ancho. Debajo de lg la barra se comporta como overlay aunque
+// `pinned` siga true, y con la geometría a ras atada a `pinned` el panel se
+// pegaba a y=0 y tapaba el botón (medido: gap -52 en 900x600).
+test("el panel flotante deja el mismo aire bajo la hamburguesa debajo de lg", async ({ page }) => {
+  test.skip(process.env.E2E_REAL === "1", "password real desconocido");
+  await page.setViewportSize({ width: 900, height: 600 });
+  await login(page);
+  // Debajo de lg no hay control de anclaje (anclar no aplica): la barra ya está
+  // escondida tras la hamburguesa sin tocar nada.
+  const sidebar = page.getByRole("complementary", { name: "Navegación" });
+  const burger = page.getByRole("button", { name: "Abrir menú" });
+  await expect(burger).toBeVisible();
+  await burger.hover();
+  await expect(sidebar).toBeInViewport();
+  await expect.poll(async () => {
+    const [panel, btn] = [await sidebar.boundingBox(), await burger.boundingBox()];
+    return panel!.y - (btn!.y + btn!.height);
+  }).toBe(12);
+  await expect(burger).toBeVisible();
 });
 
 // Asistente IA (chat): la página carga tras login, con encabezado, selector de

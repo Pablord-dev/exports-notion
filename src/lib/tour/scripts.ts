@@ -39,8 +39,9 @@ const menu: TourScript = {
       anchor: "shell-sidebar",
       title: "Navegación",
       body:
-        "Desde aquí saltas entre pantallas y cierras sesión. El ícono de panel ancla la barra o la " +
-        "esconde detrás del botón ☰; la app recuerda tu preferencia.",
+        "Desde aquí saltas entre pantallas y cierras sesión. La ✕ de arriba la esconde detrás del " +
+        "botón ☰, y escondida sigue a un cursor de distancia: pásalo sobre el ☰ y asoma flotando; " +
+        "con un click se queda fija. La app recuerda tu preferencia.",
       side: "right",
       before: "openSidebar",
       after: "closeSidebar",

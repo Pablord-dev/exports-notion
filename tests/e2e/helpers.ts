@@ -37,6 +37,10 @@ export async function login(page: Page, opts: { welcome?: "skip" | "expect" } = 
  */
 export async function gotoReports(page: Page): Promise<void> {
   await page.locator("main").getByRole("link", { name: "BD Tiempos" }).click();
-  await expect(page).toHaveURL(/\/db\/tiempos\/reports$/);
-  await expect(page.getByRole("heading", { level: 1, name: "BD Tiempos" })).toBeVisible();
+  // Timeout ampliado: es una navegación real contra el único server que
+  // comparten los 4 workers, y con la suite completa en paralelo pasa de los
+  // 5s del default —falso rojo en dos tests del onboarding— aunque aislada
+  // tarde ~1s. No enmascara nada: si el click no navegara, tampoco pasaría.
+  await expect(page).toHaveURL(/\/db\/tiempos\/reports$/, { timeout: 20_000 });
+  await expect(page.getByRole("heading", { level: 1, name: "BD Tiempos" })).toBeVisible({ timeout: 20_000 });
 }
