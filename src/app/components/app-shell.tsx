@@ -68,7 +68,10 @@ function NavLink({ href, label, icon, badge, onNavigate }: {
   return (
     <Link href={href} onClick={onNavigate}
           className={`flex h-8 items-center gap-2 rounded-lg px-2 text-[13px] transition ${
-            active ? "bg-accent font-medium text-foreground" : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+            // El hover va a bg-card y no a bg-accent/50: sobre el chrome de la
+            // barra el translúcido componía rgb(8,27,65), que es bg-card
+            // (rgb(7,27,64)) — mismo color, sin alpha.
+            active ? "bg-accent font-medium text-foreground" : "text-muted-foreground hover:bg-card hover:text-foreground"
           }`}>
       {icon}
       <span className="flex-1 truncate text-left">{label}</span>

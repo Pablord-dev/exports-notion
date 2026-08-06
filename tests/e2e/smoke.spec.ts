@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Locator } from "@playwright/test";
 import { login } from "./helpers";
 
 test("login screen renders and rejects wrong password", async ({ page }) => {
@@ -225,6 +225,64 @@ test("chat page renders composer and model selector", async ({ page }) => {
   // Selects de shadcn/Radix dentro del cuadro de texto (rol combobox).
   await expect(page.getByRole("combobox", { name: "Modelo" })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Base de datos" })).toBeVisible();
+});
+
+// Los botones que flotan sobre el contenido (☰ del shell, "?" del onboarding)
+// tienen que ser opacos, y verse igual con el SO en claro y en oscuro.
+//
+// El tema es dark fijo por :root, pero mientras globals.css no declare un
+// @custom-variant las utilidades `dark:` de shadcn son
+// @media (prefers-color-scheme: dark): `dark:bg-input/30` y
+// `dark:hover:bg-accent/50` se aplicaban SÓLO a quien tuviera el SO en oscuro
+// —ganando por orden de hoja sobre el bg-card del callsite— y el contenido se
+// veía pasar por debajo. Por eso el test compara las dos preferencias en vez de
+// fijar colores: el bug era precisamente que no coincidían (alpha 0.3/0.5
+// contra opaco), y con el default de Playwright (light) ninguna suite lo veía.
+test("los botones flotantes son opacos e iguales con el SO claro y oscuro", async ({ page }) => {
+  test.skip(process.env.E2E_REAL === "1", "password real desconocido");
+  await login(page);
+  const hide = page.getByRole("button", { name: "Ocultar menú" });
+  const burger = page.getByRole("button", { name: "Abrir menú" });
+  const help = page.locator('[data-tour="help-button"]');
+  const bg = (el: HTMLElement) => getComputedStyle(el).backgroundColor;
+  // Los botones llevan transition-all: medir justo al entrar el cursor devuelve
+  // el color a media asta (visto: rgba(12,36,82,0.176), que parece alpha pero es
+  // el fade). Se espera a que dos lecturas seguidas coincidan.
+  const settledBg = async (l: Locator): Promise<string> => {
+    let last = "";
+    await expect.poll(async () => {
+      const now = await l.evaluate(bg);
+      const same = now === last && now !== "";
+      last = now;
+      return same;
+    }, { timeout: 5_000, intervals: [100, 100, 100, 200] }).toBe(true);
+    return last;
+  };
+
+  const porEsquema: Record<string, Record<string, string>> = {};
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    // Con la barra a la vista: el ghost de su header (sólo pinta al hover).
+    await hide.hover();
+    const ghostHover = await settledBg(hide);
+    await hide.click();
+    // Escondida: la hamburguesa, en reposo y al hover.
+    const outline = await settledBg(burger);
+    await burger.hover();
+    const outlineHover = await settledBg(burger);
+    // Alejar el cursor con pasos: un salto de un solo evento no cierra el peek.
+    await page.mouse.move(900, 500, { steps: 10 });
+    porEsquema[colorScheme] = { ghostHover, outline, outlineHover, help: await settledBg(help) };
+    await burger.click(); // volver a anclar para que el próximo esquema arranque igual
+  }
+
+  // rgb(…) es opaco; rgba(…)/oklab(… / .3) llevan alpha.
+  for (const [esquema, valores] of Object.entries(porEsquema)) {
+    for (const [nombre, color] of Object.entries(valores)) {
+      expect(color, `${nombre} con el SO en ${esquema}`).toMatch(/^rgb\(\d+, \d+, \d+\)$/);
+    }
+  }
+  expect(porEsquema.dark).toEqual(porEsquema.light);
 });
 
 // El header del asistente comparte el contenedor de las otras páginas
