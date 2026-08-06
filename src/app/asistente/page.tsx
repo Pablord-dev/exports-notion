@@ -278,40 +278,41 @@ export default function AsistentePage() {
           contenedores de adentro (la conversación y el historial), cada uno con
           su propio overflow-y-auto. */}
       <div className="flex h-[calc(100dvh-var(--shell-top))] flex-col overflow-hidden">
-        {/* Header con el mismo contenedor que el menú y los reportes
-            (mx-auto max-w-[75rem] + px-6/sm:px-8): sin él la acción de la
-            derecha quedaba pegada al canto de la ventana, porque la raíz de
-            esta página es un flex a sangre completa y no el <main> angosto que
-            usan las otras. El borde sí va a sangre: abajo el panel de historial
-            arranca en x=0, y un borde cortado en 75rem dejaría su canto
-            superior al aire en pantallas anchas. */}
-        <header className="border-b border-border">
-          <div className="mx-auto w-full max-w-[75rem] space-y-3 px-6 pb-5 pt-7 sm:px-8">
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem>
-                  <BreadcrumbLink asChild><Link href="/">Menú</Link></BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator />
-                <BreadcrumbItem><BreadcrumbPage>Asistente IA</BreadcrumbPage></BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <Button variant="outline" size="icon" onClick={() => setDrawerOpen(true)}
-                        aria-label="Historial de chats" className="md:hidden">
-                  <Menu className="h-4 w-4" />
-                </Button>
-                <div>
-                  <h1 className="font-display text-[22px] font-bold tracking-tight text-foreground">Asistente IA</h1>
-                  <p className="mt-0.5 text-[12.5px] text-subtle">Consulta los reportes de {dbName(db)} en lenguaje natural.</p>
-                </div>
-              </div>
-              <Button onClick={newChat} className="shrink-0">
-                <Plus className="h-4 w-4" />
-                Nuevo chat
+        {/* La página ENTERA —header y las dos columnas— comparte el contenedor
+            del menú y los reportes (mx-auto max-w-[75rem] + px-6/sm:px-8). Capar
+            sólo el header dejaba el título flotando al centro mientras el panel
+            de historial seguía arrancando en el canto: a 1920px el título entraba
+            en x=520 y el panel en x=256, y la página se leía partida en dos.
+            min-h-0 es lo que deja scrollear a las columnas de abajo: el mínimo
+            automático de un hijo flex le impide encogerse por debajo de su
+            contenido, y sin eso la conversación empujaría la caja hacia abajo en
+            vez de scrollear por dentro. */}
+        <div className="mx-auto flex min-h-0 w-full max-w-[75rem] flex-1 flex-col">
+        <header className="space-y-3 border-b border-border px-6 pb-5 pt-7 sm:px-8">
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink asChild><Link href="/">Menú</Link></BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem><BreadcrumbPage>Asistente IA</BreadcrumbPage></BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <Button variant="outline" size="icon" onClick={() => setDrawerOpen(true)}
+                      aria-label="Historial de chats" className="md:hidden">
+                <Menu className="h-4 w-4" />
               </Button>
+              <div>
+                <h1 className="font-display text-[22px] font-bold tracking-tight text-foreground">Asistente IA</h1>
+                <p className="mt-0.5 text-[12.5px] text-subtle">Consulta los reportes de {dbName(db)} en lenguaje natural.</p>
+              </div>
             </div>
+            <Button onClick={newChat} className="shrink-0">
+              <Plus className="h-4 w-4" />
+              Nuevo chat
+            </Button>
           </div>
         </header>
 
@@ -412,6 +413,7 @@ export default function AsistentePage() {
               </>
             )}
           </div>
+        </div>
         </div>
       </div>
     </AppShell>

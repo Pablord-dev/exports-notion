@@ -407,6 +407,13 @@ test("el header del asistente se alinea con el de reportes", async ({ page }) =>
     await page.goto("/asistente");
     const chatTitle = (await page.getByRole("heading", { level: 1, name: "Asistente IA" }).boundingBox())!;
     const chatAction = (await page.getByRole("button", { name: "Nuevo chat" }).boundingBox())!;
+    // El contenedor envuelve la página ENTERA, no sólo el header: capar sólo el
+    // header dejaba el título entrando en x=520 mientras el panel de historial
+    // seguía en x=256, y la página se leía partida. Se exige que el panel
+    // arranque donde arranca el header.
+    const header = (await page.locator("header").boundingBox())!;
+    const historial = (await page.locator('[data-tour="chat-history"]').boundingBox())!;
+    expect(historial.x, `panel de historial a ${size.width}px`).toBe(header.x);
 
     await page.goto("/db/tiempos/reports");
     const repTitle = (await page.getByRole("heading", { level: 1, name: "BD Tiempos" }).boundingBox())!;
