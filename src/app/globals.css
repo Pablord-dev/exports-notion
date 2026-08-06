@@ -1,25 +1,20 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
 /* ============================================================
    Identidad visual — iU Corporation / iU Corp · TEMA DARK (fijo)
-   Tokens consumidos por Tailwind 4 vía @theme (genera utilidades
-   como bg-blue, text-sky, border-border, bg-surface, etc.).
-   No es intercambiable: solo versión oscura.
+   Tokens semánticos de shadcn/ui tematizados con la paleta iU.
+   No hay clase .dark ni toggle: la única versión es la oscura.
    ============================================================ */
+
+/* Tokens de marca que shadcn no cubre (acentos y estados).
+   Generan bg-blue, text-sky, text-danger, font-display, etc.
+   Regla de acento del sistema: blue = acción clickeable, sky = dato numérico.
+   Nada más lleva color. */
 @theme {
-  /* Paleta primaria — azules iU (acentos dominantes sobre el oscuro) */
-  --color-blue: #0f40ef;        /* Unique Blue   */
-  --color-dark-blue: #051758;   /* Unique Dark Blue */
-  --color-sky: #02b5d3;         /* Unique Sky Blue */
-  --color-ink: #121212;         /* Unique Black / Dark — base del tema */
-
-  /* Superficies del tema dark (derivados azulados del Unique Dark Blue) */
-  --color-surface: #0a2468;     /* tarjetas — dark-blue elevado */
-  --color-border: #1c3c84;      /* bordes sutiles azulados */
-
-  /* Texto sobre oscuro */
-  --color-fg: #f4f4f4;          /* Unique Dark 100 — texto principal */
-  --color-muted: #9a9a9a;       /* texto secundario legible sobre dark */
+  --color-blue: #0f40ef;        /* Unique Blue — acciones */
+  --color-sky: #02b5d3;         /* Unique Sky Blue — cifras y serie de datos */
+  --color-ink: #121212;         /* Unique Black (referencia de marca) */
 
   /* Neutros del brandbook (referencia) */
   --color-neutral-100: #f4f4f4;
@@ -28,29 +23,113 @@
   --color-neutral-400: #666666;
 
   /* Terciaria — solo acento (<20%) */
-  --color-danger: #f05347;      /* Unique Red 600 (más visible sobre dark) */
+  --color-danger: #f05347;      /* Unique Red 600 */
   --color-success: #66b169;     /* Unique Green 500 */
-  --color-warning: #b57ed1;     /* Unique Purple 400 (avisos sutiles) */
+  --color-warning: #b57ed1;     /* Unique Purple 400 */
 
-  /* Tipografía brandbook: Raleway (títulos/logotipo) + Poppins (cuerpo, nav,
-     botones). Respaldo Lato → Arial; datos técnicos en monoespaciada. */
+  /* Texto terciario (metadatos, ejes, hints) — 5.3:1 sobre la tarjeta */
+  --color-subtle: #8090b5;
+  /* Links de texto sobre superficies oscuras (blue puro no contrasta) */
+  --color-link: #7fb4ff;
+  /* Borde de controles interactivos prominentes (outline buttons, tooltips) */
+  --color-border-strong: #1c4488;
+
+  /* Tipografía brandbook: Raleway (títulos) + Poppins (cuerpo) +
+     JetBrains Mono (cifras tabulares y datos técnicos). */
   --font-display: var(--font-raleway), Lato, Arial, sans-serif;
   --font-sans: var(--font-poppins), Lato, Arial, sans-serif;
+  --font-mono: var(--font-jetbrains), Consolas, ui-monospace, monospace;
 }
 
-/* Tema oscuro corporativo fijo: base Unique Black, texto claro, aire visual.
-   Los azules iU quedan como los elementos que más destacan. */
-body {
-  background: var(--color-dark-blue);
-  color: var(--color-fg);
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
+/* Tokens semánticos shadcn — dark fijo, definidos una sola vez.
+   Rampa de 4 superficies (misma marca, con profundidad): el lienzo baja a
+   tinta azul, la tarjeta sube y los campos se hunden. El borde deja de ser
+   lo único que separa planos. */
+:root {
+  --radius: 0.625rem;
+  /* Aire que AppShell reserva arriba del contenido para la hamburguesa
+     flotante. Es un token y no un número repetido porque tiene DOS
+     consumidores que deben coincidir: el padding del contenido en
+     app-shell.tsx y la altura de las páginas que llenan el viewport (el
+     asistente), que restan este valor a 100dvh para no desbordarlo. */
+  --shell-top: 3rem;
+  --background: #02091c;            /* canvas — tinta azul, fondo de página */
+  --foreground: #eef1f7;            /* texto principal */
+  --card: #071b40;                  /* tarjetas */
+  --card-foreground: #eef1f7;
+  --popover: #0c2452;               /* flotantes sobre la tarjeta — raised */
+  --popover-foreground: #eef1f7;
+  --primary: #0f40ef;               /* Unique Blue */
+  --primary-foreground: #ffffff;
+  --secondary: #0c2452;             /* superficie raised: item activo, chips */
+  --secondary-foreground: #dce4f2;
+  --muted: #02091c;                 /* hundido: TabsList, campos, wells */
+  --muted-foreground: #9fb0cf;      /* texto secundario — gris azulado, 7.7:1 */
+  --accent: #0c2452;                /* item activo / hover en menús */
+  --accent-foreground: #eef1f7;
+  --destructive: #f05347;
+  --destructive-foreground: #ffffff;
+  --border: #12305f;
+  --input: #16386b;
+  --ring: #0f40ef;
+  --chart-1: #02b5d3;
+  --chart-2: #0f40ef;
+  --chart-3: #b57ed1;
+  --chart-4: #66b169;
+  --chart-5: #f05347;
+  --sidebar: #04122f;               /* chrome — sidebar de navegación */
+  --sidebar-foreground: #eef1f7;
+  --sidebar-border: #12305f;
 }
 
-h1, h2, h3 {
-  font-family: var(--font-display);
-  font-weight: 700;
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  h1, h2, h3 {
+    font-family: var(--font-display);
+    font-weight: 700;
+  }
 }
 
 /* Scrollbars acordes al tema dark: delgados, thumb azulado sobre track
@@ -58,7 +137,7 @@ h1, h2, h3 {
    ::-webkit-* son fallback para navegadores sin soporte de scrollbar-color. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--color-border) transparent;
+  scrollbar-color: var(--border) transparent;
 }
 ::-webkit-scrollbar {
   width: 10px;
@@ -68,7 +147,7 @@ h1, h2, h3 {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-border);
+  background: var(--border);
   border-radius: 8px;
   border: 2px solid transparent;
   background-clip: content-box;

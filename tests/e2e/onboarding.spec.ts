@@ -12,7 +12,7 @@ const progress = (page: Page) => page.getByTestId("tour-progress");
 
 test("el botón ? corre el recorrido del menú paso por paso", async ({ page }) => {
   await login(page);
-  await expect(page.getByRole("heading", { name: "Bases de datos" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Menú principal" })).toBeVisible();
 
   await page.getByRole("button", { name: /Ayuda/ }).click();
 
@@ -51,7 +51,7 @@ test("el paso de navegación abre la sidebar y la deja como estaba al salir", as
   await login(page);
   const sidebar = page.getByRole("complementary", { name: "Navegación" });
   // Desanclada, la sidebar está fuera de vista hasta que el tour la abra.
-  await sidebar.getByRole("button", { name: "Desanclar menú" }).click();
+  await sidebar.getByRole("button", { name: "Ocultar menú" }).click();
   await expect(sidebar).not.toBeInViewport();
 
   await page.getByRole("button", { name: /Ayuda/ }).click();
@@ -119,17 +119,47 @@ test("el segundo login muestra la tira discreta, no el modal", async ({ page }) 
   await page.getByRole("button", { name: "Entrar" }).click();
 
   await expect(page.getByTestId("welcome-modal")).toBeHidden();
+  // El aviso entra unos segundos después del login (BANNER_DELAY_MS), flotando
+  // en la esquina inferior derecha: se afirma la posición, no sólo que exista.
   const banner = page.getByTestId("welcome-banner");
-  await expect(banner).toBeVisible();
+  await expect(banner).toBeVisible({ timeout: 10_000 });
+  const box = (await banner.boundingBox())!;
+  const vp = page.viewportSize()!;
+  expect(vp.width - (box.x + box.width)).toBeLessThanOrEqual(24);
+  expect(vp.height - (box.y + box.height)).toBeLessThanOrEqual(24);
   await banner.getByRole("button", { name: "Iniciar tutorial" }).click();
   await expect(progress(page)).toHaveText("1 / 5");
+});
+
+test("el aviso del tutorial se queda hasta cerrarlo o cambiar de página", async ({ page }) => {
+  // Segundo login: el modal ya se consumió, así que toca la notificación.
+  await login(page, { welcome: "expect" });
+  await page.getByTestId("welcome-modal").getByRole("button", { name: "Ahora no" }).click();
+  await page.getByRole("complementary", { name: "Navegación" })
+            .getByRole("button", { name: "Cerrar sesión" }).click();
+  await page.getByPlaceholder("Contraseña").fill("e2e-password");
+  await page.getByRole("button", { name: "Entrar" }).click();
+
+  const banner = page.getByTestId("welcome-banner");
+  await expect(banner).toBeVisible({ timeout: 10_000 });
+  // No se auto-cierra: sigue ahí un rato después de aparecer.
+  await page.waitForTimeout(2000);
+  await expect(banner).toBeVisible();
+  // La ✕ lo quita para lo que queda de la sesión en esta página.
+  await banner.getByRole("button", { name: "Ocultar el aviso del tutorial" }).click();
+  await expect(banner).toBeHidden();
+  // Y al cambiar de página no reaparece.
+  await page.getByRole("complementary", { name: "Navegación" })
+            .getByRole("link", { name: "Asistente IA" }).click();
+  await expect(page).toHaveURL(/\/asistente$/);
+  await expect(banner).toBeHidden();
 });
 
 test("recargar con la sesión viva no vuelve a ofrecer el recorrido", async ({ page }) => {
   await login(page, { welcome: "expect" });
   await page.getByTestId("welcome-modal").getByRole("button", { name: "Ahora no" }).click();
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Bases de datos" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Menú principal" })).toBeVisible();
   await expect(page.getByTestId("welcome-modal")).toBeHidden();
   await expect(page.getByTestId("welcome-banner")).toBeHidden();
 });
@@ -194,13 +224,16 @@ test("el encadenado lleva del menú a reportes y de ahí al asistente", async ({
   await expect(progress(page)).toHaveText("5 / 5");
 
   await page.getByRole("button", { name: "Continuar en BD Tiempos" }).click();
-  await expect(page).toHaveURL(/\/db\/tiempos\/reports$/);   // la URL queda limpia
-  await expect(progress(page)).toHaveText("1 / 7");
+  // Timeouts ampliados en los saltos de página: navegaciones reales contra el
+  // único server que comparten los workers, que con la suite completa en
+  // paralelo pasan de los 5s del default (aisladas tardan ~1s).
+  await expect(page).toHaveURL(/\/db\/tiempos\/reports$/, { timeout: 20_000 });   // la URL queda limpia
+  await expect(progress(page)).toHaveText("1 / 7", { timeout: 20_000 });
 
   for (let i = 0; i < 6; i++) await page.getByRole("button", { name: "Siguiente" }).click();
   await expect(progress(page)).toHaveText("7 / 7");
   await page.getByRole("button", { name: "Continuar en el Asistente IA" }).click();
-  await expect(page).toHaveURL(/\/asistente$/);
+  await expect(page).toHaveURL(/\/asistente$/, { timeout: 20_000 });
   await expect(progress(page)).toHaveText("1 / 4");
   // El modal que abrió el paso 7 de reportes no viaja con nosotros.
   await expect(page.getByRole("button", { name: "Refrescar incremental" })).toBeHidden();
@@ -211,9 +244,9 @@ test("recargar después del encadenado no re-arranca el recorrido", async ({ pag
   await page.getByRole("button", { name: /Ayuda/ }).click();
   for (let i = 0; i < 4; i++) await page.getByRole("button", { name: "Siguiente" }).click();
   await page.getByRole("button", { name: "Continuar en BD Tiempos" }).click();
-  await expect(progress(page)).toHaveText("1 / 7");
+  await expect(progress(page)).toHaveText("1 / 7", { timeout: 20_000 });
   await page.reload();
-  await expect(page.getByRole("heading", { level: 1, name: "BD Tiempos" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "BD Tiempos" })).toBeVisible({ timeout: 20_000 });
   await expect(popover(page)).toBeHidden();
 });
 

@@ -3,13 +3,40 @@
 // horas por persona y por subproyecto con drill-down) + exportación y
 // sincronización en modals no bloqueantes (el viejo dashboard /db/tiempos se
 // fusionó aquí; esa ruta ahora redirige). Datos: /api/reports/* y /api/sync/status.
+// Diseño: el snapshot vive en el header como línea de estado; filtros en una
+// toolbar de una fila; KPIs en una tira con divisores; las dos tablas en una
+// tarjeta con tabs y barra de participación; el heat de la matriz en chips.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { CalendarRange, Download, RefreshCw, X } from "lucide-react";
 import type { FlatRow } from "@/lib/types";
 import { REPORT_PROPS, type PersonTotal, type SubprojectTotal, type TimelineBucket, type MatrixCell, type FilterOptions } from "@/lib/store-shared";
 import { AppShell } from "@/app/components/app-shell";
-import { Breadcrumb } from "@/app/components/breadcrumb";
-import { BarChart, MultiSelect, Spinner, fmtHours } from "./components";
+import { AppModal } from "@/components/app-modal";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { MultiSelect, Spinner, TimelineChart, fmtHours } from "./components";
 
 type Granularity = "month" | "week";
 interface Filters {
@@ -47,11 +74,12 @@ const fmtWeek = (iso: string) =>
 // Dimensiones cuyo valor y etiqueta coinciden (todas menos Persona).
 const asOptions = (vals: string[] | undefined) => (vals ?? []).map((v) => ({ value: v, label: v }));
 
-// Mapa de calor: fondo sky del brandbook (#02B5D3) con intensidad según el
-// valor relativo al máximo de la tabla. Escala sqrt para que los valores
-// medios no desaparezcan; alfa máx 0.45 mantiene legible el texto claro.
+// Chips del mapa de calor: fondo sky del brandbook (#02B5D3) con intensidad
+// según el valor relativo al máximo de la tabla. Escala sqrt para que los
+// valores medios no desaparezcan; el texto queda siempre sobre el chip, no
+// sobre el fondo de la celda. Rampa 0.10 – 0.55.
 const heatBg = (value: number, max: number): string | undefined =>
-  max > 0 && value > 0 ? `rgba(2, 181, 211, ${(0.45 * Math.sqrt(value / max)).toFixed(3)})` : undefined;
+  max > 0 && value > 0 ? `rgba(2, 181, 211, ${(0.1 + 0.45 * Math.sqrt(value / max)).toFixed(3)})` : undefined;
 
 // ---- Estado del snapshot / sync (heredado del viejo dashboard) ----
 type LastResult = {
@@ -86,6 +114,22 @@ function fmtCountdown(iso: string): string {
   return `${hh}:${mm}:${ss}`;
 }
 
+// Cuenta regresiva autocontenida: su tick por segundo re-renderiza SOLO este
+// span, no la página completa (el header la muestra siempre).
+function Countdown({ iso }: { iso: string }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const i = setInterval(() => setTick((x) => x + 1), 1000);
+    return () => clearInterval(i);
+  }, []);
+  return <span className="font-mono tabular-nums">{fmtCountdown(iso)}</span>;
+}
+
+// Etiqueta versalitas de tarjetas/estadísticas.
+function Eyebrow({ children }: { children: React.ReactNode }) {
+  return <p className="text-[10.5px] font-semibold uppercase tracking-widest text-subtle">{children}</p>;
+}
+
 export default function Reports() {
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [options, setOptions] = useState<FilterOptions | null>(null);
@@ -95,6 +139,7 @@ export default function Reports() {
     people: [], subprojects: [], projects: [], companies: [],
   });
   const [granularity, setGranularity] = useState<Granularity>("week");
+  const [tableTab, setTableTab] = useState<"person" | "subproject">("person");
   const [byPerson, setByPerson] = useState<PersonTotal[]>([]);
   const [bySubproject, setBySubproject] = useState<SubprojectTotal[]>([]);
   const [timeline, setTimeline] = useState<TimelineBucket[]>([]);
@@ -113,7 +158,6 @@ export default function Reports() {
   const [downloadErr, setDownloadErr] = useState<string | null>(null);
   const [exportFrom, setExportFrom] = useState("");
   const [exportTo, setExportTo] = useState("");
-  const [, setTick] = useState(0);
 
   const running = syncStatus?.status.state === "running";
 
@@ -136,13 +180,6 @@ export default function Reports() {
     const j = setInterval(() => void loadSyncStatus(), running ? 2000 : 30000);
     return () => clearInterval(j);
   }, [authed, running, loadSyncStatus]);
-
-  // Tick por segundo solo con el modal de sync abierto (mueve las cuentas regresivas).
-  useEffect(() => {
-    if (modal !== "sync") return;
-    const i = setInterval(() => setTick((x) => x + 1), 1000);
-    return () => clearInterval(i);
-  }, [modal]);
 
   async function trigger(kind: "incremental" | "full") {
     if (triggering) return;
@@ -204,6 +241,10 @@ export default function Reports() {
       // Un error no-401 (p. ej. base caída) no debe romper la página: los
       // dropdowns quedan vacíos y el fetch de datos reporta el error visible.
       if (r.ok) setOptions(await r.json());
+      // Deep-link desde el menú: ?modal=export abre el modal de exportación.
+      // window.location en vez de useSearchParams: evita el boundary de
+      // Suspense que Next exige para prerenderizar páginas cliente.
+      if (new URLSearchParams(window.location.search).get("modal") === "export") setModal("export");
     })();
   }, []);
 
@@ -319,29 +360,25 @@ export default function Reports() {
     return { from, to: filters.to && toISO > filters.to ? filters.to : toISO };
   }
 
-  useEffect(() => {
-    if (!detail) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setDetail(null); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [detail]);
-
-  useEffect(() => {
-    if (!modal) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setModal(null); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [modal]);
-
   const totals = useMemo(() => ({
     hours: byPerson.reduce((a, r) => a + r.hours, 0),
     count: byPerson.reduce((a, r) => a + r.count, 0),
     people: byPerson.length,
   }), [byPerson]);
 
+  const hasFilters = Boolean(filters.from || filters.to || filters.people.length
+    || filters.subprojects.length || filters.projects.length || filters.companies.length);
+  const rangeLabel = filters.from && filters.to
+    ? `${fmtDate(filters.from)} – ${fmtDate(filters.to)}`
+    : filters.from
+      ? `Desde ${fmtDate(filters.from)}`
+      : filters.to
+        ? `Hasta ${fmtDate(filters.to)}`
+        : "Rango de fechas";
+
   if (authed === null) {
     return (
-      <main className="min-h-screen flex items-center justify-center gap-3 text-muted">
+      <main className="min-h-screen flex items-center justify-center gap-3 text-muted-foreground">
         <Spinner className="text-sky" /><span className="text-sm">Cargando…</span>
       </main>
     );
@@ -349,9 +386,9 @@ export default function Reports() {
   if (!authed) {
     return (
       <main className="min-h-screen flex items-center justify-center p-6">
-        <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-8 text-center space-y-4">
-          <h1 className="font-display text-2xl font-bold text-fg">Reportes</h1>
-          <p className="text-sm text-muted">Necesitas iniciar sesión para consultar los reportes.</p>
+        <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-8 text-center space-y-4">
+          <h1 className="font-display text-2xl font-bold text-foreground">Reportes</h1>
+          <p className="text-sm text-muted-foreground">Necesitas iniciar sesión para consultar los reportes.</p>
           <Link href="/" className="inline-block rounded-lg bg-blue px-4 py-2.5 text-sm font-medium text-white transition hover:brightness-110">
             Ir al inicio de sesión
           </Link>
@@ -360,7 +397,7 @@ export default function Reports() {
     );
   }
 
-  const inputCls = "mt-1 block w-full rounded-lg border border-border bg-dark-blue px-3 py-2 text-sm text-fg outline-none transition [color-scheme:dark] focus:border-blue focus:ring-2 focus:ring-blue/30";
+  const lastSync = syncStatus?.meta.lastIncrementalAt ?? syncStatus?.meta.lastFullAt ?? null;
 
   return (
     <AppShell onLogout={() => setAuthed(false)}
@@ -369,428 +406,505 @@ export default function Reports() {
                 openSyncModal: () => setModal("sync"),
                 closeModal: () => setModal(null),
               } }}>
-    <main className="max-w-7xl mx-auto p-4 sm:p-5 space-y-5">
-      <header className="space-y-2 border-b border-border pb-5">
-        <Breadcrumb items={[{ label: "Menú", href: "/" }, { label: "BD Tiempos" }]} />
-        <h1 className="font-display text-xl font-bold text-fg tracking-tight">BD Tiempos</h1>
-      </header>
-
-      {/* Snapshot: registros + última sync + acciones (abren modals no bloqueantes) */}
-      <section data-tour="reports-snapshot" className="rounded-xl border border-border bg-surface p-5">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="space-y-0.5">
-            <p className="whitespace-nowrap font-display text-xl font-bold text-sky tabular-nums">
-              {(syncStatus?.meta.count ?? 0).toLocaleString("es-MX")}
-              <span className="ml-1.5 text-sm font-medium">registros</span>
-            </p>
+    <main className="mx-auto max-w-[75rem] space-y-6 px-6 py-7 sm:px-8">
+      {/* Header: breadcrumb → título + línea de estado del snapshot → acciones */}
+      <header className="space-y-3 border-b border-border pb-5">
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink asChild><Link href="/">Menú</Link></BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem><BreadcrumbPage>BD Tiempos</BreadcrumbPage></BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div data-tour="reports-snapshot">
+            <h1 className="font-display text-[22px] font-bold tracking-tight text-foreground">BD Tiempos</h1>
             {running ? (
-              <p className="flex items-center gap-2 text-xs font-medium text-sky">
+              <p className="mt-1.5 flex items-center gap-2 text-[12.5px] font-medium text-sky">
                 <Spinner className="h-3 w-3" />
                 Sincronizando ({syncStatus?.status.kind}): {syncStatus?.status.done} / {syncStatus?.status.total}
               </p>
             ) : (
-              <p className="text-xs text-muted">
-                Última sincronización {fmtAgo(syncStatus?.meta.lastIncrementalAt ?? syncStatus?.meta.lastFullAt ?? null)}
+              <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12.5px] text-subtle">
+                <span className="h-1.5 w-1.5 rounded-full bg-sky" aria-hidden />
+                <span className="text-muted-foreground tabular-nums">
+                  {(syncStatus?.meta.count ?? 0).toLocaleString("es-MX")} registros
+                </span>
+                <span>· sincronizado {fmtAgo(lastSync)}</span>
+                {syncStatus?.next.incremental && (
+                  <span>· próximo cron en <Countdown iso={syncStatus.next.incremental} /></span>
+                )}
               </p>
             )}
           </div>
-          <div className="flex gap-3">
-            <button onClick={() => setModal("export")}
-                    className="rounded-lg border border-blue px-4 py-2 text-sm font-medium text-blue transition hover:bg-blue hover:text-white">
-              Exportar
-            </button>
-            <button onClick={() => setModal("sync")}
-                    className="rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white transition hover:brightness-110">
+          <div className="flex shrink-0 gap-2.5">
+            <Button variant="outline" className="border-border-strong" onClick={() => setModal("export")}>
+              <Download className="h-4 w-4" />
+              Exportar CSV
+            </Button>
+            <Button onClick={() => setModal("sync")}>
+              <RefreshCw className="h-4 w-4" />
               Sincronizar
-            </button>
+            </Button>
           </div>
         </div>
-      </section>
+      </header>
 
-      {/* Título de la sección de reportes, ya con el snapshot arriba */}
-      <div className="flex items-baseline gap-4 pt-2">
-        <h2 className="font-display text-lg font-bold text-fg tracking-tight">Reportes</h2>
-        <span className="text-sm text-muted">
-          {!filters.from && !filters.to
-            ? "Todos los registros"
-            : filters.from && filters.to
-              ? `${fmtDate(filters.from)} — ${fmtDate(filters.to)}`
-              : filters.from
-                ? `Desde ${fmtDate(filters.from)}`
-                : `Hasta ${fmtDate(filters.to)}`}
-        </span>
-      </div>
-
-      {/* Filtros: una fila, rango + 4 dimensiones */}
-      <section data-tour="reports-filters" className="rounded-xl border border-border bg-surface p-5">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          <label className="text-sm text-muted">Desde
-            <input type="date" value={filters.from} max={filters.to}
-                   onChange={(e) => setFilters({ ...filters, from: e.target.value })} className={inputCls} />
-          </label>
-          <label className="text-sm text-muted">Hasta
-            <input type="date" value={filters.to} min={filters.from}
-                   onChange={(e) => setFilters({ ...filters, to: e.target.value })} className={inputCls} />
-          </label>
-          <div className="pt-6"><MultiSelect label="Persona" options={options?.people ?? []} selected={filters.people}
-                                             onChange={(v) => setFilters({ ...filters, people: v })} /></div>
-          <div className="pt-6"><MultiSelect label="Subproyecto" options={asOptions(options?.subprojects)} selected={filters.subprojects}
-                                             onChange={(v) => setFilters({ ...filters, subprojects: v })} /></div>
-          <div className="pt-6"><MultiSelect label="Proyecto" options={asOptions(options?.projects)} selected={filters.projects}
-                                             onChange={(v) => setFilters({ ...filters, projects: v })} /></div>
-          <div className="pt-6"><MultiSelect label="Empresa" options={asOptions(options?.companies)} selected={filters.companies}
-                                             onChange={(v) => setFilters({ ...filters, companies: v })} /></div>
+      {/* Toolbar de filtros: rango como un solo control + 4 dimensiones + limpiar */}
+      <section data-tour="reports-filters" className="rounded-xl border border-border bg-card p-2.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline"
+                      className={`font-normal ${filters.from || filters.to ? "border-border-strong bg-accent text-foreground" : "text-muted-foreground"}`}>
+                <CalendarRange className="h-3.5 w-3.5" />
+                {rangeLabel}
+                {(filters.from || filters.to) && (
+                  <span role="button" aria-label="Quitar rango de fechas"
+                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); setFilters({ ...filters, from: "", to: "" }); }}
+                        className="ml-0.5 rounded-sm text-subtle transition hover:text-foreground">
+                    <X className="h-3.5 w-3.5" />
+                  </span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-auto p-3">
+              <div className="flex gap-3">
+                <Label className="flex-col items-start text-xs text-muted-foreground">Desde
+                  <Input type="date" value={filters.from} max={filters.to}
+                         onChange={(e) => setFilters({ ...filters, from: e.target.value })} />
+                </Label>
+                <Label className="flex-col items-start text-xs text-muted-foreground">Hasta
+                  <Input type="date" value={filters.to} min={filters.from}
+                         onChange={(e) => setFilters({ ...filters, to: e.target.value })} />
+                </Label>
+              </div>
+            </PopoverContent>
+          </Popover>
+          <div className="mx-0.5 hidden h-5 w-px bg-border sm:block" aria-hidden />
+          <MultiSelect label="Persona" options={options?.people ?? []} selected={filters.people}
+                       onChange={(v) => setFilters({ ...filters, people: v })} />
+          <MultiSelect label="Subproyecto" options={asOptions(options?.subprojects)} selected={filters.subprojects}
+                       onChange={(v) => setFilters({ ...filters, subprojects: v })} />
+          <MultiSelect label="Proyecto" options={asOptions(options?.projects)} selected={filters.projects}
+                       onChange={(v) => setFilters({ ...filters, projects: v })} />
+          <MultiSelect label="Empresa" options={asOptions(options?.companies)} selected={filters.companies}
+                       onChange={(v) => setFilters({ ...filters, companies: v })} />
+          {hasFilters && (
+            <Button variant="ghost" size="sm" className="ml-auto text-muted-foreground"
+                    onClick={() => setFilters({ from: "", to: "", people: [], subprojects: [], projects: [], companies: [] })}>
+              Limpiar
+            </Button>
+          )}
         </div>
-        {!rangeValid && <p className="mt-3 text-sm font-medium text-danger">El rango es inválido: “Desde” es posterior a “Hasta”.</p>}
-        {error && <p className="mt-3 text-sm font-medium text-danger">{error}</p>}
+        {!rangeValid && <p className="px-1 pt-2 text-sm font-medium text-danger">El rango es inválido: “Desde” es posterior a “Hasta”.</p>}
+        {error && <p className="px-1 pt-2 text-sm font-medium text-danger">{error}</p>}
       </section>
 
-      {/* Totales del rango filtrado */}
-      <section data-tour="reports-totals" className="grid grid-cols-3 gap-4">
+      {/* Totales del corte: una tira con divisores, no tres tarjetas */}
+      <section data-tour="reports-totals"
+               className="grid grid-cols-1 rounded-xl border border-border bg-card sm:grid-cols-3 sm:divide-x divide-border max-sm:divide-y">
         {[
-          { label: "Horas registradas", value: fmtHours(totals.hours) },
-          { label: "Registros", value: totals.count.toLocaleString("es-MX") },
-          { label: "Personas activas", value: String(totals.people) },
+          {
+            label: "Horas registradas", value: fmtHours(totals.hours), accent: true,
+            sub: totals.people ? `promedio ${fmtHours(totals.hours / totals.people)} h por persona` : "sin personas en el corte",
+          },
+          {
+            label: "Registros", value: totals.count.toLocaleString("es-MX"),
+            sub: totals.count ? `${fmtHours(totals.hours / totals.count)} h por registro` : "sin registros en el corte",
+          },
+          {
+            label: "Personas activas", value: String(totals.people),
+            sub: "con registros en el corte",
+          },
         ].map((t) => (
-          <div key={t.label} className="rounded-xl border border-border bg-surface p-5">
-            <p className="text-xs uppercase tracking-wide text-muted">{t.label}</p>
-            <p className="mt-1 font-display text-2xl font-bold text-sky">{loading ? "…" : t.value}</p>
+          <div key={t.label} className="px-5 py-4">
+            <Eyebrow>{t.label}</Eyebrow>
+            {loading ? (
+              <Skeleton className="mt-2 h-8 w-24" />
+            ) : (
+              <p className={`mt-2 font-display text-[32px] font-extrabold leading-none tracking-tight tabular-nums ${t.accent ? "text-sky" : "text-foreground"}`}>
+                {t.value}
+              </p>
+            )}
+            <p className="mt-1.5 text-[11.5px] text-subtle">{loading ? "…" : t.sub}</p>
           </div>
         ))}
       </section>
 
       {/* Evolución temporal */}
-      <section data-tour="reports-timeline" className="rounded-xl border border-border bg-surface p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="font-display text-base font-semibold text-fg">Evolución de horas</h2>
-          <div className="flex rounded-lg border border-border p-0.5 text-sm">
-            {(["week", "month"] as const).map((g) => (
-              <button key={g} onClick={() => setGranularity(g)}
-                      className={`rounded-md px-3 py-1 font-medium transition ${granularity === g ? "bg-blue text-white" : "text-muted hover:text-fg"}`}>
-                {g === "week" ? "Semana" : "Mes"}
-              </button>
-            ))}
+      <section data-tour="reports-timeline" className="rounded-xl border border-border bg-card p-5 pb-3 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-baseline gap-3">
+            <h2 className="font-sans text-[15px] font-semibold text-foreground">Evolución de horas</h2>
+            {!loading && timeline.length > 0 && (
+              <span className="text-xs text-subtle">{fmtHours(totals.hours)} h en el corte</span>
+            )}
           </div>
+          <Tabs value={granularity} onValueChange={(v) => setGranularity(v as Granularity)}>
+            <TabsList>
+              <TabsTrigger value="week">Semana</TabsTrigger>
+              <TabsTrigger value="month">Mes</TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
         {loading
-          ? <div className="flex h-60 items-center justify-center text-muted"><Spinner className="text-sky" /></div>
-          : <BarChart buckets={timeline} granularity={granularity}
-                      onBarClick={(b) => { const r = barToRange(b); void openDetail(`Registros · ${fmtDate(r.from)} — ${fmtDate(r.to)}`, {}, r); }} />}
+          ? <div className="flex h-60 items-center justify-center text-muted-foreground"><Spinner className="text-sky" /></div>
+          : <TimelineChart buckets={timeline} granularity={granularity}
+                           onBarClick={(b) => { const r = barToRange(b); void openDetail(`Registros · ${fmtDate(r.from)} — ${fmtDate(r.to)}`, {}, r); }} />}
       </section>
 
-      {/* Reporte dinámico: matriz dimensión × semana (1 persona o 1 subproyecto) */}
+      {/* Reporte dinámico: matriz dimensión × semana (1 persona o 1 subproyecto).
+          El heat va en chips redondeados, no en el fondo de la celda. */}
       {matrixMode && (
-        <section className="rounded-xl border border-sky/40 bg-surface p-5 space-y-3">
-          <h2 className="font-display text-base font-semibold text-fg">{matrixMode.title}</h2>
+        <section className="overflow-hidden rounded-xl border border-border bg-card">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-5 pb-3 pt-4">
+            <div className="flex items-center gap-2.5">
+              <span className="rounded-full bg-accent px-2 py-0.5 font-mono text-[10px] font-medium tracking-wider text-sky">DINÁMICO</span>
+              <h2 className="font-sans text-[15px] font-semibold text-foreground">{matrixMode.title}</h2>
+            </div>
+            <div className="flex items-center gap-2 text-[11px] text-subtle">
+              0 h
+              <span className="h-1.5 w-16 rounded-full bg-gradient-to-r from-sky/10 to-sky" aria-hidden />
+              máx
+            </div>
+          </div>
           {matrixLoading ? (
-            <div className="flex h-44 flex-col items-center justify-center gap-3 text-muted">
+            <div className="flex h-44 flex-col items-center justify-center gap-3 text-muted-foreground">
               <Spinner className="h-6 w-6 text-sky" />
               <p className="text-sm">Generando reporte…</p>
             </div>
           ) : !matrixView ? (
-            <p className="py-8 text-center text-sm text-muted">Sin registros en el rango seleccionado.</p>
+            <p className="py-8 text-center text-sm text-muted-foreground">Sin registros en el rango seleccionado.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="text-xs uppercase tracking-wide text-muted">
-                    <th className="sticky left-0 bg-surface pb-2 pr-3 font-medium">{matrixMode.rowLabel}</th>
-                    {matrixView.weeks.map((w) => (
-                      <th key={w} className="whitespace-nowrap px-2 pb-2 text-right font-medium">{fmtWeek(w)}</th>
-                    ))}
-                    <th className="pb-2 pl-3 text-right font-medium">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {matrixView.rows.map((r) => (
-                    <tr key={r.group ?? "__sin_grupo__"} className="border-t border-border/60">
-                      <td className={`sticky left-0 min-w-44 max-w-72 bg-surface py-2 pr-3 [overflow-wrap:anywhere] ${r.group ? "text-fg" : "italic text-muted"}`}>
-                        {/* grupo sin valor: nunca mostrar el label (mezclaría personas) */}
-                        {r.group ? (r.label ?? r.group) : matrixMode.nullLabel}
-                      </td>
-                      {matrixView.weeks.map((w) => {
-                        const v = r.cells.get(w);
-                        return (
-                          <td key={w} style={v ? { backgroundColor: heatBg(v, matrixView.max) } : undefined}
-                              className="whitespace-nowrap px-2 py-2 text-right tabular-nums text-fg">
-                            {v ? fmtHours(v) : <span className="text-muted/40">—</span>}
-                          </td>
-                        );
-                      })}
-                      <td className="whitespace-nowrap py-2 pl-3 text-right font-medium tabular-nums text-sky">{fmtHours(r.total)}</td>
-                    </tr>
+            <Table className="text-left">
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="sticky left-0 h-auto bg-card pb-2.5 pl-5 pr-3 text-[10.5px] font-semibold uppercase tracking-widest text-subtle">{matrixMode.rowLabel}</TableHead>
+                  {matrixView.weeks.map((w) => (
+                    <TableHead key={w} className="h-auto whitespace-nowrap px-2 pb-2.5 text-right font-mono text-[10.5px] font-semibold text-subtle">{fmtWeek(w)}</TableHead>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                  <TableHead className="h-auto pb-2.5 pl-3 pr-5 text-right text-[10.5px] font-semibold uppercase tracking-widest text-subtle">Total</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {matrixView.rows.map((r) => (
+                  <TableRow key={r.group ?? "__sin_grupo__"} className="border-border/60">
+                    <TableCell className={`sticky left-0 min-w-44 max-w-72 bg-card py-2 pl-5 pr-3 whitespace-normal text-[13px] [overflow-wrap:anywhere] ${r.group ? "text-foreground" : "italic text-muted-foreground"}`}>
+                      {/* grupo sin valor: nunca mostrar el label (mezclaría personas) */}
+                      {r.group ? (r.label ?? r.group) : matrixMode.nullLabel}
+                    </TableCell>
+                    {matrixView.weeks.map((w) => {
+                      const v = r.cells.get(w);
+                      return (
+                        <TableCell key={w} className="px-1.5 py-1.5 text-right">
+                          {v ? (
+                            <span className="inline-block min-w-14 rounded-md px-2 py-1 text-right font-mono text-[12.5px] tabular-nums text-foreground"
+                                  style={{ backgroundColor: heatBg(v, matrixView.max) }}>
+                              {fmtHours(v)}
+                            </span>
+                          ) : (
+                            <span className="inline-block px-2 py-1 font-mono text-[12.5px] text-subtle/60">—</span>
+                          )}
+                        </TableCell>
+                      );
+                    })}
+                    <TableCell className="whitespace-nowrap py-1.5 pl-3 pr-5 text-right font-mono text-[13.5px] font-medium tabular-nums text-sky">{fmtHours(r.total)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </section>
       )}
 
-      {/* Tablas de agregados: apiladas, cada una a lo ancho completo */}
-      <div data-tour="reports-tables" className="space-y-5">
-        <section className="rounded-xl border border-border bg-surface p-5 space-y-3">
-          <h2 className="font-display text-base font-semibold text-fg">Horas por persona</h2>
-          <AggTable
-            head={["Persona", "Horas", "Registros"]}
-            empty={loading ? "Cargando…" : "Sin registros en el rango."}
-            heatCol={1}
-            rows={byPerson.map((r) => {
-              // Con ID muestra el nombre (o el ID si el grupo no trae nombre). El grupo
-              // SIN relación junta a muchas personas: siempre "(sin persona)", nunca
-              // el max() del nombre (etiquetaría a una persona arbitraria).
-              const name = r.person ? (r.label ?? r.person) : "(sin persona)";
-              return {
-                key: r.person || "(sin persona)",
-                // sin relación no hay valor por el cual filtrar el detalle
-                onClick: r.person ? () => void openDetail(`Registros · ${name}`, { person: r.person }) : undefined,
-                cells: [name, fmtHours(r.hours), String(r.count)],
-                mutedFirst: !r.person,
-                heat: r.hours,
-              };
-            })} />
-        </section>
-        <section className="rounded-xl border border-border bg-surface p-5 space-y-3">
-          <h2 className="font-display text-base font-semibold text-fg">Horas por subproyecto</h2>
-          <AggTable
-            head={["Subproyecto", "Proyecto", "Horas", "Registros"]}
-            empty={loading ? "Cargando…" : "Sin registros en el rango."}
-            heatCol={2}
-            rows={bySubproject.map((r) => ({
-              key: r.subproject ?? "(sin subproyecto)",
-              // los registros sin subproyecto no tienen valor por el cual filtrar el detalle
-              onClick: r.subproject ? () => void openDetail(`Registros · ${r.subproject}`, { subproject: r.subproject! }) : undefined,
-              cells: [r.subproject ?? "(sin subproyecto)", r.project ?? "—", fmtHours(r.hours), String(r.count)],
-              mutedFirst: !r.subproject,
-              heat: r.hours,
-            }))} />
-        </section>
-      </div>
+      {/* Distribución de horas: una tarjeta con tabs (persona / subproyecto) */}
+      <section data-tour="reports-tables" className="overflow-hidden rounded-xl border border-border bg-card">
+        <Tabs value={tableTab} onValueChange={(v) => setTableTab(v as "person" | "subproject")}>
+          <div className="flex flex-wrap items-center justify-between gap-3 px-5 pb-3 pt-4">
+            <h2 className="font-sans text-[15px] font-semibold text-foreground">Distribución de horas</h2>
+            <TabsList>
+              <TabsTrigger value="person">Por persona</TabsTrigger>
+              <TabsTrigger value="subproject">Por subproyecto</TabsTrigger>
+            </TabsList>
+          </div>
+          <TabsContent value="person">
+            <AggTable
+              nameLabel="Persona"
+              unit="personas"
+              empty={loading ? "Cargando…" : "Sin registros en el rango."}
+              rows={byPerson.map((r) => {
+                // Con ID muestra el nombre (o el ID si el grupo no trae nombre). El grupo
+                // SIN relación junta a muchas personas: siempre "(sin persona)", nunca
+                // el max() del nombre (etiquetaría a una persona arbitraria).
+                const name = r.person ? (r.label ?? r.person) : "(sin persona)";
+                return {
+                  key: r.person || "(sin persona)",
+                  name,
+                  // sin relación no hay valor por el cual filtrar el detalle
+                  onClick: r.person ? () => void openDetail(`Registros · ${name}`, { person: r.person }) : undefined,
+                  hours: r.hours,
+                  count: r.count,
+                  muted: !r.person,
+                };
+              })} />
+          </TabsContent>
+          <TabsContent value="subproject">
+            <AggTable
+              nameLabel="Subproyecto"
+              unit="subproyectos"
+              showProject
+              empty={loading ? "Cargando…" : "Sin registros en el rango."}
+              rows={bySubproject.map((r) => ({
+                key: r.subproject ?? "(sin subproyecto)",
+                name: r.subproject ?? "(sin subproyecto)",
+                project: r.project ?? undefined,
+                // los registros sin subproyecto no tienen valor por el cual filtrar el detalle
+                onClick: r.subproject ? () => void openDetail(`Registros · ${r.subproject}`, { subproject: r.subproject! }) : undefined,
+                hours: r.hours,
+                count: r.count,
+                muted: !r.subproject,
+              }))} />
+          </TabsContent>
+        </Tabs>
+      </section>
 
       {/* Modal de exportación (no bloqueante: click fuera o Esc regresa al reporte) */}
-      {modal === "export" && (
-        <Modal title="Exportar CSV" anchor="export-modal" onClose={() => setModal(null)}>
-          <p className="text-sm text-muted">
-            Rango opcional por fecha de creación. Con ambos campos vacíos se exporta todo el snapshot.
-          </p>
-          <div className="flex gap-3">
-            <label className="flex-1 text-sm text-muted">Desde
-              <input type="date" value={exportFrom} onChange={(e) => setExportFrom(e.target.value)} className={inputCls} />
-            </label>
-            <label className="flex-1 text-sm text-muted">Hasta
-              <input type="date" value={exportTo} onChange={(e) => setExportTo(e.target.value)} className={inputCls} />
-            </label>
-          </div>
-          <button onClick={download} disabled={downloading}
-                  className="flex items-center gap-2 rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60">
-            {downloading && <Spinner className="h-3.5 w-3.5" />}
-            {downloading ? "Descargando…" : "Descargar"}
-          </button>
-          {downloadErr && <p className="text-sm font-medium text-danger">{downloadErr}</p>}
-        </Modal>
-      )}
+      <AppModal open={modal === "export"} onClose={() => setModal(null)} title="Exportar CSV" anchor="export-modal">
+        <p className="text-sm text-muted-foreground">
+          Rango opcional por fecha de creación. Con ambos campos vacíos se exporta todo el snapshot.
+        </p>
+        <div className="flex gap-3">
+          <Label className="flex-1 flex-col items-start text-sm text-muted-foreground">Desde
+            <Input type="date" value={exportFrom} onChange={(e) => setExportFrom(e.target.value)} />
+          </Label>
+          <Label className="flex-1 flex-col items-start text-sm text-muted-foreground">Hasta
+            <Input type="date" value={exportTo} onChange={(e) => setExportTo(e.target.value)} />
+          </Label>
+        </div>
+        <Button onClick={download} disabled={downloading} className="w-fit">
+          {downloading && <Spinner className="h-3.5 w-3.5" />}
+          {downloading ? "Descargando…" : "Descargar"}
+        </Button>
+        {downloadErr && <p className="text-sm font-medium text-danger">{downloadErr}</p>}
+      </AppModal>
 
       {/* Modal de sincronización (no bloqueante) */}
-      {modal === "sync" && (
-        <Modal title="Sincronización" anchor="sync-modal" onClose={() => setModal(null)}>
-          <dl className="grid grid-cols-3 gap-4">
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-muted">Full</dt>
-              <dd className="text-sm text-fg">{fmtAgo(syncStatus?.meta.lastFullAt ?? null)}</dd>
-            </div>
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-muted">Incremental</dt>
-              <dd className="text-sm text-fg">{fmtAgo(syncStatus?.meta.lastIncrementalAt ?? null)}</dd>
-            </div>
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-muted">Registros</dt>
-              <dd className="font-display text-xl font-bold text-sky">{(syncStatus?.meta.count ?? 0).toLocaleString("es-MX")}</dd>
-            </div>
-          </dl>
-          {syncStatus?.status.lastResult && (
-            <p className="border-t border-border pt-3 text-sm text-muted">
-              Último sync ({syncStatus.status.lastResult.kind}, {fmtAgo(syncStatus.status.lastResult.finishedAt)}):{" "}
-              <span className="font-medium text-fg">{syncStatus.status.lastResult.upserted} actualizados</span>
-              {" · "}
-              <span className="font-medium text-fg">{syncStatus.status.lastResult.deleted} eliminados</span>
-              {syncStatus.status.lastResult.skipped ? (
-                <> · <span className="font-medium text-warning">{syncStatus.status.lastResult.skipped} omitidos</span></>
-              ) : null}
+      <AppModal open={modal === "sync"} onClose={() => setModal(null)} title="Sincronización" anchor="sync-modal">
+        {/* Tira de estado hundida: registros + últimas corridas */}
+        <div className="grid grid-cols-3 divide-x divide-border rounded-lg border border-border bg-background">
+          <div className="px-4 py-3.5">
+            <Eyebrow>Registros</Eyebrow>
+            <p className="mt-1.5 font-display text-[22px] font-extrabold leading-none tracking-tight text-sky tabular-nums">
+              {(syncStatus?.meta.count ?? 0).toLocaleString("es-MX")}
             </p>
-          )}
-          {running ? (
-            <div className="space-y-3 border-t border-border pt-4">
-              <h3 className="flex items-center gap-2 font-display text-sm font-semibold text-fg">
-                <Spinner className="text-sky" />
-                Sync en progreso <span className="font-sans font-normal text-muted">({syncStatus?.status.kind})</span>
-              </h3>
-              {/* Sin denominador a propósito: Notion no expone un total de antemano, así
-                  que `status.total` es sólo done + un page_size cuando queda más. Mostrarlo
-                  como "1,200 / 1,300" fingía un progreso que nadie conoce. */}
-              <p className="font-display text-xl font-bold text-fg">
-                {(syncStatus?.status.done ?? 0).toLocaleString("es-MX")}
-                <span className="ml-1.5 font-sans text-sm font-normal text-muted">
-                  {(syncStatus?.status.total ?? 0) > (syncStatus?.status.done ?? 0) ? "registros y contando…" : "registros"}
-                </span>
-              </p>
-              {syncStatus?.status.skipped ? <p className="text-sm font-medium text-warning">Omitidos: {syncStatus.status.skipped}</p> : null}
-              <button onClick={cancelSync} disabled={cancelling}
-                      className="flex items-center gap-2 rounded-lg border border-danger px-3 py-2 text-sm font-medium text-danger transition hover:bg-danger hover:text-white disabled:cursor-not-allowed disabled:opacity-60">
-                {cancelling && <Spinner className="h-3.5 w-3.5" />}
-                {cancelling ? "Cancelando…" : "Cancelar y guardar lo cargado"}
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-3 border-t border-border pt-4">
-              <div className="flex gap-8">
-                <p className="text-sm text-muted">Incremental en <span className="font-medium text-fg tabular-nums">{syncStatus?.next.incremental ? fmtCountdown(syncStatus.next.incremental) : "—"}</span></p>
-                <p className="text-sm text-muted">Full <span className="font-medium text-fg">{syncStatus?.next.full ? <>en <span className="tabular-nums">{fmtCountdown(syncStatus.next.full)}</span></> : "sólo manual"}</span></p>
+          </div>
+          <div className="px-4 py-3.5">
+            <Eyebrow>Incremental</Eyebrow>
+            <p className="mt-1.5 text-sm font-medium text-foreground">{fmtAgo(syncStatus?.meta.lastIncrementalAt ?? null)}</p>
+          </div>
+          <div className="px-4 py-3.5">
+            <Eyebrow>Full</Eyebrow>
+            <p className="mt-1.5 text-sm font-medium text-foreground">{fmtAgo(syncStatus?.meta.lastFullAt ?? null)}</p>
+          </div>
+        </div>
+        {syncStatus?.status.lastResult && (
+          <p className="text-sm text-muted-foreground">
+            Último sync <span className="text-subtle">({syncStatus.status.lastResult.kind}, {fmtAgo(syncStatus.status.lastResult.finishedAt)})</span>:{" "}
+            <span className="font-medium text-foreground">{syncStatus.status.lastResult.upserted} actualizados</span>
+            {" · "}
+            <span className="font-medium text-foreground">{syncStatus.status.lastResult.deleted} eliminados</span>
+            {syncStatus.status.lastResult.skipped ? (
+              <> · <span className="font-medium text-warning">{syncStatus.status.lastResult.skipped} omitidos</span></>
+            ) : null}
+          </p>
+        )}
+        <Separator />
+        {running ? (
+          <div className="space-y-3">
+            <h3 className="flex items-center gap-2 font-sans text-sm font-semibold text-foreground">
+              <Spinner className="text-sky" />
+              Sync en progreso <span className="font-normal text-muted-foreground">({syncStatus?.status.kind})</span>
+            </h3>
+            {/* Sin denominador a propósito: Notion no expone un total de antemano, así
+                que `status.total` es sólo done + un page_size cuando queda más. Mostrarlo
+                como "1,200 / 1,300" fingía un progreso que nadie conoce. */}
+            <p className="font-display text-xl font-bold text-foreground">
+              {(syncStatus?.status.done ?? 0).toLocaleString("es-MX")}
+              <span className="ml-1.5 font-sans text-sm font-normal text-muted-foreground">
+                {(syncStatus?.status.total ?? 0) > (syncStatus?.status.done ?? 0) ? "registros y contando…" : "registros"}
+              </span>
+            </p>
+            {syncStatus?.status.skipped ? <p className="text-sm font-medium text-warning">Omitidos: {syncStatus.status.skipped}</p> : null}
+            <Button variant="outline" onClick={cancelSync} disabled={cancelling}
+                    className="border-danger text-danger hover:bg-danger hover:text-white">
+              {cancelling && <Spinner className="h-3.5 w-3.5" />}
+              {cancelling ? "Cancelando…" : "Cancelar y guardar lo cargado"}
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex gap-8">
+              <div>
+                <Eyebrow>Próximo incremental</Eyebrow>
+                <p className="mt-1 text-sm font-medium text-foreground">
+                  {syncStatus?.next.incremental ? <Countdown iso={syncStatus.next.incremental} /> : "—"}
+                </p>
               </div>
-              <div className="flex gap-3">
-                <button onClick={() => trigger("incremental")} disabled={triggering !== null}
-                        className="flex items-center gap-2 rounded-lg bg-blue px-4 py-2 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60">
-                  {triggering === "incremental" && <Spinner className="h-3.5 w-3.5" />}
-                  {triggering === "incremental" ? "Iniciando…" : "Refrescar incremental"}
-                </button>
-                <button onClick={() => trigger("full")} disabled={triggering !== null}
-                        className="flex items-center gap-2 rounded-lg border border-blue px-4 py-2 text-sm font-medium text-blue transition hover:bg-blue hover:text-white disabled:cursor-not-allowed disabled:opacity-60">
-                  {triggering === "full" && <Spinner className="h-3.5 w-3.5" />}
-                  {triggering === "full" ? "Iniciando…" : "Full"}
-                </button>
+              <div>
+                <Eyebrow>Full</Eyebrow>
+                <p className="mt-1 text-sm font-medium text-muted-foreground">
+                  {syncStatus?.next.full ? <>en <Countdown iso={syncStatus.next.full} /></> : "sólo manual"}
+                </p>
               </div>
             </div>
-          )}
-        </Modal>
-      )}
+            <div className="flex flex-wrap items-center gap-2.5">
+              <Button onClick={() => trigger("incremental")} disabled={triggering !== null}>
+                {triggering === "incremental" ? <Spinner className="h-3.5 w-3.5" /> : <RefreshCw className="h-4 w-4" />}
+                {triggering === "incremental" ? "Iniciando…" : "Refrescar incremental"}
+              </Button>
+              <Button variant="outline" className="border-border-strong" onClick={() => trigger("full")} disabled={triggering !== null}>
+                {triggering === "full" && <Spinner className="h-3.5 w-3.5" />}
+                {triggering === "full" ? "Iniciando…" : "Full"}
+              </Button>
+              <span className="ml-auto text-[11.5px] text-subtle">El full puede tardar varios minutos</span>
+            </div>
+          </div>
+        )}
+      </AppModal>
 
       {/* Panel de detalle (drill-down) */}
       {detail && (
-        <div className="fixed inset-0 z-30 flex items-start justify-center overflow-y-auto bg-dark-blue/80 p-4 sm:p-10"
-             onClick={(e) => { if (e.target === e.currentTarget) setDetail(null); }}>
-          <div className="w-full max-w-4xl rounded-2xl border border-border bg-surface shadow-2xl">
-            <div className="flex items-center justify-between border-b border-border p-5">
-              <h2 className="font-display text-base font-semibold text-fg">{detail.title}</h2>
-              <button onClick={() => setDetail(null)}
-                      className="rounded-lg border border-border px-3 py-1.5 text-sm text-muted transition hover:border-blue hover:text-blue">
-                Cerrar
-              </button>
-            </div>
-            <div className="max-h-[70vh] overflow-y-auto p-5">
-              {detail.loading && detail.rows.length === 0
-                ? <div className="flex justify-center py-10"><Spinner className="text-sky" /></div>
-                : detail.rows.length === 0
-                  ? <p className="py-8 text-center text-sm text-muted">Sin registros para este corte.</p>
-                  : (
-                    <table className="w-full text-left text-sm">
-                      <thead>
-                        <tr className="text-xs uppercase tracking-wide text-muted">
-                          <th className="pb-2 pr-3 font-medium">ID</th>
-                          <th className="pb-2 pr-3 font-medium">Fecha</th>
-                          <th className="pb-2 pr-3 font-medium">Persona</th>
-                          <th className="pb-2 pr-3 font-medium">Tarea</th>
-                          <th className="pb-2 pr-3 font-medium">Descripción</th>
-                          <th className="pb-2 text-right font-medium">Horas</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {detail.rows.map((r) => (
-                          <tr key={r["ID"]} className="border-t border-border/60 align-top">
-                            <td className="py-2 pr-3 whitespace-nowrap text-muted">{r["ID"]}</td>
-                            <td className="py-2 pr-3 whitespace-nowrap text-fg">{fmtDate(r["Hora de creación"])}</td>
-                            {/* La columna "Persona" muestra el nombre (personLabel), no el ID de la relación */}
-                            <td className="py-2 pr-3 text-fg">{r[REPORT_PROPS.personLabel]}</td>
-                            <td className="py-2 pr-3 text-fg">{r["Tarea"]}</td>
-                            <td className="py-2 pr-3 text-muted">{r["Breve descripción"]}</td>
-                            <td className="py-2 text-right font-medium text-sky whitespace-nowrap">{fmtHours(Number(r["Registro de horas"]) || 0)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-              {detail.nextCursor && (
-                <div className="pt-4 text-center">
-                  <button disabled={detail.loading}
-                          onClick={() => { setDetail({ ...detail, loading: true }); void loadDetailPage({ ...detail, loading: true }); }}
-                          className="rounded-lg border border-blue px-4 py-2 text-sm font-medium text-blue transition hover:bg-blue hover:text-white disabled:opacity-60">
-                    {detail.loading ? "Cargando…" : "Cargar más"}
-                  </button>
-                </div>
+        <AppModal open onClose={() => setDetail(null)} title={detail.title} wide>
+          {detail.loading && detail.rows.length === 0
+            ? <div className="flex justify-center py-10"><Spinner className="text-sky" /></div>
+            : detail.rows.length === 0
+              ? <p className="py-8 text-center text-sm text-muted-foreground">Sin registros para este corte.</p>
+              : (
+                <Table className="text-left">
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="h-auto px-0 pb-2.5 pr-3 text-[10.5px] font-semibold uppercase tracking-widest text-subtle">ID</TableHead>
+                      <TableHead className="h-auto px-0 pb-2.5 pr-3 text-[10.5px] font-semibold uppercase tracking-widest text-subtle">Fecha</TableHead>
+                      <TableHead className="h-auto px-0 pb-2.5 pr-3 text-[10.5px] font-semibold uppercase tracking-widest text-subtle">Persona</TableHead>
+                      <TableHead className="h-auto px-0 pb-2.5 pr-3 text-[10.5px] font-semibold uppercase tracking-widest text-subtle">Tarea</TableHead>
+                      <TableHead className="h-auto px-0 pb-2.5 pr-3 text-[10.5px] font-semibold uppercase tracking-widest text-subtle">Descripción</TableHead>
+                      <TableHead className="h-auto px-0 pb-2.5 text-right text-[10.5px] font-semibold uppercase tracking-widest text-subtle">Horas</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {detail.rows.map((r) => (
+                      <TableRow key={r["ID"]} className="border-border/60">
+                        <TableCell className="p-0 py-2 pr-3 align-top whitespace-nowrap font-mono text-xs text-subtle">{r["ID"]}</TableCell>
+                        <TableCell className="p-0 py-2 pr-3 align-top whitespace-nowrap text-foreground">{fmtDate(r["Hora de creación"])}</TableCell>
+                        {/* La columna "Persona" muestra el nombre (personLabel), no el ID de la relación */}
+                        <TableCell className="p-0 py-2 pr-3 align-top whitespace-normal text-foreground">{r[REPORT_PROPS.personLabel]}</TableCell>
+                        <TableCell className="p-0 py-2 pr-3 align-top whitespace-normal text-foreground">{r["Tarea"]}</TableCell>
+                        <TableCell className="p-0 py-2 pr-3 align-top whitespace-normal text-muted-foreground">{r["Breve descripción"]}</TableCell>
+                        <TableCell className="p-0 py-2 text-right align-top font-mono font-medium text-sky whitespace-nowrap tabular-nums">{fmtHours(Number(r["Registro de horas"]) || 0)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               )}
+          {detail.nextCursor && (
+            <div className="pt-2 text-center">
+              <Button variant="outline" disabled={detail.loading}
+                      onClick={() => { setDetail({ ...detail, loading: true }); void loadDetailPage({ ...detail, loading: true }); }}>
+                {detail.loading ? "Cargando…" : "Cargar más"}
+              </Button>
             </div>
-          </div>
-        </div>
+          )}
+        </AppModal>
       )}
     </main>
     </AppShell>
   );
 }
 
-// Modal no bloqueante: click en el backdrop (o Esc, manejado por el caller) cierra
-// y regresa al reporte sin perder estado.
-function Modal({ title, onClose, anchor, children }: {
-  title: string; onClose: () => void; anchor?: string; children: React.ReactNode;
-}) {
-  return (
-    <div className="fixed inset-0 z-30 flex items-start justify-center overflow-y-auto bg-dark-blue/80 p-4 sm:p-10"
-         onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div data-tour={anchor} className="w-full max-w-lg rounded-2xl border border-border bg-surface shadow-2xl">
-        <div className="flex items-center justify-between border-b border-border p-5">
-          <h2 className="font-display text-base font-semibold text-fg">{title}</h2>
-          <button onClick={onClose}
-                  className="rounded-lg border border-border px-3 py-1.5 text-sm text-muted transition hover:border-blue hover:text-blue">
-            Cerrar
-          </button>
-        </div>
-        <div className="space-y-4 p-5">{children}</div>
-      </div>
-    </div>
-  );
-}
-
-// Tabla de agregados compacta: filas clickeables para el drill-down.
-// heatCol: índice de la columna con mapa de calor (intensidad = r.heat
-// relativo al máximo de la tabla).
-function AggTable({ head, rows, empty, heatCol }: {
-  head: string[];
+// Tabla de agregados: ranking con barra de participación (el heat sale del
+// fondo de la celda: texto siempre sobre la misma superficie). Top-10 por
+// default con footer "N de M · Ver todas"; filas clickeables para drill-down.
+function AggTable({ nameLabel, unit, rows, empty, showProject }: {
+  nameLabel: string;
+  unit: string;
   empty: string;
-  heatCol?: number;
-  rows: { key: string; cells: string[]; onClick?: () => void; mutedFirst?: boolean; heat?: number }[];
+  showProject?: boolean;
+  rows: { key: string; name: string; project?: string; hours: number; count: number; onClick?: () => void; muted?: boolean }[];
 }) {
-  if (!rows.length) return <p className="py-8 text-center text-sm text-muted">{empty}</p>;
-  const maxHeat = Math.max(...rows.map((r) => r.heat ?? 0));
+  const [showAll, setShowAll] = useState(false);
+  if (!rows.length) return <p className="py-10 text-center text-sm text-muted-foreground">{empty}</p>;
+  const maxHours = Math.max(...rows.map((r) => r.hours));
+  const totalHours = rows.reduce((a, r) => a + r.hours, 0);
+  const visible = showAll ? rows : rows.slice(0, 10);
+  const headCls = "h-auto pb-2.5 text-[10.5px] font-semibold uppercase tracking-widest text-subtle";
   return (
-    <div className="max-h-96 overflow-y-auto">
-      <table className="w-full text-left text-sm">
-        <thead className="sticky top-0 bg-surface">
-          <tr className="text-xs uppercase tracking-wide text-muted">
-            {head.map((h, i) => (
-              <th key={h} className={`pb-2 font-medium ${i >= head.length - 2 ? "text-right pl-3" : "pr-3"}`}>{h}</th>
+    <>
+      <div className={showAll ? "max-h-[560px] overflow-y-auto" : undefined}>
+        <Table className="text-left">
+          <TableHeader className="sticky top-0 bg-card">
+            <TableRow className="hover:bg-transparent">
+              <TableHead className={`${headCls} w-11 pl-5 pr-0`}>#</TableHead>
+              <TableHead className={`${headCls} pr-3`}>{nameLabel}</TableHead>
+              {showProject && <TableHead className={`${headCls} pr-3`}>Proyecto</TableHead>}
+              <TableHead className={`${headCls} w-52 pr-3 max-md:hidden`}>Distribución</TableHead>
+              <TableHead className={`${headCls} w-24 pr-3 text-right`}>Horas</TableHead>
+              <TableHead className={`${headCls} w-16 pr-3 text-right max-sm:hidden`}>Part.</TableHead>
+              <TableHead className={`${headCls} w-24 pr-5 text-right`}>Registros</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {visible.map((r, i) => (
+              <TableRow key={r.key}
+                  onClick={r.onClick}
+                  title={r.onClick ? "Ver registros" : undefined}
+                  className={`border-border/60 ${r.onClick ? "cursor-pointer transition hover:bg-accent/40" : ""}`}>
+                <TableCell className="h-10 py-0 pl-5 pr-0 font-mono text-[11px] text-subtle tabular-nums">
+                  {String(i + 1).padStart(2, "0")}
+                </TableCell>
+                {/* [overflow-wrap:anywhere]: los códigos largos de subproyecto
+                    (SubProy-…::NO-3510) no tienen espacios y desbordaban la tarjeta. */}
+                <TableCell className={`h-10 py-1.5 pr-3 text-[13px] whitespace-normal [overflow-wrap:anywhere] ${r.muted ? "italic text-muted-foreground" : "text-foreground"}`}>
+                  {r.name}
+                </TableCell>
+                {showProject && (
+                  <TableCell className="h-10 py-1.5 pr-3 text-[13px] whitespace-normal [overflow-wrap:anywhere] text-muted-foreground">
+                    {r.project ?? "—"}
+                  </TableCell>
+                )}
+                <TableCell className="h-10 py-0 pr-3 max-md:hidden">
+                  <div className="h-1.5 rounded-full bg-accent">
+                    <div className="h-1.5 rounded-full bg-sky"
+                         style={{ width: `${maxHours > 0 ? Math.max((r.hours / maxHours) * 100, 1) : 0}%` }} />
+                  </div>
+                </TableCell>
+                <TableCell className="h-10 py-0 pr-3 text-right font-mono text-[13.5px] font-medium tabular-nums text-sky whitespace-nowrap">
+                  {fmtHours(r.hours)}
+                </TableCell>
+                <TableCell className="h-10 py-0 pr-3 text-right font-mono text-xs tabular-nums text-subtle whitespace-nowrap max-sm:hidden">
+                  {totalHours > 0 ? `${((r.hours / totalHours) * 100).toFixed(1)}%` : "—"}
+                </TableCell>
+                <TableCell className="h-10 py-0 pr-5 text-right font-mono text-[13px] tabular-nums text-muted-foreground whitespace-nowrap">
+                  {r.count.toLocaleString("es-MX")}
+                </TableCell>
+              </TableRow>
             ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.key}
-                onClick={r.onClick}
-                title={r.onClick ? "Ver registros" : undefined}
-                className={`border-t border-border/60 ${r.onClick ? "cursor-pointer transition hover:bg-dark-blue/50" : ""}`}>
-              {r.cells.map((c, i) => (
-                <td key={i}
-                    style={heatCol === i ? { backgroundColor: heatBg(r.heat ?? 0, maxHeat) } : undefined}
-                    className={`py-2 ${i >= r.cells.length - 2
-                      ? "text-right pl-3 tabular-nums whitespace-nowrap"
-                      // [overflow-wrap:anywhere]: los códigos largos de subproyecto
-                      // (SubProy-…::NO-3510) no tienen espacios y desbordaban la tarjeta.
-                      : "pr-3 [overflow-wrap:anywhere]"}
-                      ${heatCol === i ? "px-3" : ""}
-                      ${i === 0 ? (r.mutedFirst ? "italic text-muted" : "text-fg") : i >= r.cells.length - 2 ? "text-fg" : "text-muted"}`}>
-                  {c}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </TableBody>
+        </Table>
+      </div>
+      <div className="flex items-center justify-between border-t border-border bg-background px-5 py-2.5">
+        <span className="text-[11.5px] text-subtle">
+          {visible.length} de {rows.length} {unit} · click en una fila para ver sus registros
+        </span>
+        {rows.length > 10 && (
+          <button onClick={() => setShowAll(!showAll)}
+                  className="text-xs font-medium text-link transition hover:brightness-110">
+            {showAll ? "Ver menos" : "Ver todas"}
+          </button>
+        )}
+      </div>
+    </>
   );
 }

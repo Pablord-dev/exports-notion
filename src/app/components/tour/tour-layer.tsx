@@ -11,6 +11,7 @@
 // cualquier z-index de la página: el recorte es transparente.
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { popoverPlacement, type Placement, type Rect } from "@/lib/tour/geometry";
 import { tourScript } from "@/lib/tour/scripts";
 import { hasSeenWelcome, markWelcomeSeen } from "@/lib/tour/storage";
@@ -32,6 +33,12 @@ const anchorSelector = (anchor: string) => `[data-tour="${anchor}"]`;
 const ANCHOR_FRAMES = 10;
 /** Techo de frames re-midiendo un ancla que se está animando (~500ms). */
 const SETTLE_FRAMES = 30;
+/** Frames quietos consecutivos para dar el rect por asentado. Con uno solo,
+    un ancla cuya animación de entrada aún no arranca (React no comiteó el
+    render del `before` bajo carga) se daba por quieta fuera de pantalla. */
+const STILL_FRAMES = 3;
+/** Espera antes de asomar el aviso del recorrido tras un login (ms). */
+const BANNER_DELAY_MS = 3000;
 
 const sameRect = (a: Rect | null, b: Rect | null) =>
   !!a && !!b && a.top === b.top && a.left === b.left && a.width === b.width && a.height === b.height;
@@ -65,12 +72,19 @@ export function TourLayer({ tour, shellActions, justLoggedIn = false }: {
 
   useEffect(() => {
     if (!justLoggedIn) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (hasSeenWelcome()) { setWelcome("banner"); return; }
-    // Se marca al MOSTRARLO, no al completarlo: la promesa es "una vez por
-    // navegador", incluso si eligen "Ahora no".
-    markWelcomeSeen();
-    setWelcome("modal");
+    if (!hasSeenWelcome()) {
+      // Se marca al MOSTRARLO, no al completarlo: la promesa es "una vez por
+      // navegador", incluso si eligen "Ahora no".
+      markWelcomeSeen();
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setWelcome("modal");
+      return;
+    }
+    // El aviso de los logins siguientes entra como notificación unos segundos
+    // después, no junto con el primer render: así no compite con la pantalla
+    // que el usuario acaba de abrir. Se limpia al desmontar (navegar).
+    const t = setTimeout(() => setWelcome("banner"), BANNER_DELAY_MS);
+    return () => clearTimeout(t);
   }, [justLoggedIn]);
 
   const active = index !== null;
@@ -217,17 +231,24 @@ export function TourLayer({ tour, shellActions, justLoggedIn = false }: {
       // re-mide hasta que deja de moverse (ni el scroll ni el resize se disparan
       // con una transición de CSS, así que nadie corregiría el rect después).
       let settling = 0;
+      let stillFrames = 0;
       let last: Rect | null = null;
       const measure = () => {
         const r = readRect(s.anchor!);
         if (!r) return;
         const still = sameRect(r, last);
+        stillFrames = still ? stillFrames + 1 : 0;
         if (!still) {
           setRect(r);
           setPlacement(popoverPlacement(r, { width: window.innerWidth, height: window.innerHeight }, s.side));
         }
         last = r;
-        if (still || ++settling > SETTLE_FRAMES) return;
+        // Un rect quieto pero completamente fuera del viewport no está asentado:
+        // es un ancla cuya transición de entrada todavía no empieza. Se sigue
+        // midiendo hasta agotar el techo.
+        const offscreen = r.left + r.width <= 0 || r.top + r.height <= 0
+          || r.left >= window.innerWidth || r.top >= window.innerHeight;
+        if ((stillFrames >= STILL_FRAMES && !offscreen) || ++settling > SETTLE_FRAMES) return;
         raf = requestAnimationFrame(measure);
       };
       raf = requestAnimationFrame(measure);
@@ -286,11 +307,18 @@ export function TourLayer({ tour, shellActions, justLoggedIn = false }: {
         <WelcomeModal onStart={start} onDismiss={() => setWelcome("none")} />
       )}
 
-      <button ref={helpRef} onClick={start} data-tour="help-button"
-              aria-label="Ayuda: iniciar el recorrido guiado" title="Recorrido guiado"
-              className="fixed top-4 right-4 z-30 flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-surface font-display text-base font-bold text-muted transition hover:border-blue hover:text-blue">
-        ?
-      </button>
+      {/* asChild conserva el ref: el tour mide este botón para su recorte, y
+          Radix compone su propio ref con el nuestro. */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button ref={helpRef} onClick={start} data-tour="help-button"
+                  aria-label="Ayuda: iniciar el recorrido guiado"
+                  className="fixed top-4 right-4 z-30 flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card font-display text-base font-bold text-muted-foreground transition hover:border-blue hover:text-blue">
+            ?
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="left">Recorrido guiado de esta pantalla</TooltipContent>
+      </Tooltip>
 
       {active && placement && step && (
         <>
@@ -307,7 +335,7 @@ export function TourLayer({ tour, shellActions, justLoggedIn = false }: {
                    zIndex: 56,
                  }} />
           ) : (
-            <div aria-hidden className="pointer-events-none fixed inset-0 z-[56] bg-dark-blue/80" />
+            <div aria-hidden className="pointer-events-none fixed inset-0 z-[56] bg-background/80" />
           )}
           <TourPopover
             title={step.title} body={step.body}

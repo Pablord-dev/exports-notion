@@ -31,15 +31,17 @@ const menu: TourScript = {
       anchor: "menu-db-card",
       title: "Tus bases de datos",
       body:
-        "Cada tarjeta es una base. El número son los registros que tiene la copia y abajo dice " +
-        "hace cuánto se sincronizó. La tarjeta completa es un enlace a sus reportes.",
+        "Cada tarjeta es una base y toda ella es clickeable: te lleva a sus reportes, donde también " +
+        "viven la exportación a CSV y la sincronización. El número son los registros que tiene la " +
+        "copia y abajo dice hace cuánto se sincronizó.",
     },
     {
       anchor: "shell-sidebar",
       title: "Navegación",
       body:
-        "Desde aquí saltas entre pantallas y cierras sesión. El ícono de pin ancla la barra o la " +
-        "esconde detrás del botón ☰; la app recuerda tu preferencia.",
+        "Desde aquí saltas entre pantallas y cierras sesión. La ✕ de arriba la esconde detrás del " +
+        "botón ☰, y escondida sigue a un cursor de distancia: pásalo sobre el ☰ y asoma flotando; " +
+        "con un click se queda fija. La app recuerda tu preferencia.",
       side: "right",
       before: "openSidebar",
       after: "closeSidebar",
@@ -94,9 +96,10 @@ const reports: TourScript = {
       anchor: "reports-tables",
       title: "Horas por persona y por subproyecto",
       body:
-        "Ordenadas de mayor a menor, con la intensidad de color según las horas. Click en una fila " +
-        "abre su detalle. Las filas “(sin persona)” y “(sin subproyecto)” agrupan lo que no tiene esa " +
-        "relación en Notion, y por eso no son clickeables.",
+        "Una sola tarjeta con pestañas para cambiar de dimensión, ordenada de mayor a menor y con " +
+        "una barra de participación por fila. Click en una fila abre su detalle. Las filas “(sin " +
+        "persona)” y “(sin subproyecto)” agrupan lo que no tiene esa relación en Notion, y por eso " +
+        "no son clickeables.",
     },
     {
       anchor: "export-modal",
@@ -152,9 +155,9 @@ const asistente: TourScript = {
     {
       title: "Cómo verificar una respuesta",
       body:
-        "Debajo de cada respuesta hay un desplegable que dice “consultó N herramienta(s)”: ahí ves " +
-        "qué consultó para contestar. Si no aparece, el modelo respondió sin consultar datos y " +
-        "conviene desconfiar del número.",
+        "Debajo de cada respuesta aparecen etiquetas con las herramientas que consultó para " +
+        "contestar. Si no aparece ninguna, el modelo respondió sin consultar datos y conviene " +
+        "desconfiar del número.",
     },
   ],
 };
