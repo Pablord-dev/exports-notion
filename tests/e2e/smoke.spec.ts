@@ -227,6 +227,33 @@ test("chat page renders composer and model selector", async ({ page }) => {
   await expect(page.getByRole("combobox", { name: "Base de datos" })).toBeVisible();
 });
 
+// El header del asistente comparte el contenedor de las otras páginas
+// (mx-auto max-w-[75rem] + px-6/sm:px-8). Se compara contra el de reportes en
+// vez de contra números fijos: si algún día cambia el ancho del contenedor, el
+// test sigue midiendo lo que importa —que las dos páginas se vean igual— y no
+// se convierte en un número que hay que actualizar a mano. A 1920 el cap sí
+// muerde (gap derecho 264 en vez de 32), que es justo el caso que se rompía:
+// la acción pegada al canto de la ventana.
+test("el header del asistente se alinea con el de reportes", async ({ page }) => {
+  test.skip(process.env.E2E_REAL === "1", "password real desconocido");
+  await login(page);
+  for (const size of [{ width: 1280, height: 720 }, { width: 1920, height: 1080 }]) {
+    await page.setViewportSize(size);
+
+    await page.goto("/asistente");
+    const chatTitle = (await page.getByRole("heading", { level: 1, name: "Asistente IA" }).boundingBox())!;
+    const chatAction = (await page.getByRole("button", { name: "Nuevo chat" }).boundingBox())!;
+
+    await page.goto("/db/tiempos/reports");
+    const repTitle = (await page.getByRole("heading", { level: 1, name: "BD Tiempos" }).boundingBox())!;
+    const repAction = (await page.getByRole("button", { name: "Sincronizar" }).boundingBox())!;
+
+    expect(chatTitle.x, `título a ${size.width}px`).toBe(repTitle.x);
+    expect(chatAction.x + chatAction.width, `acción a ${size.width}px`)
+      .toBe(repAction.x + repAction.width);
+  }
+});
+
 // La ruta vieja /reports redirige a la nueva ubicación bajo su BD.
 test("legacy /reports redirects to /db/tiempos/reports", async ({ page }) => {
   await page.goto("/reports");

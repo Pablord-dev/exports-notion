@@ -266,32 +266,40 @@ export default function AsistentePage() {
   return (
     <AppShell onLogout={() => setAuthed(false)} tour={{ id: "asistente" }}>
       <div className="flex h-[100dvh] flex-col overflow-hidden">
-        {/* Header estándar a lo ancho: breadcrumb → título + acción */}
-        <header className="space-y-3 border-b border-border px-6 pb-4 pt-6 sm:px-8">
-          <Breadcrumb>
-            <BreadcrumbList>
-              <BreadcrumbItem>
-                <BreadcrumbLink asChild><Link href="/">Menú</Link></BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem><BreadcrumbPage>Asistente IA</BreadcrumbPage></BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <Button variant="outline" size="icon" onClick={() => setDrawerOpen(true)}
-                      aria-label="Historial de chats" className="md:hidden">
-                <Menu className="h-4 w-4" />
-              </Button>
-              <div>
-                <h1 className="font-display text-[22px] font-bold tracking-tight text-foreground">Asistente IA</h1>
-                <p className="mt-0.5 text-[12.5px] text-subtle">Consulta los reportes de {dbName(db)} en lenguaje natural.</p>
+        {/* Header con el mismo contenedor que el menú y los reportes
+            (mx-auto max-w-[75rem] + px-6/sm:px-8): sin él la acción de la
+            derecha quedaba pegada al canto de la ventana, porque la raíz de
+            esta página es un flex a sangre completa y no el <main> angosto que
+            usan las otras. El borde sí va a sangre: abajo el panel de historial
+            arranca en x=0, y un borde cortado en 75rem dejaría su canto
+            superior al aire en pantallas anchas. */}
+        <header className="border-b border-border">
+          <div className="mx-auto w-full max-w-[75rem] space-y-3 px-6 pb-5 pt-7 sm:px-8">
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem>
+                  <BreadcrumbLink asChild><Link href="/">Menú</Link></BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator />
+                <BreadcrumbItem><BreadcrumbPage>Asistente IA</BreadcrumbPage></BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <Button variant="outline" size="icon" onClick={() => setDrawerOpen(true)}
+                        aria-label="Historial de chats" className="md:hidden">
+                  <Menu className="h-4 w-4" />
+                </Button>
+                <div>
+                  <h1 className="font-display text-[22px] font-bold tracking-tight text-foreground">Asistente IA</h1>
+                  <p className="mt-0.5 text-[12.5px] text-subtle">Consulta los reportes de {dbName(db)} en lenguaje natural.</p>
+                </div>
               </div>
+              <Button onClick={newChat} className="shrink-0">
+                <Plus className="h-4 w-4" />
+                Nuevo chat
+              </Button>
             </div>
-            <Button onClick={newChat} className="shrink-0">
-              <Plus className="h-4 w-4" />
-              Nuevo chat
-            </Button>
           </div>
         </header>
 
