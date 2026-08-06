@@ -196,7 +196,13 @@ export default function AsistentePage() {
         <Textarea ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={onKeyDown}
                   rows={1} disabled={noProvider} placeholder="Escribe tu pregunta…"
                   className="max-h-40 min-h-[48px] resize-none border-0 bg-transparent px-4 py-3 shadow-none focus-visible:ring-0 [color-scheme:dark]" />
-        <div data-tour="chat-selectors" className="flex items-center gap-2 px-2.5 pb-2.5">
+        {/* pt-2.5 explícito: sin él la fila de controles quedaba pegada al borde
+            inferior del textarea (medido: 0px entre las dos cajas) y el único
+            aire encima de las pills era el padding interno del textarea.
+            px-4 iguala el padding horizontal del textarea, así las pills
+            arrancan a plomo con el texto en vez de 6px a su izquierda; pb-4
+            deja el mismo aire abajo que a los lados. */}
+        <div data-tour="chat-selectors" className="flex items-center gap-2 px-4 pb-4 pt-2.5">
           <Select value={db} onValueChange={setDb}>
             <SelectTrigger size="sm" aria-label="Base de datos"
                            className="w-auto rounded-full border-border-strong bg-transparent text-xs text-muted-foreground">

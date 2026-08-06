@@ -225,6 +225,14 @@ test("chat page renders composer and model selector", async ({ page }) => {
   // Selects de shadcn/Radix dentro del cuadro de texto (rol combobox).
   await expect(page.getByRole("combobox", { name: "Modelo" })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Base de datos" })).toBeVisible();
+
+  // La fila de controles no va pegada al textarea: sin un padding-top propio,
+  // el único aire encima de las pills era el padding interno del textarea y las
+  // dos cajas se tocaban (medido: 0px). Se exige separación, no un valor
+  // concreto — el número es diseño y puede cambiar.
+  const texto = (await page.getByPlaceholder("Escribe tu pregunta…").boundingBox())!;
+  const pill = (await page.getByRole("combobox", { name: "Base de datos" }).boundingBox())!;
+  expect(pill.y - (texto.y + texto.height)).toBeGreaterThan(0);
 });
 
 // Los botones que flotan sobre el contenido (☰ del shell, "?" del onboarding)
