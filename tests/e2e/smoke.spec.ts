@@ -293,6 +293,35 @@ test("los botones flotantes son opacos e iguales con el SO claro y oscuro", asyn
   expect(porEsquema.dark).toEqual(porEsquema.light);
 });
 
+// El hover de un botón primario ACLARA el azul; no lo apaga. El default de
+// shadcn es `hover:bg-primary/90`, que sobre un lienzo oscuro mezcla el azul con
+// el fondo (rgba(15,64,239,.9) sobre #02091c = rgb(14,58,218)) y el hover se lee
+// como apagado. Se afirma la dirección y no los valores —brightness y anillo son
+// diseño y van a cambiar—: lo que no debe volver es el hover que oscurece, que
+// es lo que reaparecería si alguien regenera button.tsx con la CLI de shadcn.
+test("el hover de un botón primario aclara en vez de apagar", async ({ page }) => {
+  test.skip(process.env.E2E_REAL === "1", "password real desconocido");
+  await login(page);
+  await page.goto("/asistente");
+  const boton = page.getByRole("button", { name: "Nuevo chat" });
+  const estilo = () => boton.evaluate((el) => {
+    const s = getComputedStyle(el);
+    return { bg: s.backgroundColor, filter: s.filter };
+  });
+
+  const reposo = await estilo();
+  expect(reposo.filter).toBe("none");
+  await boton.hover();
+  // Poll: transition-all anima el filter, así que las primeras lecturas están a
+  // media asta (brightness(1.03)…). Cualquier valor > 1 sirve: es la dirección.
+  await expect.poll(async () => {
+    const m = /brightness\(([\d.]+)\)/.exec((await estilo()).filter);
+    return m ? Number(m[1]) > 1 : false;
+  }).toBe(true);
+  // Y el color de fondo no se compone con el lienzo: sigue siendo el azul pleno.
+  expect((await estilo()).bg).toBe(reposo.bg);
+});
+
 // En el asistente el documento NO scrollea: sólo lo hacen la conversación y el
 // historial, cada uno en su contenedor. La página pedía h-[100dvh] dentro del
 // wrapper de AppShell, que le suma su --shell-top, así que medía 48px más que el

@@ -71,11 +71,11 @@ export function WelcomeBanner({ onStart, onDismiss }: { onStart: () => void; onD
           <span className="font-semibold text-foreground">¿Nuevo por aquí?</span>{" "}
           Te muestro las pantallas en menos de un minuto.
         </p>
-        {/* El hover del variant default baja la opacidad del azul, que sobre
-            este fondo oscuro lo apaga en vez de destacarlo: aquí se aclara y
-            gana un halo, que sí se lee como estado activo. */}
-        <Button size="sm" onClick={onStart}
-                className="h-8 shrink-0 hover:bg-primary hover:brightness-125 hover:ring-2 hover:ring-blue/50 hover:ring-offset-2 hover:ring-offset-popover">
+        {/* Sin override de hover: aclarar el azul en vez de apagarlo ya es el
+            comportamiento del variant default (ver button.tsx). Este botón lo
+            tenía en su className con brightness-125 y un anillo despegado por
+            ring-offset-2, que resultó aparatoso. */}
+        <Button size="sm" onClick={onStart} className="h-8 shrink-0">
           Iniciar tutorial
         </Button>
         <Button variant="ghost" size="icon" onClick={onDismiss} aria-label="Ocultar el aviso del tutorial"

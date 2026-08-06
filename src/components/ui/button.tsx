@@ -23,7 +23,13 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        // El hover NO baja la opacidad como en el default de shadcn
+        // (`hover:bg-primary/90`): sobre un fondo oscuro eso mezcla el azul con
+        // el lienzo y lo APAGA, así que el hover iba en la dirección contraria a
+        // la que debería —destacar—. Se aclara un poco y gana un halo pegado al
+        // borde. Sin `ring-offset`: ese offset es lo que despegaba el anillo del
+        // botón y hacía el efecto aparatoso.
+        default: "bg-primary text-primary-foreground hover:brightness-110 hover:ring-2 hover:ring-blue/30",
         destructive:
           "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/40",
         outline:
