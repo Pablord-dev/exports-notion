@@ -285,6 +285,75 @@ test("los botones flotantes son opacos e iguales con el SO claro y oscuro", asyn
   expect(porEsquema.dark).toEqual(porEsquema.light);
 });
 
+// En el asistente el documento NO scrollea: sólo lo hacen la conversación y el
+// historial, cada uno en su contenedor. La página pedía h-[100dvh] dentro del
+// wrapper de AppShell, que le suma su --shell-top, así que medía 48px más que el
+// viewport y el compositor quedaba mordido abajo (medido: scrollHeight 948 vs
+// 900). Se prueba con historial y conversación sembrados en localStorage —el
+// stub no tiene modelo, así que la única forma de ver la rama de conversación es
+// abrir un chat guardado— y en dos alturas de ventana.
+const chatsSembrados = Array.from({ length: 30 }, (_, i) => ({
+  id: `c_seed_${i}`,
+  title: `Conversación sembrada ${i} con un título suficientemente largo`,
+  db: "tiempos",
+  provider: "",
+  messages: Array.from({ length: 12 }, (_, j) => ({
+    role: j % 2 === 0 ? "user" : "assistant",
+    content: `Mensaje ${j} del chat ${i}. `.repeat(20),
+  })),
+  createdAt: 1_750_000_000_000 + i,
+  updatedAt: 1_750_000_000_000 + i,
+}));
+
+test("en el asistente sólo scrollean la conversación y el historial", async ({ page }) => {
+  test.skip(process.env.E2E_REAL === "1", "password real desconocido");
+  await page.addInitScript((seed) => {
+    window.localStorage.setItem("asistente-chats-v1", JSON.stringify(seed));
+  }, chatsSembrados);
+  await login(page);
+
+  const desborde = () => page.evaluate(() => {
+    const d = document.documentElement;
+    return d.scrollHeight - d.clientHeight;
+  });
+  // Sube desde un nodo hasta el ancestro que realmente scrollea. Devuelve
+  // "documento" si nadie de la cadena tiene overflow propio: eso es el bug.
+  const scrollerDe = (texto: string) =>
+    page.getByText(texto).first().evaluate((el) => {
+      // Element y no HTMLElement: getByText puede aterrizar en un SVG.
+      let node: Element | null = el;
+      while (node && node !== document.documentElement) {
+        const oy = getComputedStyle(node).overflowY;
+        if ((oy === "auto" || oy === "scroll") && node.scrollHeight > node.clientHeight) {
+          return { propio: true, scrollH: node.scrollHeight, clientH: node.clientHeight };
+        }
+        node = node.parentElement;
+      }
+      return { propio: false, scrollH: 0, clientH: 0 };
+    });
+
+  for (const height of [720, 560]) {
+    await page.setViewportSize({ width: 1280, height });
+    await page.goto("/asistente");
+
+    expect(await desborde(), `documento con ${height}px de alto`).toBe(0);
+
+    // El compositor entero cabe en la ventana (era lo que el desborde mordía).
+    const composer = (await page.locator('[data-tour="chat-composer"]').boundingBox())!;
+    expect(composer.y + composer.height, `fondo del compositor a ${height}px`).toBeLessThanOrEqual(height);
+
+    // El historial scrollea por dentro, no arrastrando la página.
+    const historial = await scrollerDe("Conversación sembrada 0");
+    expect(historial.propio, `historial a ${height}px`).toBe(true);
+
+    // Y la conversación también, con el documento todavía quieto.
+    await page.getByText("Conversación sembrada 0").first().click();
+    const convo = await scrollerDe("Mensaje 0 del chat 0");
+    expect(convo.propio, `conversación a ${height}px`).toBe(true);
+    expect(await desborde(), `documento con chat abierto a ${height}px`).toBe(0);
+  }
+});
+
 // El header del asistente comparte el contenedor de las otras páginas
 // (mx-auto max-w-[75rem] + px-6/sm:px-8). Se compara contra el de reportes en
 // vez de contra números fijos: si algún día cambia el ancho del contenedor, el

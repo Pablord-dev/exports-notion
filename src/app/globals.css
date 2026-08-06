@@ -47,6 +47,12 @@
    lo único que separa planos. */
 :root {
   --radius: 0.625rem;
+  /* Aire que AppShell reserva arriba del contenido para la hamburguesa
+     flotante. Es un token y no un número repetido porque tiene DOS
+     consumidores que deben coincidir: el padding del contenido en
+     app-shell.tsx y la altura de las páginas que llenan el viewport (el
+     asistente), que restan este valor a 100dvh para no desbordarlo. */
+  --shell-top: 3rem;
   --background: #02091c;            /* canvas — tinta azul, fondo de página */
   --foreground: #eef1f7;            /* texto principal */
   --card: #071b40;                  /* tarjetas */

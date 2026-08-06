@@ -265,7 +265,13 @@ export default function AsistentePage() {
 
   return (
     <AppShell onLogout={() => setAuthed(false)} tour={{ id: "asistente" }}>
-      <div className="flex h-[100dvh] flex-col overflow-hidden">
+      {/* Altura exacta del hueco que deja AppShell (100dvh menos su --shell-top):
+          con `h-[100dvh]` a secas la página medía 48px más que el viewport y el
+          documento entero scrolleaba, así que el compositor quedaba mordido
+          abajo. Con la altura calculada, lo único que scrollea son los dos
+          contenedores de adentro (la conversación y el historial), cada uno con
+          su propio overflow-y-auto. */}
+      <div className="flex h-[calc(100dvh-var(--shell-top))] flex-col overflow-hidden">
         {/* Header con el mismo contenedor que el menú y los reportes
             (mx-auto max-w-[75rem] + px-6/sm:px-8): sin él la acción de la
             derecha quedaba pegada al canto de la ventana, porque la raíz de

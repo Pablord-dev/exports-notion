@@ -327,12 +327,16 @@ export function AppShell({ children, onLogout, tour, justLoggedIn }: {
         </div>
       </aside>
 
-      {/* pt-12: aire para la hamburguesa. Fijo y NO condicionado a `pinned`:
-          con `lg:pt-0` el contenido subía 48px al anclar y bajaba al ocultar,
-          un salto vertical en una acción que sólo debería correrlo a la derecha.
-          La transición acompaña al pl-64 para que ese corrimiento no sea un
-          brinco; misma duración que la de la barra, así se leen como un gesto. */}
-      <div className={`pt-12 transition-[padding] duration-[250ms] ease-out ${pinned ? "lg:pl-64" : ""}`}>
+      {/* --shell-top: aire para la hamburguesa. Sale de globals.css y no de un
+          `pt-12` literal porque las páginas que llenan el viewport tienen que
+          restar exactamente este valor a 100dvh (si no, la página mide
+          100dvh + este padding y el documento entero scrollea).
+          Fijo y NO condicionado a `pinned`: con `lg:pt-0` el contenido subía
+          48px al anclar y bajaba al ocultar, un salto vertical en una acción que
+          sólo debería correrlo a la derecha. La transición acompaña al pl-64
+          para que ese corrimiento no sea un brinco; misma duración que la de la
+          barra, así se leen como un gesto. */}
+      <div className={`pt-[var(--shell-top)] transition-[padding] duration-[250ms] ease-out ${pinned ? "lg:pl-64" : ""}`}>
         {tour && (
           <TourLayer tour={tour} justLoggedIn={justLoggedIn}
                      shellActions={{ openSidebar: () => setOpen(true), closeSidebar: () => setOpen(false) }} />
