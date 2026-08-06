@@ -184,7 +184,11 @@ export default function AsistentePage() {
   // pills y el botón de enviar circular en una fila dentro del mismo recuadro.
   // Radix posiciona los menús solo.
   // ⚠️ Radix SelectItem prohíbe value="" — la rama sin proveedores va por el
-  // placeholder del SelectValue, no por un item vacío.
+  // placeholder del SelectValue, no por un item vacío. El Root sí acepta ""
+  // (su `shouldShowPlaceholder` trata "" y undefined igual), así que `value` va
+  // crudo: pasarlo como `provider || undefined` hacía nacer el Select
+  // uncontrolled —`provider` arranca en "" hasta que responde
+  // /api/chat/providers— y React avisaba del cambio a controlled.
   const composer = (
     <div>
       <div data-tour="chat-composer"
@@ -202,7 +206,7 @@ export default function AsistentePage() {
               {dbOptions.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Select value={provider || undefined} onValueChange={setProvider} disabled={noProvider}>
+          <Select value={provider} onValueChange={setProvider} disabled={noProvider}>
             <SelectTrigger size="sm" aria-label="Modelo"
                            className="w-auto rounded-full border-border-strong bg-transparent text-xs text-muted-foreground">
               {provider && <span className="h-1 w-1 shrink-0 rounded-full bg-success" aria-hidden />}
