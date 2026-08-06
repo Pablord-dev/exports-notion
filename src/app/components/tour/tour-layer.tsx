@@ -11,6 +11,7 @@
 // cualquier z-index de la página: el recorte es transparente.
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { popoverPlacement, type Placement, type Rect } from "@/lib/tour/geometry";
 import { tourScript } from "@/lib/tour/scripts";
 import { hasSeenWelcome, markWelcomeSeen } from "@/lib/tour/storage";
@@ -306,11 +307,18 @@ export function TourLayer({ tour, shellActions, justLoggedIn = false }: {
         <WelcomeModal onStart={start} onDismiss={() => setWelcome("none")} />
       )}
 
-      <button ref={helpRef} onClick={start} data-tour="help-button"
-              aria-label="Ayuda: iniciar el recorrido guiado" title="Recorrido guiado"
-              className="fixed top-4 right-4 z-30 flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card font-display text-base font-bold text-muted-foreground transition hover:border-blue hover:text-blue">
-        ?
-      </button>
+      {/* asChild conserva el ref: el tour mide este botón para su recorte, y
+          Radix compone su propio ref con el nuestro. */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button ref={helpRef} onClick={start} data-tour="help-button"
+                  aria-label="Ayuda: iniciar el recorrido guiado"
+                  className="fixed top-4 right-4 z-30 flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card font-display text-base font-bold text-muted-foreground transition hover:border-blue hover:text-blue">
+            ?
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="left">Recorrido guiado de esta pantalla</TooltipContent>
+      </Tooltip>
 
       {active && placement && step && (
         <>
