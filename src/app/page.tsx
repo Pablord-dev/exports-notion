@@ -6,15 +6,14 @@
 // punteada anuncia las BDs por venir.
 // El backend sigue siendo single-DB: el estado del snapshot (/api/sync/status)
 // aplica a la única BD registrada, BD Tiempos.
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronRight, Clock, Lock, MessageSquare, Plus } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { ChevronRight, Clock, MessageSquare, Plus } from "lucide-react";
 import { AppShell } from "@/app/components/app-shell";
 import { Spinner } from "@/app/components/spinner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { DATABASES } from "@/lib/databases";
 
 type Status = {
@@ -60,13 +59,53 @@ function ActionTile({ href, tour, icon, title, body, cta }: {
   );
 }
 
-export default function Home() {
+// Los códigos que puede devolver /api/auth/google/callback. El mensaje NUNCA
+// repite el correo ni el error crudo de Google: quien no está autorizado no
+// necesita saber qué parte de la validación lo rechazó.
+const ERROR_MESSAGES: Record<string, string> = {
+  domain: "Esa cuenta no está autorizada. Entra con tu correo institucional.",
+  unverified: "Esa cuenta de Google tiene el correo sin verificar.",
+  state: "La sesión de ingreso venció. Inténtalo de nuevo.",
+  token: "No se pudo completar el ingreso con Google. Inténtalo de nuevo.",
+  google: "Se canceló el ingreso con Google.",
+  rate: "Demasiados intentos, espera 15 minutos.",
+};
+
+/** La "G" de Google en línea: sus lineamientos de marca piden el logo junto al
+ *  texto, y embebido no cuesta una petición externa ni depende de su CDN. */
+function GoogleMark() {
+  return (
+    <svg viewBox="0 0 48 48" className="h-4 w-4 shrink-0" aria-hidden>
+      <path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-2.8-.4-4H24v7.6h11.9c-.2 2-1.5 4.9-4.4 6.9l-.1.3 6.4 5 .4.1c4.1-3.8 6.9-9.3 6.9-15.9z" />
+      <path fill="#34A853" d="M24 46c5.9 0 10.8-1.9 14.2-5.3l-6.8-5.2c-1.8 1.3-4.3 2.2-7.4 2.2-5.7 0-10.5-3.7-12.2-8.8l-.3.1-6.6 5.1-.1.3C8.2 41.1 15.5 46 24 46z" />
+      <path fill="#FBBC05" d="M11.8 28.9c-.5-1.4-.7-2.8-.7-4.4s.3-3 .7-4.4l-.1-.3-6.7-5.2-.2.1C3.2 17.5 2.4 20.6 2.4 24s.8 6.5 2.4 9.3l7-4.4z" />
+      <path fill="#EA4335" d="M24 9.8c4 0 6.7 1.7 8.3 3.2l6-5.9C34.7 3.7 29.9 2 24 2 15.5 2 8.2 6.9 4.8 14.7l7 5.4C13.5 15 18.3 9.8 24 9.8z" />
+    </svg>
+  );
+}
+
+// useSearchParams obliga a un límite de Suspense: al prerender, los search
+// params no existen todavía y next build aborta la página sin él. El fallback
+// replica la rama de carga de Home, así el primer paint no cambia de forma.
+export default function Page() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen flex items-center justify-center gap-3 text-muted-foreground">
+        <Spinner className="text-sky" />
+        <span className="text-sm">Cargando…</span>
+      </main>
+    }>
+      <Home />
+    </Suspense>
+  );
+}
+
+function Home() {
   const [authed, setAuthed] = useState<boolean | null>(null);
-  const [password, setPassword] = useState("");
-  const [loginErr, setLoginErr] = useState<string | null>(null);
-  const [loggingIn, setLoggingIn] = useState(false);
   const [status, setStatus] = useState<Status | null>(null);
   const [justLoggedIn, setJustLoggedIn] = useState(false);
+  const params = useSearchParams();
+  const authError = ERROR_MESSAGES[params.get("error") ?? ""] ?? null;
 
   async function loadStatus() {
     const r = await fetch("/api/sync/status");
@@ -79,16 +118,16 @@ export default function Home() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadStatus(); }, []);
 
-  async function login(e: React.FormEvent) {
-    e.preventDefault();
-    if (loggingIn) return;
-    setLoginErr(null); setLoggingIn(true);
-    try {
-      const r = await fetch("/api/login", { method: "POST", body: JSON.stringify({ password }) });
-      if (r.ok) { setPassword(""); setJustLoggedIn(true); await loadStatus(); }
-      else setLoginErr(r.status === 429 ? "Demasiados intentos, espera 15 min." : "Contraseña incorrecta.");
-    } finally { setLoggingIn(false); }
-  }
+  // El callback de Google vuelve con ?bienvenida=1: es lo único que distingue
+  // "acabo de entrar" de "recargué con la cookie viva". Se lee una vez y se
+  // limpia de la URL — si el parámetro se quedara, cada F5 volvería a ofrecer el
+  // recorrido, que es justo lo que la key de localStorage evita.
+  useEffect(() => {
+    if (params.get("bienvenida") !== "1") return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setJustLoggedIn(true);
+    window.history.replaceState({}, "", "/");
+  }, [params]);
 
   if (authed === null) {
     return (
@@ -112,25 +151,21 @@ export default function Home() {
             <p className="mt-0.5 text-[13px] text-muted-foreground">Reportes y exportación de bases de Notion</p>
           </div>
         </div>
-        <Card className="w-full max-w-sm p-6">
-          <form onSubmit={login} className="space-y-3.5">
-            <div className="space-y-2">
-              <Label htmlFor="login-password" className="text-[10.5px] font-semibold uppercase tracking-widest text-subtle">
-                Contraseña compartida
-              </Label>
-              <div className="relative">
-                <Lock className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
-                <Input id="login-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-                       placeholder="Contraseña" autoFocus className="h-10 bg-background pl-9" />
-              </div>
-              {loginErr && <p className="text-sm font-medium text-danger">{loginErr}</p>}
-            </div>
-            <Button type="submit" disabled={loggingIn} className="h-10 w-full">
-              {loggingIn && <Spinner />}
-              {loggingIn ? "Entrando…" : "Entrar"}
-            </Button>
-            <p className="text-center text-xs text-muted-foreground">5 intentos cada 15 minutos.</p>
-          </form>
+        <Card className="w-full max-w-sm space-y-3.5 p-6">
+          {authError && (
+            <p role="alert" className="text-sm font-medium text-danger">{authError}</p>
+          )}
+          {/* Link con navegación real, no fetch: el flujo de OAuth es una
+              redirección del navegador y un XHR no la puede seguir. */}
+          <Button asChild className="h-10 w-full">
+            <a href="/api/auth/google">
+              <GoogleMark />
+              Continuar con Google
+            </a>
+          </Button>
+          <p className="text-center text-xs text-muted-foreground">
+            Sólo cuentas de los dominios autorizados de iU Corp.
+          </p>
         </Card>
         <p className="text-[11px] text-subtle">iU Corp · herramienta interna</p>
       </main>

@@ -1,16 +1,8 @@
 import { test, expect, type Locator } from "@playwright/test";
 import { login } from "./helpers";
 
-test("login screen renders and rejects wrong password", async ({ page }) => {
-  await page.goto("/");
-  await expect(page.getByPlaceholder("Contraseña")).toBeVisible();
-  await page.getByPlaceholder("Contraseña").fill("incorrecto");
-  await page.getByRole("button", { name: "Entrar" }).click();
-  await expect(page.getByText(/Contraseña incorrecta|Demasiados intentos/)).toBeVisible();
-});
-
-// Sólo en modo stub (default): el password del entorno E2E es conocido.
-// Con E2E_REAL=1 se salta — no conocemos el password real.
+// Sólo en modo stub (default): la sesión entra por /api/auth/stub-login.
+// Con E2E_REAL=1 se salta — no hay cuenta de Google que Playwright pueda usar.
 test("login shows main menu and sync/export modals work", async ({ page }) => {
   test.skip(process.env.E2E_REAL === "1", "password real desconocido");
   await login(page);
@@ -430,6 +422,17 @@ test("legacy /reports redirects to /db/tiempos/reports", async ({ page }) => {
   await page.goto("/reports");
   await page.waitForURL("**/db/tiempos/reports");
   expect(page.url()).toContain("/db/tiempos/reports");
+});
+
+test("la tarjeta de login ofrece Google y traduce el error del callback", async ({ page }) => {
+  await page.goto("/?error=domain");
+  const boton = page.getByRole("link", { name: "Continuar con Google" });
+  await expect(boton).toBeVisible();
+  await expect(boton).toHaveAttribute("href", "/api/auth/google");
+  // El mensaje no filtra el correo ni el error crudo de Google.
+  await expect(page.getByText("Esa cuenta no está autorizada")).toBeVisible();
+  // Ya no hay password que escribir.
+  await expect(page.getByPlaceholder("Contraseña")).toHaveCount(0);
 });
 
 test("la ruta de stub-login sólo existe con E2E_STUBS", async ({ request }) => {
