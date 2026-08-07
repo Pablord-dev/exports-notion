@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { describe, it, expect } from "vitest";
-import { parseAllowedDomains, isAllowedEmail, newState, newPkce, callbackUrl, authorizeUrl, readIdToken } from "@/lib/google-oauth";
+import { describe, it, expect, afterEach } from "vitest";
+import { parseAllowedDomains, isAllowedEmail, newState, newPkce, callbackUrl, authorizeUrl, readIdToken, exchangeCode, __setTokenFetcher, __resetTokenFetcher } from "@/lib/google-oauth";
 
 describe("parseAllowedDomains", () => {
   it("separa por comas, recorta y baja a minúsculas", () => {
@@ -154,5 +154,58 @@ describe("readIdToken", () => {
   });
   it("rechaza un token sin correo", () => {
     expect(read({ ...base, email: undefined })).toEqual({ ok: false, problem: "malformed" });
+  });
+});
+
+describe("exchangeCode", () => {
+  afterEach(() => __resetTokenFetcher());
+
+  it("postea al endpoint de token con el code, el verifier y el secreto", async () => {
+    let seen: { url: string; body: URLSearchParams } | null = null;
+    __setTokenFetcher(async (url, init) => {
+      seen = { url, body: new URLSearchParams(String(init.body)) };
+      return new Response(JSON.stringify({ id_token: "tok" }), { status: 200 });
+    });
+
+    const r = await exchangeCode({
+      code: "c0de", codeVerifier: "verif", redirectUri: "http://localhost:3000/api/auth/google/callback",
+      clientId: "cid", clientSecret: "sec",
+    });
+
+    expect(r).toEqual({ ok: true, idToken: "tok" });
+    expect(seen!.url).toBe("https://oauth2.googleapis.com/token");
+    expect(seen!.body.get("code")).toBe("c0de");
+    expect(seen!.body.get("code_verifier")).toBe("verif");
+    expect(seen!.body.get("client_secret")).toBe("sec");
+    expect(seen!.body.get("grant_type")).toBe("authorization_code");
+    expect(seen!.body.get("redirect_uri")).toBe("http://localhost:3000/api/auth/google/callback");
+  });
+
+  it("falla si Google responde con error", async () => {
+    __setTokenFetcher(async () => new Response(JSON.stringify({ error: "invalid_grant" }), { status: 400 }));
+    expect(await exchangeCode({
+      code: "c0de", codeVerifier: "v", redirectUri: "r", clientId: "cid", clientSecret: "sec",
+    })).toEqual({ ok: false });
+  });
+
+  it("falla si la respuesta no trae id_token", async () => {
+    __setTokenFetcher(async () => new Response(JSON.stringify({ access_token: "solo-este" }), { status: 200 }));
+    expect(await exchangeCode({
+      code: "c0de", codeVerifier: "v", redirectUri: "r", clientId: "cid", clientSecret: "sec",
+    })).toEqual({ ok: false });
+  });
+
+  it("falla si la respuesta no es JSON", async () => {
+    __setTokenFetcher(async () => new Response("<html>502</html>", { status: 200 }));
+    expect(await exchangeCode({
+      code: "c0de", codeVerifier: "v", redirectUri: "r", clientId: "cid", clientSecret: "sec",
+    })).toEqual({ ok: false });
+  });
+
+  it("falla si la red se cae, sin propagar la excepción", async () => {
+    __setTokenFetcher(async () => { throw new Error("ECONNRESET"); });
+    expect(await exchangeCode({
+      code: "c0de", codeVerifier: "v", redirectUri: "r", clientId: "cid", clientSecret: "sec",
+    })).toEqual({ ok: false });
   });
 });

@@ -46,6 +46,56 @@ export function authorizeUrl(p: {
   return `${AUTH_ENDPOINT}?${q}`;
 }
 
+const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
+
+type TokenFetcher = (url: string, init: RequestInit) => Promise<Response>;
+const realFetcher: TokenFetcher = (url, init) => fetch(url, init);
+let tokenFetcher: TokenFetcher = realFetcher;
+
+/** Costura de tests, mismo patrón que __setLlmClient / __setStore: inyectar un
+ *  doble en vez de mockear módulos globalmente. */
+export function __setTokenFetcher(f: TokenFetcher): void {
+  tokenFetcher = f;
+}
+export function __resetTokenFetcher(): void {
+  tokenFetcher = realFetcher;
+}
+
+/**
+ * Canjea el `code` por tokens. Devuelve un resultado, nunca lanza: para el
+ * callback cualquier fallo aquí es el mismo error de cara al usuario, y una
+ * excepción sin atrapar convertiría un login fallido en un 500.
+ */
+export async function exchangeCode(p: {
+  code: string;
+  codeVerifier: string;
+  redirectUri: string;
+  clientId: string;
+  clientSecret: string;
+}): Promise<{ ok: true; idToken: string } | { ok: false }> {
+  const body = new URLSearchParams({
+    code: p.code,
+    client_id: p.clientId,
+    client_secret: p.clientSecret,
+    redirect_uri: p.redirectUri,
+    grant_type: "authorization_code",
+    code_verifier: p.codeVerifier,
+  });
+  try {
+    const r = await tokenFetcher(TOKEN_ENDPOINT, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: body.toString(),
+    });
+    if (!r.ok) return { ok: false };
+    const j = (await r.json()) as { id_token?: unknown };
+    if (typeof j?.id_token !== "string" || !j.id_token) return { ok: false };
+    return { ok: true, idToken: j.id_token };
+  } catch {
+    return { ok: false };
+  }
+}
+
 /** Los dos valores de `iss` que Google emite. Validar sólo uno rechazaría
  *  logins legítimos. */
 const GOOGLE_ISS = new Set(["accounts.google.com", "https://accounts.google.com"]);
