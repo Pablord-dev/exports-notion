@@ -105,7 +105,10 @@ function Home() {
   const [status, setStatus] = useState<Status | null>(null);
   const [justLoggedIn, setJustLoggedIn] = useState(false);
   const params = useSearchParams();
-  const authError = ERROR_MESSAGES[params.get("error") ?? ""] ?? null;
+  // Object.hasOwn y no un lookup directo: ?error=constructor resolvería por la
+  // cadena de prototipos a una función, que React no puede renderizar.
+  const errorCode = params.get("error") ?? "";
+  const authError = Object.hasOwn(ERROR_MESSAGES, errorCode) ? ERROR_MESSAGES[errorCode] : null;
 
   async function loadStatus() {
     const r = await fetch("/api/sync/status");

@@ -433,9 +433,16 @@ test("la tarjeta de login ofrece Google y traduce el error del callback", async 
   await expect(page.getByText("Esa cuenta no está autorizada")).toBeVisible();
   // Ya no hay password que escribir.
   await expect(page.getByPlaceholder("Contraseña")).toHaveCount(0);
+  // Un código desconocido —incluido un nombre heredado del prototipo, como
+  // ?error=constructor— no pinta banner: el lookup exige clave propia. La
+  // aserción va acotada a main: el route announcer de Next también es role=alert.
+  await page.goto("/?error=constructor");
+  await expect(page.getByRole("link", { name: "Continuar con Google" })).toBeVisible();
+  await expect(page.locator("main").getByRole("alert")).toHaveCount(0);
 });
 
 test("el footer del shell identifica a quien inició sesión", async ({ page }) => {
+  test.skip(process.env.E2E_REAL === "1", "sin stub de sesión en modo real");
   await login(page);
   const footer = page.getByRole("complementary", { name: "Navegación" });
   await expect(footer.getByText("Usuario E2E")).toBeVisible();
