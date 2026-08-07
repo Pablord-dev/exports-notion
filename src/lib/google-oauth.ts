@@ -208,7 +208,7 @@ export interface CallbackEnv {
   allowedDomains: string;
 }
 
-export type CallbackFailure = "state" | "google" | "token" | "unverified" | "domain";
+export type CallbackFailure = "state" | "google" | "token" | "unverified" | "domain" | "rate";
 
 /**
  * Decide si alguien entra. Puro a propósito: recibe la cookie sellada como
@@ -223,6 +223,11 @@ export async function resolveCallback(input: {
   sealedTx: string | undefined;
   env: CallbackEnv;
   nowMs: number;
+  /** Gate previo al canje (el rate-limit en producción). Corre DESPUÉS de las
+   *  validaciones puras: cancelar en Google o mandar un state forjado no debe
+   *  consumir la ventana — lo único que el límite protege es la salida a
+   *  hablar con Google. false = negado → failure "rate". */
+  beforeExchange?: () => Promise<boolean>;
 }): Promise<{ ok: true; identity: GoogleIdentity } | { ok: false; failure: CallbackFailure }> {
   // El usuario canceló en la pantalla de Google, o Google rechazó la petición.
   if (input.googleError) return { ok: false, failure: "google" };
@@ -232,6 +237,10 @@ export async function resolveCallback(input: {
   // El state se compara ANTES de canjear: sin esto, un code inyectado por un
   // tercero se cambiaría por una sesión.
   if (!tx || tx.state !== input.state) return { ok: false, failure: "state" };
+
+  if (input.beforeExchange && !(await input.beforeExchange())) {
+    return { ok: false, failure: "rate" };
+  }
 
   const redirectUri = callbackUrl(input.env.origin);
   const ex = await exchangeCode({

@@ -128,6 +128,45 @@ describe("resolveCallback", () => {
   });
 });
 
+// El gate de beforeExchange (el rate-limit en producción) corre DESPUÉS de las
+// validaciones puras y ANTES del canje: una cancelación del usuario o un state
+// forjado no deben consumir la ventana de 5/15min — sólo protege el canje real.
+describe("resolveCallback · beforeExchange (rate-limit)", () => {
+  let sealed: string;
+  beforeEach(async () => { sealed = await sealTx({ state: "st4te", verifier: "verif" }, SECRET); });
+  afterEach(() => __resetTokenFetcher());
+
+  const call = (over: Partial<Parameters<typeof resolveCallback>[0]> = {}) =>
+    resolveCallback({ code: "c0de", state: "st4te", googleError: null, sealedTx: sealed, env, nowMs: NOW, ...over });
+
+  it("no se consume cuando Google manda error (el usuario canceló)", async () => {
+    let gate = 0;
+    await call({ googleError: "access_denied", beforeExchange: async () => { gate++; return true; } });
+    expect(gate).toBe(0);
+  });
+
+  it("no se consume con un state que no coincide", async () => {
+    let gate = 0;
+    await call({ state: "otro", beforeExchange: async () => { gate++; return true; } });
+    expect(gate).toBe(0);
+  });
+
+  it("gate negado: failure=rate y NO canjea el code", async () => {
+    let llamado = false;
+    __setTokenFetcher(async () => { llamado = true; return new Response("{}", { status: 200 }); });
+    expect(await call({ beforeExchange: async () => false })).toEqual({ ok: false, failure: "rate" });
+    expect(llamado).toBe(false);
+  });
+
+  it("el camino feliz lo consume exactamente una vez", async () => {
+    googleReturns();
+    let gate = 0;
+    const r = await call({ beforeExchange: async () => { gate++; return true; } });
+    expect(r.ok).toBe(true);
+    expect(gate).toBe(1);
+  });
+});
+
 describe("stub-login", () => {
   const original = process.env.E2E_STUBS;
   const req = () => new NextRequest("http://localhost:3000/api/auth/stub-login");
