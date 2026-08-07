@@ -41,6 +41,11 @@ describe("loadConfig", () => {
     }
   });
 
+  it("ALLOWED_EMAIL_DOMAINS vacío es configuración válida: nadie entra, no var faltante", () => {
+    process.env.ALLOWED_EMAIL_DOMAINS = "";
+    expect(loadConfig().allowedEmailDomains).toBe("");
+  });
+
   it("ya no exige el password compartido", () => {
     delete process.env.APP_PASSWORD_HASH;
     expect(() => loadConfig()).not.toThrow();

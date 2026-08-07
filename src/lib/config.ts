@@ -36,8 +36,12 @@ export function loadConfig(): AppConfig {
   const out = {} as Record<keyof AppConfig, string>;
   for (const [field, envName] of Object.entries(KEYS) as [keyof AppConfig, string][]) {
     const v = process.env[envName];
-    if (!v) missing.push(envName);
-    else out[field] = v;
+    // ALLOWED_EMAIL_DOMAINS admite el vacío a propósito: "" = nadie entra (el
+    // cierre documentado en .env.example), no configuración faltante — tratarla
+    // como faltante convertía la revocación total en un server que no arranca.
+    const present = field === "allowedEmailDomains" ? v !== undefined : Boolean(v);
+    if (!present) missing.push(envName);
+    else out[field] = v as string;
   }
   if (missing.length) throw new Error(`Missing env vars: ${missing.join(", ")}`);
   return out as AppConfig;
