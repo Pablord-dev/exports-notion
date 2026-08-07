@@ -1,9 +1,11 @@
 import { expect, type Page } from "@playwright/test";
 
-const STUB_PASSWORD = "e2e-password";
-
 /**
  * Login del entorno stub.
+ *
+ * Navega a /api/auth/stub-login, que sólo existe con E2E_STUBS=1 y escribe la
+ * sesión directo: Playwright no puede completar el flujo real de Google. La ruta
+ * redirige a /, así que al volver ya estamos en el menú.
  *
  * welcome: "skip" (default) siembra el estado del onboarding ANTES de cargar la
  * página, así el modal de bienvenida no aparece y no intercepta los clicks de
@@ -15,12 +17,17 @@ export async function login(page: Page, opts: { welcome?: "skip" | "expect" } = 
       window.localStorage.setItem("onboarding-v1", JSON.stringify({ welcomeSeen: true }));
     });
   }
-  await page.goto("/");
-  await page.getByPlaceholder("Contraseña").fill(STUB_PASSWORD);
-  await page.getByRole("button", { name: "Entrar" }).click();
-  // Esperar el shell autenticado, no sólo el click: el POST /api/login es
-  // asíncrono y sin esto el helper regresa antes de que la cookie exista —
-  // un test que navegue de inmediato aterriza en "necesitas iniciar sesión".
+  await page.goto("/api/auth/stub-login");
+  // El stub redirige a / SIN ?bienvenida=1, y es correcto: el aviso de
+  // bienvenida sólo debe salir tras un login real (el callback de Google es
+  // quien agrega el parámetro). Los tests que sí esperan la bienvenida
+  // reproducen esa vuelta a mano.
+  if ((opts.welcome ?? "skip") === "expect") {
+    await page.goto("/?bienvenida=1");
+  }
+  // Esperar el shell autenticado, no sólo la navegación: sin esto el helper
+  // regresa antes de que la página termine de montar su rama con sesión, y un
+  // test que interactúe de inmediato corre contra el "Cargando…".
   await expect(page.getByRole("complementary", { name: "Navegación" })).toBeAttached();
   if ((opts.welcome ?? "skip") === "skip") {
     await expect(page.getByTestId("welcome-modal")).toBeHidden();
