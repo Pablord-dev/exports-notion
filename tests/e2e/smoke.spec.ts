@@ -431,3 +431,12 @@ test("legacy /reports redirects to /db/tiempos/reports", async ({ page }) => {
   await page.waitForURL("**/db/tiempos/reports");
   expect(page.url()).toContain("/db/tiempos/reports");
 });
+
+test("la ruta de stub-login sólo existe con E2E_STUBS", async ({ request }) => {
+  // En esta suite la bandera está encendida, así que responde. El valor del test
+  // es la aserción de arriba en CI y la de abajo como recordatorio: si algún día
+  // esta ruta contesta en un entorno sin la bandera, es un agujero de auth.
+  const r = await request.get("/api/auth/stub-login", { maxRedirects: 0 });
+  expect(r.status()).toBe(307);
+  expect(process.env.E2E_STUBS).toBe("1");
+});

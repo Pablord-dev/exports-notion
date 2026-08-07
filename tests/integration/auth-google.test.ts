@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { NextRequest } from "next/server";
 import {
   resolveCallback, sealTx, openTx, __setTokenFetcher, __resetTokenFetcher,
   type CallbackEnv,
 } from "@/lib/google-oauth";
+import { GET as stubLogin } from "@/app/api/auth/stub-login/route";
 
 const SECRET = "x".repeat(32);
 const NOW = Date.UTC(2026, 7, 7, 12, 0, 0);
@@ -123,5 +125,21 @@ describe("resolveCallback", () => {
     });
     await call();
     expect(body!.get("redirect_uri")).toBe("http://localhost:3000/api/auth/google/callback");
+  });
+});
+
+describe("stub-login", () => {
+  const original = process.env.E2E_STUBS;
+  const req = () => new NextRequest("http://localhost:3000/api/auth/stub-login");
+  afterEach(() => { process.env.E2E_STUBS = original; });
+
+  it("responde 404 sin E2E_STUBS: una ruta que emite sesiones no puede existir en producción", async () => {
+    delete process.env.E2E_STUBS;
+    expect((await stubLogin(req())).status).toBe(404);
+  });
+
+  it("tampoco existe con un valor distinto de \"1\"", async () => {
+    process.env.E2E_STUBS = "true";
+    expect((await stubLogin(req())).status).toBe(404);
   });
 });
