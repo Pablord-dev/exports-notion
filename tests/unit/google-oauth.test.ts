@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { describe, it, expect } from "vitest";
-import { parseAllowedDomains, isAllowedEmail, newState, newPkce, callbackUrl, authorizeUrl } from "@/lib/google-oauth";
+import { parseAllowedDomains, isAllowedEmail, newState, newPkce, callbackUrl, authorizeUrl, readIdToken } from "@/lib/google-oauth";
 
 describe("parseAllowedDomains", () => {
   it("separa por comas, recorta y baja a minúsculas", () => {
@@ -93,5 +93,66 @@ describe("authorizeUrl", () => {
   });
   it("deja elegir cuenta", () => {
     expect(url().searchParams.get("prompt")).toBe("select_account");
+  });
+});
+
+/** Arma un JWT de tres partes con la firma en blanco: readIdToken no verifica
+ *  firma a propósito (el token viene del canje directo por TLS), así que para el
+ *  test la firma es irrelevante. */
+function fakeIdToken(payload: Record<string, unknown>): string {
+  const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64url");
+  return `${b64({ alg: "RS256" })}.${b64(payload)}.firma-no-verificada`;
+}
+
+const NOW = Date.UTC(2026, 7, 7, 12, 0, 0);
+const base = {
+  aud: "cid",
+  iss: "https://accounts.google.com",
+  exp: Math.floor(NOW / 1000) + 3600,
+  email: "pablo@hiuman.edu.mx",
+  email_verified: true,
+  name: "Pablo Sánchez",
+};
+
+describe("readIdToken", () => {
+  const read = (p: Record<string, unknown>) => readIdToken(fakeIdToken(p), { clientId: "cid", nowMs: NOW });
+
+  it("devuelve correo y nombre de un token válido", () => {
+    expect(read(base)).toEqual({ ok: true, identity: { email: "pablo@hiuman.edu.mx", name: "Pablo Sánchez" } });
+  });
+  it("acepta el iss sin esquema, que Google también emite", () => {
+    expect(read({ ...base, iss: "accounts.google.com" })).toEqual({
+      ok: true, identity: { email: "pablo@hiuman.edu.mx", name: "Pablo Sánchez" },
+    });
+  });
+  it("cae al correo cuando no viene el nombre", () => {
+    const r = read({ ...base, name: undefined });
+    expect(r).toEqual({ ok: true, identity: { email: "pablo@hiuman.edu.mx", name: "pablo@hiuman.edu.mx" } });
+  });
+  it("rechaza un aud de otra app", () => {
+    expect(read({ ...base, aud: "otra-app" })).toEqual({ ok: false, problem: "aud" });
+  });
+  it("rechaza un iss ajeno", () => {
+    expect(read({ ...base, iss: "https://evil.example" })).toEqual({ ok: false, problem: "iss" });
+  });
+  it("rechaza un token vencido", () => {
+    expect(read({ ...base, exp: Math.floor(NOW / 1000) - 1 })).toEqual({ ok: false, problem: "expired" });
+  });
+  it("rechaza un correo sin verificar", () => {
+    expect(read({ ...base, email_verified: false })).toEqual({ ok: false, problem: "unverified" });
+  });
+  it("no acepta email_verified por truthiness", () => {
+    expect(read({ ...base, email_verified: "yes" })).toEqual({ ok: false, problem: "unverified" });
+    expect(read({ ...base, email_verified: 1 })).toEqual({ ok: false, problem: "unverified" });
+  });
+  it("acepta el string \"true\", por si Google lo emite así", () => {
+    expect(read({ ...base, email_verified: "true" }).ok).toBe(true);
+  });
+  it("rechaza un token sin las tres partes o con payload ilegible", () => {
+    expect(readIdToken("no-es-un-jwt", { clientId: "cid", nowMs: NOW })).toEqual({ ok: false, problem: "malformed" });
+    expect(readIdToken("a.b.c", { clientId: "cid", nowMs: NOW })).toEqual({ ok: false, problem: "malformed" });
+  });
+  it("rechaza un token sin correo", () => {
+    expect(read({ ...base, email: undefined })).toEqual({ ok: false, problem: "malformed" });
   });
 });

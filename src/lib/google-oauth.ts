@@ -46,6 +46,58 @@ export function authorizeUrl(p: {
   return `${AUTH_ENDPOINT}?${q}`;
 }
 
+/** Los dos valores de `iss` que Google emite. Validar sólo uno rechazaría
+ *  logins legítimos. */
+const GOOGLE_ISS = new Set(["accounts.google.com", "https://accounts.google.com"]);
+
+export interface GoogleIdentity {
+  email: string;
+  name: string;
+}
+
+export type IdTokenProblem = "malformed" | "aud" | "iss" | "expired" | "unverified";
+
+/**
+ * Lee el ID token SIN verificar su firma. Es deliberado y sólo vale porque el
+ * token llega del canje directo con el endpoint de Google por TLS: el canal ya
+ * autentica el origen, y la verificación de firma es para tokens que llegan de
+ * terceros. ⚠️ Si algún día se acepta un id_token por otra vía, hay que verificar
+ * la firma (JWKS) antes de confiar en estos claims.
+ */
+export function readIdToken(
+  idToken: string,
+  o: { clientId: string; nowMs: number },
+): { ok: true; identity: GoogleIdentity } | { ok: false; problem: IdTokenProblem } {
+  const parts = idToken.split(".");
+  if (parts.length !== 3) return { ok: false, problem: "malformed" };
+
+  let claims: Record<string, unknown>;
+  try {
+    claims = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+  } catch {
+    return { ok: false, problem: "malformed" };
+  }
+  if (!claims || typeof claims !== "object") return { ok: false, problem: "malformed" };
+
+  if (claims.aud !== o.clientId) return { ok: false, problem: "aud" };
+  if (typeof claims.iss !== "string" || !GOOGLE_ISS.has(claims.iss)) return { ok: false, problem: "iss" };
+  if (typeof claims.exp !== "number" || claims.exp * 1000 <= o.nowMs) return { ok: false, problem: "expired" };
+
+  const email = claims.email;
+  if (typeof email !== "string" || !email) return { ok: false, problem: "malformed" };
+
+  // Explícito, nunca por truthiness: un claim ausente o con cualquier otro valor
+  // es "no verificado". Sin esto, alguien podría declarar un correo del dominio
+  // sin poseerlo.
+  const verified = claims.email_verified === true || claims.email_verified === "true";
+  if (!verified) return { ok: false, problem: "unverified" };
+
+  // Google no garantiza `name`. Sin fallback, la UI mostraría un hueco donde va
+  // una persona.
+  const name = typeof claims.name === "string" && claims.name.trim() ? claims.name.trim() : email;
+  return { ok: true, identity: { email, name } };
+}
+
 /**
  * Lee ALLOWED_EMAIL_DOMAINS. Descarta entradas vacías para que una coma sobrante
  * ("a.com,") no registre un dominio fantasma que después acepte cualquier cosa.
