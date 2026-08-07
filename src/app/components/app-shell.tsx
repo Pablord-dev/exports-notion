@@ -30,6 +30,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { DATABASES } from "@/lib/databases";
+import type { SessionUser } from "@/lib/session";
 import { Spinner } from "@/app/components/spinner";
 import { TourLayer, type TourBinding } from "@/app/components/tour/tour-layer";
 
@@ -58,6 +59,15 @@ const DB_ICONS: Record<string, React.ReactNode> = {
 // Contador compacto para el badge de la BD: 21307 → "21.3k".
 const fmtCompact = (n: number): string =>
   n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+
+/** Hasta dos iniciales. Un correo sin espacios da una sola, que es correcto:
+ *  inventar la segunda a partir del dominio produciría "PH" para pablo@hiuman. */
+function initials(nameOrEmail: string): string {
+  const parts = nameOrEmail.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  const letters = parts.slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "");
+  return letters.join("");
+}
 
 function NavLink({ href, label, icon, badge, onNavigate }: {
   href: string; label: string; icon: React.ReactNode; badge?: string; onNavigate: () => void;
@@ -108,6 +118,7 @@ export function AppShell({ children, onLogout, tour, justLoggedIn }: {
   const [dbsOpen, setDbsOpen] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
   const [count, setCount] = useState<number | null>(null);
+  const [user, setUser] = useState<SessionUser | null>(null);
 
   // Contador de registros para el badge de la BD. El shell solo se monta en
   // ramas autenticadas; si el fetch falla, simplemente no hay badge.
@@ -120,6 +131,22 @@ export function AppShell({ children, onLogout, tour, justLoggedIn }: {
         const s = await r.json();
         if (alive && typeof s?.meta?.count === "number") setCount(s.meta.count);
       } catch { /* sin badge */ }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  // El shell sólo se monta autenticado, así que esta respuesta siempre trae
+  // usuario. Es el único consumidor de la identidad en toda la app: por eso la
+  // pide él y no se le pasa por props desde las tres páginas.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const r = await fetch("/api/auth/session");
+        if (!r.ok) return;
+        const j = (await r.json()) as { user?: SessionUser | null };
+        if (alive && j.user) setUser(j.user);
+      } catch { /* sin identidad el footer cae al correo vacío, no rompe */ }
     })();
     return () => { alive = false; };
   }, []);
@@ -194,7 +221,7 @@ export function AppShell({ children, onLogout, tour, justLoggedIn }: {
     if (loggingOut) return;
     setLoggingOut(true);
     try {
-      await fetch("/api/login", { method: "DELETE" });
+      await fetch("/api/auth/logout", { method: "POST" });
       onLogout();
     } finally { setLoggingOut(false); }
   }
@@ -310,10 +337,20 @@ export function AppShell({ children, onLogout, tour, justLoggedIn }: {
           </Collapsible>
         </nav>
 
-        {/* Footer de sesión: estado + logout como icono */}
+        {/* Footer de sesión: identidad + logout como icono */}
         <div className="flex items-center gap-2.5 border-t border-sidebar-border px-4 py-2.5">
-          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-success" aria-hidden />
-          <span className="flex-1 truncate text-xs text-muted-foreground">Sesión activa</span>
+          {/* Iniciales en vez de la foto de Google: la imagen vive en
+              lh3.googleusercontent.com, lo que obliga a declarar
+              images.remotePatterns y dispara una petición externa en cada carga.
+              El nombre cae al correo cuando Google no manda `name`. */}
+          <span aria-hidden
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent text-[10px] font-semibold text-accent-foreground">
+            {initials(user?.name ?? user?.email ?? "")}
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col leading-tight">
+            <span className="truncate text-xs text-sidebar-foreground">{user?.name ?? "Sesión activa"}</span>
+            {user?.email && <span className="truncate text-[10.5px] text-subtle">{user.email}</span>}
+          </span>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button variant="ghost" size="icon" onClick={logout} disabled={loggingOut}

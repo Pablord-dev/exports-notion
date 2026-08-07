@@ -435,6 +435,15 @@ test("la tarjeta de login ofrece Google y traduce el error del callback", async 
   await expect(page.getByPlaceholder("Contraseña")).toHaveCount(0);
 });
 
+test("el footer del shell identifica a quien inició sesión", async ({ page }) => {
+  await login(page);
+  const footer = page.getByRole("complementary", { name: "Navegación" });
+  await expect(footer.getByText("Usuario E2E")).toBeVisible();
+  await expect(footer.getByText("e2e@hiuman.edu.mx")).toBeVisible();
+  // Ya no dice sólo "Sesión activa".
+  await expect(footer.getByText("Sesión activa")).toHaveCount(0);
+});
+
 test("la ruta de stub-login sólo existe con E2E_STUBS", async ({ request }) => {
   // En esta suite la bandera está encendida, así que responde. El valor del test
   // es la aserción de arriba en CI y la de abajo como recordatorio: si algún día
