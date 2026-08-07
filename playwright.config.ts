@@ -7,8 +7,8 @@ import { defineConfig, devices } from "@playwright/test";
 const REAL = process.env.E2E_REAL === "1";
 const PORT = REAL ? 3000 : 3100;
 
-// Password del entorno stub: "e2e-password" (resuelto en verifyPassword con
-// E2E_STUBS=1). OJO: `next start` pisa el process.env heredado con .env.local
+// El entorno stub entra por /api/auth/stub-login, que sólo existe con
+// E2E_STUBS=1. OJO: `next start` pisa el process.env heredado con .env.local
 // (verificado empíricamente en Next 16.2.6, contra lo que dice la doc), así
 // que los valores de aquí sólo surten efecto si NO hay .env.local — su único
 // propósito es satisfacer el fail-fast de instrumentation.ts en máquinas sin
@@ -19,11 +19,16 @@ const STUB_ENV = {
   NOTION_TOKEN: "e2e-dummy",
   NOTION_DATABASE_ID: "e2e-dummy",
   DATE_COLUMN: "When",
-  APP_PASSWORD_HASH: "e2e-dummy",
   SESSION_SECRET: "e2e-session-secret-of-32-chars!!",
   CRON_SECRET: "e2e-dummy",
   // Nunca se conecta (E2E_STUBS=1 usa memoryStore), pero loadConfig la exige.
   DATABASE_URL: "postgresql://e2e:e2e@127.0.0.1:1/e2e",
+  // El stub nunca habla con Google (E2E_STUBS=1 entra por /api/auth/stub-login),
+  // pero loadConfig las exige.
+  GOOGLE_CLIENT_ID: "e2e-dummy",
+  GOOGLE_CLIENT_SECRET: "e2e-dummy",
+  ALLOWED_EMAIL_DOMAINS: "hiuman.edu.mx",
+  APP_ORIGIN: `http://localhost:${PORT}`,
 };
 
 export default defineConfig({

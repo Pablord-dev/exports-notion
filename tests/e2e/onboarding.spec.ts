@@ -1,11 +1,20 @@
 import { test, expect, type Page } from "@playwright/test";
 import { login, gotoReports } from "./helpers";
 
-// Todo este archivo depende del password del entorno stub. test.skip() dentro de
-// un hook aplica a cada test del archivo (llamarlo en el top-level lanzaría).
+// Todo este archivo depende del stub de sesión (E2E_STUBS). test.skip() dentro
+// de un hook aplica a cada test del archivo (llamarlo en el top-level lanzaría).
 test.beforeEach(() => {
-  test.skip(process.env.E2E_REAL === "1", "password real desconocido");
+  test.skip(process.env.E2E_REAL === "1", "sin stub de sesión en modo real");
 });
+
+// Segundo ingreso en el mismo contexto: como el stub, pero reproduciendo el
+// ?bienvenida=1 con el que vuelve el callback real — es lo que distingue
+// "acabo de entrar" de un F5 con la cookie viva.
+async function relogin(page: Page): Promise<void> {
+  await expect(page.getByRole("link", { name: "Continuar con Google" })).toBeVisible();
+  await page.goto("/api/auth/stub-login");
+  await page.goto("/?bienvenida=1");
+}
 
 const popover = (page: Page) => page.getByTestId("tour-popover");
 const progress = (page: Page) => page.getByTestId("tour-progress");
@@ -115,8 +124,7 @@ test("el segundo login muestra la tira discreta, no el modal", async ({ page }) 
   // Cerrar sesión y volver a entrar en el mismo contexto (mismo localStorage).
   await page.getByRole("complementary", { name: "Navegación" })
             .getByRole("button", { name: "Cerrar sesión" }).click();
-  await page.getByPlaceholder("Contraseña").fill("e2e-password");
-  await page.getByRole("button", { name: "Entrar" }).click();
+  await relogin(page);
 
   await expect(page.getByTestId("welcome-modal")).toBeHidden();
   // El aviso entra unos segundos después del login (BANNER_DELAY_MS), flotando
@@ -137,8 +145,7 @@ test("el aviso del tutorial se queda hasta cerrarlo o cambiar de página", async
   await page.getByTestId("welcome-modal").getByRole("button", { name: "Ahora no" }).click();
   await page.getByRole("complementary", { name: "Navegación" })
             .getByRole("button", { name: "Cerrar sesión" }).click();
-  await page.getByPlaceholder("Contraseña").fill("e2e-password");
-  await page.getByRole("button", { name: "Entrar" }).click();
+  await relogin(page);
 
   const banner = page.getByTestId("welcome-banner");
   await expect(banner).toBeVisible({ timeout: 10_000 });

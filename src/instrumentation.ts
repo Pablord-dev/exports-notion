@@ -1,5 +1,5 @@
 // src/instrumentation.ts
-// Fail-fast (UP-06): valida las 7 env vars obligatorias al arrancar el server,
+// Fail-fast (UP-06): valida las 10 env vars obligatorias al arrancar el server,
 // antes de atender requests. Sin esto, una env var faltante sólo explota en la
 // primera request que la usa (p. ej. un DATABASE_URL vacío tirando el login).
 export async function register() {

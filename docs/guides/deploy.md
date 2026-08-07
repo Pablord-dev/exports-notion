@@ -41,17 +41,24 @@ postgresql://postgres.<ref>:<PASSWORD>@aws-1-<region>.pooler.supabase.com:6543/p
 ```bash
 # SESSION_SECRET (iron-session exige ≥32 chars) y CRON_SECRET — uno distinto cada uno
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-
-# APP_PASSWORD_HASH — el password compartido del equipo
-node -e "console.log(require('bcryptjs').hashSync(process.argv[1],10))" "EL-PASSWORD"
 ```
 
 Generar secretos **nuevos** para producción en vez de reusar los de `.env.local`.
 
+### Credenciales de Google (manual, una vez)
+
+1. Google Cloud Console → tu proyecto → **Google Auth Platform**: *Audience* con User type
+   **External**, y **publicar** la app (en *Testing* hay cap de 100 usuarios). Scopes: sólo
+   `openid`, `email`, `profile`.
+2. *Credentials* → **Create credentials** → **OAuth client ID** → tipo **Web application**.
+3. *Authorized redirect URIs*, exactos: `https://<dominio-de-producción>/api/auth/google/callback`
+   (y `http://localhost:3000/api/auth/google/callback` para desarrollo).
+4. Copia el Client ID y el secret: son `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET`.
+
 ## 3. Vercel
 
 1. Importar el repo. Framework Next.js (autodetecta). **No deployar antes de las env vars:**
-   `instrumentation.ts` hace fail-fast y el server no arranca sin las 7 obligatorias.
+   `instrumentation.ts` hace fail-fast y el server no arranca sin las 10 obligatorias.
 2. **Settings → Functions → Function Region:** la que corresponda a la región de Supabase
    (`pdx1` para `us-west-2`). El default `iad1` cruzaría el continente en cada query.
 3. **Settings → Environment Variables** (Production/Preview/Development):
@@ -59,18 +66,28 @@ Generar secretos **nuevos** para producción en vez de reusar los de `.env.local
    | Variable | Valor |
    |---|---|
    | `NOTION_TOKEN`, `NOTION_DATABASE_ID`, `DATE_COLUMN` | los mismos de `.env.local` |
-   | `APP_PASSWORD_HASH` | el hash del paso 2 — **literal, sin escapar los `$`** ⚠️ |
+   | `GOOGLE_CLIENT_ID` | el Client ID del paso 2 |
+   | `GOOGLE_CLIENT_SECRET` | el secret del paso 2 |
+   | `ALLOWED_EMAIL_DOMAINS` | dominios autorizados, separados por coma (p. ej. `hiuman.edu.mx`) |
+   | `APP_ORIGIN` | el dominio de producción (`https://…`), **no** `localhost` |
    | `SESSION_SECRET`, `CRON_SECRET` | los del paso 2 |
    | `DATABASE_URL` | el pooler del paso 1 |
    | `SYNC_BUDGET_MS` | `40000` |
    | `LLM_MINIMAX_BASE_URL`, `LLM_MINIMAX_API_KEY`, `LLM_MINIMAX_MODEL` | los de `.env.local` |
    | `LLM_DEFAULT_PROVIDER` | `minimax` |
 
-   - `APP_PASSWORD_HASH` va **con `\$` escapados en `.env.local`** pero **literal en Vercel**.
-     Es la inversión más fácil de equivocar.
    - **No** cargar `LLM_OLLAMA_*`: apuntan a un `localhost` que no existe en serverless.
      MiniMax necesita sus **tres** vars o el proveedor no se registra y el chat dice "sin modelo".
 4. Deployar. La rama de producción es `main`; los crons **sólo corren en deploys de producción**.
+
+> **Borra `APP_PASSWORD_HASH` de Vercel a mano** — el código no toca esa configuración.
+>
+> **Rota `SESSION_SECRET` al desplegar.** Si no, las cookies emitidas con el password
+> siguen válidas hasta 7 días y pasan el proxy **sin traer `user`**, justo lo que este
+> cambio elimina. Rotarlo obliga a todos a entrar de nuevo, que es el punto.
+>
+> **Los previews de Vercel se quedan sin login**: su URL es aleatoria y Google no acepta
+> comodines en los redirect URIs. Registra el dominio de producción y usa local para probar.
 
 `vercel.json` declara **sólo el cron incremental** — el full no se cronea (ADR-0007 §5).
 
@@ -94,8 +111,9 @@ checkpointeado y reanuda al volver a apretar Full).
   Notion no expone un total de antemano. Al terminar, "último sync" da el total real.
 - **Sync trancado:** `node scripts/reset-sync-state.cjs` (no toca el snapshot vivo).
 - **Detectar drift:** `node scripts/check-cache-drift.cjs [sinceISO]` (sólo lectura).
-- **Colaboradores:** todos comparten un password; no hay usuarios individuales. El rate limit
-  es 5 intentos/15 min **por IP** — en una misma red de oficina comparten el contador. Los chats
+- **Colaboradores:** cada quien entra con su cuenta de Google de un dominio autorizado
+  (`ALLOWED_EMAIL_DOMAINS`); no hay tabla de usuarios. El rate limit del callback es 5
+  intentos/15 min **por IP** — en una misma red de oficina comparten el contador. Los chats
   del Asistente viven en el `localStorage` de cada navegador: no se comparten.
 
 ## Riesgos a tener presentes

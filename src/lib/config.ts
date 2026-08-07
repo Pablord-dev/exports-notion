@@ -3,21 +3,32 @@ export interface AppConfig {
   notionToken: string;
   databaseId: string;
   dateColumn: string;
-  appPasswordHash: string;
   sessionSecret: string;
   cronSecret: string;
   /** Postgres (Supabase) — ADR 0006. */
   databaseUrl: string;
+  /** Login con Google — ADR 0008. */
+  googleClientId: string;
+  googleClientSecret: string;
+  /** Dominios autorizados, separados por comas. Vacío = nadie entra. */
+  allowedEmailDomains: string;
+  /** Origin público de esta instancia. El redirect_uri se arma con él y tiene
+   *  que coincidir carácter por carácter con el registrado en Google; derivarlo
+   *  del request rompe en cuanto un proxy reescribe el Host, y sólo en producción. */
+  appOrigin: string;
 }
 
 const KEYS: Record<keyof AppConfig, string> = {
   notionToken: "NOTION_TOKEN",
   databaseId: "NOTION_DATABASE_ID",
   dateColumn: "DATE_COLUMN",
-  appPasswordHash: "APP_PASSWORD_HASH",
   sessionSecret: "SESSION_SECRET",
   cronSecret: "CRON_SECRET",
   databaseUrl: "DATABASE_URL",
+  googleClientId: "GOOGLE_CLIENT_ID",
+  googleClientSecret: "GOOGLE_CLIENT_SECRET",
+  allowedEmailDomains: "ALLOWED_EMAIL_DOMAINS",
+  appOrigin: "APP_ORIGIN",
 };
 
 export function loadConfig(): AppConfig {
@@ -25,8 +36,12 @@ export function loadConfig(): AppConfig {
   const out = {} as Record<keyof AppConfig, string>;
   for (const [field, envName] of Object.entries(KEYS) as [keyof AppConfig, string][]) {
     const v = process.env[envName];
-    if (!v) missing.push(envName);
-    else out[field] = v;
+    // ALLOWED_EMAIL_DOMAINS admite el vacío a propósito: "" = nadie entra (el
+    // cierre documentado en .env.example), no configuración faltante — tratarla
+    // como faltante convertía la revocación total en un server que no arranca.
+    const present = field === "allowedEmailDomains" ? v !== undefined : Boolean(v);
+    if (!present) missing.push(envName);
+    else out[field] = v as string;
   }
   if (missing.length) throw new Error(`Missing env vars: ${missing.join(", ")}`);
   return out as AppConfig;
