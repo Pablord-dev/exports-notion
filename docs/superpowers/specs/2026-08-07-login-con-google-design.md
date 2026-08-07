@@ -172,9 +172,10 @@ descartando entradas vacías, para que `a.com, b.com,` no cuente un dominio fant
 
 ### Errores
 
-Cinco códigos, traducidos por la tarjeta de login: `state` (transacción inválida o
+Seis códigos, traducidos por la tarjeta de login: `state` (transacción inválida o
 vencida), `google` (el usuario canceló o Google devolvió error), `token` (falló el
-canje), `unverified` (correo sin verificar), `domain` (fuera de la lista). El mensaje
+canje), `unverified` (correo sin verificar), `domain` (fuera de la lista), `rate`
+(rate-limit del callback agotado). El mensaje
 **no repite el correo ni el error crudo de Google** — sólo "esa cuenta no está
 autorizada".
 
