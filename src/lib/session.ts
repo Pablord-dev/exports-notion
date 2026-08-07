@@ -1,7 +1,17 @@
 import type { SessionOptions } from "iron-session";
 
+export interface SessionUser {
+  email: string;
+  name: string;
+}
+
 export interface SessionData {
+  /** Se conserva tal cual: es la condición que evalúan proxy.ts y las rutas de
+   *  API, y así el login con Google no las obliga a cambiar. La identidad se
+   *  suma, no sustituye. */
   authenticated?: true;
+  /** Ausente en cookies emitidas antes del login con Google (ADR-0008). */
+  user?: SessionUser;
 }
 
 export const sessionOptions: SessionOptions = {
