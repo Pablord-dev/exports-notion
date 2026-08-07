@@ -3,6 +3,7 @@
 // a propósito: así se testea suelto y las route handlers quedan de diez líneas.
 
 import { createHash, randomBytes } from "node:crypto";
+import { sealData, unsealData } from "iron-session";
 
 const AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
 
@@ -169,4 +170,88 @@ export function isAllowedEmail(email: string, domains: string[]): boolean {
   const domain = email.slice(at + 1).toLowerCase();
   if (!domain) return false;
   return domains.includes(domain);
+}
+
+/** Cookie de la transacción en curso: state + code_verifier, cifrados. Vive 10
+ *  minutos porque es el tiempo de una vuelta a Google, no una sesión. */
+export const TX_COOKIE = "oauth-tx";
+export const TX_TTL_SEC = 600;
+
+export interface OAuthTx {
+  state: string;
+  verifier: string;
+}
+
+export async function sealTx(tx: OAuthTx, password: string): Promise<string> {
+  return sealData(tx, { password, ttl: TX_TTL_SEC });
+}
+
+/** Devuelve null en vez de lanzar: una cookie vencida, manipulada o ausente son
+ *  el mismo caso para quien llama —transacción inválida—. */
+export async function openTx(sealed: string, password: string): Promise<OAuthTx | null> {
+  try {
+    const tx = await unsealData<OAuthTx>(sealed, { password, ttl: TX_TTL_SEC });
+    if (!tx || typeof tx.state !== "string" || typeof tx.verifier !== "string") return null;
+    if (!tx.state || !tx.verifier) return null;
+    return tx;
+  } catch {
+    return null;
+  }
+}
+
+export interface CallbackEnv {
+  clientId: string;
+  clientSecret: string;
+  sessionSecret: string;
+  origin: string;
+  /** ALLOWED_EMAIL_DOMAINS crudo; se parsea aquí. */
+  allowedDomains: string;
+}
+
+export type CallbackFailure = "state" | "google" | "token" | "unverified" | "domain";
+
+/**
+ * Decide si alguien entra. Puro a propósito: recibe la cookie sellada como
+ * string en vez de leerla de `cookies()`, porque esa API de Next lanza fuera de
+ * un request y la orquestación quedaría sin tests. La route handler sólo traduce
+ * HTTP ↔ esta función.
+ */
+export async function resolveCallback(input: {
+  code: string | null;
+  state: string | null;
+  googleError: string | null;
+  sealedTx: string | undefined;
+  env: CallbackEnv;
+  nowMs: number;
+}): Promise<{ ok: true; identity: GoogleIdentity } | { ok: false; failure: CallbackFailure }> {
+  // El usuario canceló en la pantalla de Google, o Google rechazó la petición.
+  if (input.googleError) return { ok: false, failure: "google" };
+  if (!input.code || !input.state || !input.sealedTx) return { ok: false, failure: "state" };
+
+  const tx = await openTx(input.sealedTx, input.env.sessionSecret);
+  // El state se compara ANTES de canjear: sin esto, un code inyectado por un
+  // tercero se cambiaría por una sesión.
+  if (!tx || tx.state !== input.state) return { ok: false, failure: "state" };
+
+  const redirectUri = callbackUrl(input.env.origin);
+  const ex = await exchangeCode({
+    code: input.code,
+    codeVerifier: tx.verifier,
+    redirectUri,
+    clientId: input.env.clientId,
+    clientSecret: input.env.clientSecret,
+  });
+  if (!ex.ok) return { ok: false, failure: "token" };
+
+  const read = readIdToken(ex.idToken, { clientId: input.env.clientId, nowMs: input.nowMs });
+  if (!read.ok) {
+    // "unverified" es el único problema del token que se le explica al usuario:
+    // es el único que puede resolver él. El resto es un fallo nuestro o un ataque.
+    return { ok: false, failure: read.problem === "unverified" ? "unverified" : "token" };
+  }
+
+  if (!isAllowedEmail(read.identity.email, parseAllowedDomains(input.env.allowedDomains))) {
+    return { ok: false, failure: "domain" };
+  }
+  return { ok: true, identity: read.identity };
 }
