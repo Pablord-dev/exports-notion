@@ -10,6 +10,7 @@ import {
   encodeDetailCursor, decodeDetailCursor,
   type Store, type ReportFilters,
 } from "@/lib/store-shared";
+import { normalizeEmail, type Role } from "@/lib/authz";
 
 // Tipos, mapeo de propiedades y helpers compartidos viven en store-shared.ts
 // (memory-store también los usa; tenerlos aquí crearía un ciclo de módulos).
@@ -298,6 +299,25 @@ function pgStore(sql: Sql): Store {
         returning count`;
       return (rs[0].count as number) <= limit;
     },
+
+    // `role` queda FUERA del do-update a propósito: si el login lo escribiera,
+    // cada vez que un admin entrara volvería al default y la promoción duraría
+    // hasta su próxima visita.
+    async recordLogin(email, name) {
+      await sql`
+        insert into users (email, name, last_login_at)
+        values (${normalizeEmail(email)}, ${name}, now())
+        on conflict (email) do update set last_login_at = now(), name = excluded.name`;
+    },
+    async getUserRole(email) {
+      const rs = await sql`select role from users where email = ${normalizeEmail(email)}`;
+      return rs.length ? (rs[0].role as Role) : null;
+    },
+    async setUserRole(email, role) {
+      await sql`
+        insert into users (email, role) values (${normalizeEmail(email)}, ${role})
+        on conflict (email) do update set role = excluded.role`;
+    },
   };
 }
 
@@ -367,6 +387,9 @@ export const getFullActive: Store["getFullActive"] = () => s().getFullActive();
 export const setFullActive: Store["setFullActive"] = (v, ttl) => s().setFullActive(v, ttl);
 export const clearFullActive: Store["clearFullActive"] = () => s().clearFullActive();
 export const rateLimitLogin: Store["rateLimitLogin"] = (ip, limit, win) => s().rateLimitLogin(ip, limit, win);
+export const recordLogin: Store["recordLogin"] = (e, n) => s().recordLogin(e, n);
+export const getUserRole: Store["getUserRole"] = (e) => s().getUserRole(e);
+export const setUserRole: Store["setUserRole"] = (e, r) => s().setUserRole(e, r);
 export const reportByPerson: Store["reportByPerson"] = (f) => s().reportByPerson(f);
 export const reportBySubproject: Store["reportBySubproject"] = (f) => s().reportBySubproject(f);
 export const reportTimeline: Store["reportTimeline"] = (f, g) => s().reportTimeline(f, g);
