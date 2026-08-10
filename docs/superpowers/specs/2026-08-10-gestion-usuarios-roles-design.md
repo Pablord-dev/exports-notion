@@ -68,7 +68,7 @@ en `src/lib/memory-store.ts` (memoria, para tests y `E2E_STUBS=1`):
 
 | Método | Devuelve | Notas |
 |---|---|---|
-| `recordLogin(email, name)` | `Role` | `insert … on conflict do update set last_login_at = now(), name = excluded.name returning role`. Crea la fila en el primer login, refresca el timestamp en los siguientes, y en ambos casos deja el rol a mano sin una segunda consulta. |
+| `recordLogin(email, name)` | `void` | `insert … on conflict do update set last_login_at = now(), name = excluded.name`. Crea la fila en el primer login y refresca el timestamp en los siguientes. **El `role` queda fuera del `do update`**: un login posterior nunca degrada a un admin de vuelta al default. No devuelve el rol porque nadie lo necesita en ese punto — el callback ya no sella nada (§2). |
 | `getUserRole(email)` | `Role \| null` | El `null` (sesión viva de alguien sin fila) lo interpreta quien llama como `viewer`. |
 | `setUserRole(email, role)` | `void` | Lo usa el script de operación. |
 
