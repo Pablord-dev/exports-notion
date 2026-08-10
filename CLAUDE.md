@@ -90,8 +90,8 @@ Chat en lenguaje natural que responde consultando **las mismas funciones de repo
 
 - `GET /api/auth/google` — arranca el flujo: state + PKCE en la cookie `oauth-tx`, 302 a Google. `GET /api/auth/google/callback` — valida y crea la sesión; redirige a `/?bienvenida=1` o a `/?error=<state|google|token|unverified|domain|rate>`. Rate-limit 5/15min por IP sobre el callback (tabla `login_attempts`).
 - `GET /api/auth/session` — `{authenticated, user?}`; **fuera** del matcher del proxy. `POST /api/auth/logout` — destruye la sesión.
-- `POST /api/sync?kind=incremental|full` — acepta **cookie de usuario** OR `Authorization: Bearer $CRON_SECRET`. **Espera inline** (no es 202 background — patrón "void runSync()" no es confiable en Vercel serverless porque la función muere al responder). Responde 200 con `{ok:true, done:true, upserted, deleted}` o `{ok:true, done:false, segmentCount}` (full con `SYNC_BUDGET_MS` agotado — el cliente debe volver a llamar para continuar). Devuelve 409 si hay otra sync corriendo (lock). `DELETE /api/sync` setea flag de cancel.
-- `GET /api/sync/status` — estado actual (protegido por el proxy).
+- `POST /api/sync?kind=incremental|full` — acepta **cookie de usuario** OR `Authorization: Bearer $CRON_SECRET`. **Espera inline** (no es 202 background — patrón "void runSync()" no es confiable en Vercel serverless porque la función muere al responder). Responde 200 con `{ok:true, done:true, upserted, deleted}` o `{ok:true, done:false, segmentCount}` (full con `SYNC_BUDGET_MS` agotado — el cliente debe volver a llamar para continuar). Devuelve 409 si hay otra sync corriendo (lock). Devuelve **403 `forbidden`** si el rol no alcanza (`full` exige `admin`; el incremental es libre). `DELETE /api/sync` setea flag de cancel, y su permiso depende del sync **en curso**: con un full corriendo exige `admin`.
+- `GET /api/sync/status` — estado actual + `perms: {full, cancel}` ya resueltos contra la tabla `users` (protegido por el proxy). Los permisos viajan acá y no en `/api/auth/session` porque `AppShell` es **hijo** de la página y el modal de sync no vería un rol traído por el shell.
 - `GET /api/export?from=YYYY-MM-DD&to=YYYY-MM-DD` — valida fechas ISO, filtra por `DATE_COLUMN`, ordena ascendente por `DATE_COLUMN` en memoria (la ruta usa `getAllRows` y conserva el pipeline previo a la migración) y stream CSV. Devuelve **503 `no_data`** si el cache está vacío (necesita primer sync manual). Devuelve **500 `date_column_not_in_whitelist`** si `DATE_COLUMN` no está en `COLUMNS`.
 - `GET /api/reports/{by-person,by-subproject,timeline,matrix,detail,filters}` — agregados SQL sobre `pages` (totales por persona/subproyecto, evolución `month`/`week`, matriz persona×subproyecto, detalle con cursor, opciones de filtro). Protegidos por el proxy. Spec: `docs/reports/202607081002_reportes_v1_spec.md`.
 - `POST /api/chat` — body `{provider, db, messages}`; valida el body, resuelve el proveedor, valida `db` contra `DATABASES` y corre `runChat`. Responde `{reply, toolTrace}`. `maxDuration=120`. `GET /api/chat/providers` — lista los proveedores disponibles + default.
@@ -113,7 +113,10 @@ Chat en lenguaje natural que responde consultando **las mismas funciones de repo
 - **`src/proxy.ts`** (convención Next 16, ex-`middleware.ts`; runtime nodejs) protege `/api/export/*`, `/api/sync/status`, `/api/reports/*` y `/api/chat` con iron-session. **`/api/sync` no está en el matcher** — su auth (cookie OR cron bearer) la maneja la route handler. **`/api/auth/session` tampoco**: tiene que contestar `{authenticated:false}` sin sesión en vez de 401.
 - **Login con Google** (ADR-0008), única puerta: no hay password. `src/lib/google-oauth.ts` tiene TODO el flujo (state, PKCE S256, cookie sellada `oauth-tx` de 10 min, canje del code, lectura del ID token, allowlist) **sin importar nada de Next**, y `resolveCallback()` es el orquestador puro — la route handler sólo traduce HTTP, porque `cookies()` lanza fuera de un request y la orquestación se quedaría sin tests. ⚠️ **No se verifica la firma del `id_token`**: llega del canje directo por TLS, el canal autentica el origen. Si algún día llega por otra vía, hay que verificarla. La restricción por dominio es **nuestra**, en `ALLOWED_EMAIL_DOMAINS` (comparación exacta: subdominio no listado NO entra; lista vacía = nadie entra); el claim `hd` de Google es sólo una pista y no se usa. Un solo proyecto de Google Cloud alcanza para varios dominios: el consent screen va **External** y publicado, y el Client ID identifica la app, no el dominio.
 - **Única definición de sesión**: `src/lib/session.ts` (opciones + tipo `SessionData {authenticated?, user?}`). `src/lib/auth.ts` sólo la re-exporta. `SESSION_SECRET` no tiene fallback: si falta, el fail-fast de `instrumentation.ts` impide arrancar.
-- ⚠️ **`GET /api/auth/stub-login`** emite una sesión sin credenciales para que Playwright pueda entrar. Sólo existe con `E2E_STUBS=1` (404 si no), sin parámetros, con correo fijo. Cubierto por un test de que da 404 sin la bandera.
+- ⚠️ **`GET /api/auth/stub-login`** emite una sesión sin credenciales para que Playwright pueda entrar. Sólo existe con `E2E_STUBS=1` (404 si no) y con correos fijos —los trae la ruta, no la query—. Acepta `?role=admin|viewer` (default `admin`, valor inválido → 400) y emite **una identidad distinta por rol**: la suite corre `fullyParallel` sobre un memory-store singleton de proceso, así que con un solo correo el login admin de un test le arrebataba el rol al viewer de otro. Cubierto por un test de que da 404 sin la bandera.
+- **Roles** (spec `docs/superpowers/specs/2026-08-10-gestion-usuarios-roles-design.md`): `admin` y `viewer`, en la tabla `users`, que **es la única fuente de verdad** — el rol NO se cachea en la sesión, porque la cookie dura 7 días y una degradación tardaría eso en surtir efecto. `src/lib/authz.ts` tiene las reglas puras (`canTrigger`, `canCancel`, `roleOrDefault`, `normalizeEmail`), sin importar nada de Next, por el mismo motivo que `google-oauth.ts`. Lo único restringido es el **full sync**: el incremental, los reportes, el export y el Asistente son de todos. El rol no reemplaza a `ALLOWED_EMAIL_DOMAINS`, que sigue siendo la puerta de entrada.
+- El **cron conserva permisos plenos** (`Authorization: Bearer $CRON_SECRET`): no tiene persona detrás a quien asignarle rol. Una sesión sin `user.email` (cookie previa a ADR-0008) cae a `viewer`.
+- ⚠️ En la UI los botones vedados van con **`aria-disabled` y sin `onClick`**, no con `disabled`: un botón deshabilitado no emite eventos de puntero y el tooltip que explica el veto nunca aparecería.
 
 ### Crons (Vercel)
 
@@ -132,6 +135,7 @@ Chat en lenguaje natural que responde consultando **las mismas funciones de repo
 | `pages_new` | Staging durante el full sync (mismo shape). Se promueve con swap transaccional al completar o cancelar. |
 | `sync_state` | KV de control: `key` PK, `value` jsonb, `expires_at` (TTL emulado: fila vencida = ausente). |
 | `login_attempts` | Rate-limit del login: `(ip, window_start)` PK + `count`; ventana fija, purga oportunista. |
+| `users` | Usuarios y roles. `email` PK (siempre en minúsculas), `role` (`admin`\|`viewer`, default `viewer`, con `check`), `name`, `created_at`, `last_login_at`. Se puebla sola en el primer login. `last_login_at` se pisa: no hay historial. |
 
 Keys de `sync_state` (mismas semánticas que las viejas keys de Redis):
 
@@ -179,4 +183,9 @@ Herramientas en `scripts/` (leen credenciales de `.env.local`):
 ```bash
 node scripts/reset-sync-state.cjs        # destraba un sync trancado: borra keys de control, trunca pages_new y deja status idle. NO toca el snapshot vivo.
 node scripts/check-cache-drift.cjs [sinceISO]   # solo lectura: detecta filas del snapshot desactualizadas vs. Notion (default: últimas 24h)
+node scripts/set-role.cjs <email> <admin|viewer>   # promueve/degrada; crea la fila si esa persona nunca entró
 ```
+
+> Tras aplicar la migración de `users`, **nadie es admin**: la tabla arranca vacía y
+> todos caen a `viewer`, así que el primer `set-role.cjs` es parte del despliegue.
+> El incremental del cron no se ve afectado en ningún momento.
