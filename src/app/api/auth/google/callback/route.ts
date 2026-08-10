@@ -3,7 +3,7 @@ import { cookies, headers } from "next/headers";
 import { getIronSession } from "iron-session";
 import { sessionOptions, type SessionData } from "@/lib/session";
 import { resolveCallback, TX_COOKIE, type CallbackEnv } from "@/lib/google-oauth";
-import { rateLimitLogin } from "@/lib/db";
+import { rateLimitLogin, recordLogin } from "@/lib/db";
 
 export async function GET(req: NextRequest) {
   // ⚠️ Dos orígenes distintos a propósito, y confundirlos rompe cosas:
@@ -53,6 +53,12 @@ export async function GET(req: NextRequest) {
     beforeExchange: async () => process.env.E2E_STUBS === "1" || rateLimitLogin(ip),
   });
   if (!r.ok) return fail(r.failure);
+
+  // Alta o refresco en `users`. Va ANTES de sellar la sesión: si la base no
+  // responde, es preferible no emitir una cookie de 7 días para alguien que no
+  // quedó registrado. No agrega un modo de falla nuevo — rateLimitLogin, unas
+  // líneas arriba, ya depende de la misma base.
+  await recordLogin(r.identity.email, r.identity.name);
 
   const session = await getIronSession<SessionData>(jar, sessionOptions);
   session.authenticated = true;
