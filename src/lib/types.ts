@@ -34,4 +34,6 @@ export interface SyncStatusResponse {
   status: SyncStatus;
   meta: CacheMeta;
   next: { incremental: string; full: string };
+  /** Permisos ya resueltos en el server: la UI no ve roles, sólo booleanos. */
+  perms: { full: boolean; cancel: boolean };
 }

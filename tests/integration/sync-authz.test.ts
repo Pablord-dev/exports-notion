@@ -105,3 +105,31 @@ describe("DELETE /api/sync", () => {
     expect((await del()).status).toBe(200);
   });
 });
+
+describe("GET /api/sync/status: perms", () => {
+  // Import diferido: comparte los mocks de iron-session/next-headers de arriba.
+  const get = async () => {
+    const { GET } = await import("@/app/api/sync/status/route");
+    return (await GET()).json();
+  };
+  const corriendo = (kind: "incremental" | "full") =>
+    setStatus({ state: "running", kind, done: 0, total: 0, startedAt: null, error: null, skipped: 0 });
+
+  it("viewer: no puede full, sí cancelar cuando no corre nada", async () => {
+    h.sesion = { authenticated: true, user: { email: "v@hiuman.edu.mx", name: "V" } };
+    expect((await get()).perms).toEqual({ full: false, cancel: true });
+  });
+
+  it("viewer con un full corriendo: tampoco puede cancelar", async () => {
+    h.sesion = { authenticated: true, user: { email: "v@hiuman.edu.mx", name: "V" } };
+    await corriendo("full");
+    expect((await get()).perms).toEqual({ full: false, cancel: false });
+  });
+
+  it("admin: puede con todo", async () => {
+    await setUserRole("a@hiuman.edu.mx", "admin");
+    h.sesion = { authenticated: true, user: { email: "a@hiuman.edu.mx", name: "A" } };
+    await corriendo("full");
+    expect((await get()).perms).toEqual({ full: true, cancel: true });
+  });
+});
