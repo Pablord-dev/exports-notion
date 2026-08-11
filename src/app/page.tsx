@@ -69,6 +69,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   token: "No se pudo completar el ingreso con Google. Inténtalo de nuevo.",
   google: "Se canceló el ingreso con Google.",
   rate: "Demasiados intentos, espera 15 minutos.",
+  blocked: "Un administrador retiró tu acceso a esta herramienta.",
+  servidor: "No se pudo completar el ingreso. Vuelve a intentarlo en un momento.",
 };
 
 /** La "G" de Google en línea: sus lineamientos de marca piden el logo junto al

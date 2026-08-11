@@ -208,7 +208,7 @@ export interface CallbackEnv {
   allowedDomains: string;
 }
 
-export type CallbackFailure = "state" | "google" | "token" | "unverified" | "domain" | "rate";
+export type CallbackFailure = "state" | "google" | "token" | "unverified" | "domain" | "rate" | "blocked";
 
 /**
  * Decide si alguien entra. Puro a propósito: recibe la cookie sellada como
@@ -228,6 +228,11 @@ export async function resolveCallback(input: {
    *  consumir la ventana — lo único que el límite protege es la salida a
    *  hablar con Google. false = negado → failure "rate". */
   beforeExchange?: () => Promise<boolean>;
+  /** Lista de bloqueo. Corre DESPUÉS del allowlist de dominio: a un correo ajeno
+   *  no hay por qué consultárselo. ⚠️ A propósito NO se atrapa lo que lance —esta
+   *  lista sí es una condición de entrada, y tragarse el error dejaría pasar
+   *  justo a quien se quiso sacar—. Opcional: sin callback, no hay bloqueo. */
+  isBlocked?: (email: string) => Promise<boolean>;
 }): Promise<{ ok: true; identity: GoogleIdentity } | { ok: false; failure: CallbackFailure }> {
   // El usuario canceló en la pantalla de Google, o Google rechazó la petición.
   if (input.googleError) return { ok: false, failure: "google" };
@@ -261,6 +266,13 @@ export async function resolveCallback(input: {
 
   if (!isAllowedEmail(read.identity.email, parseAllowedDomains(input.env.allowedDomains))) {
     return { ok: false, failure: "domain" };
+  }
+
+  // El dominio dice quién PUEDE entrar; la lista de bloqueo, a quién se le quitó
+  // el acceso. Van en este orden porque el bloqueo es la excepción sobre el
+  // permiso, no al revés.
+  if (input.isBlocked && (await input.isBlocked(read.identity.email))) {
+    return { ok: false, failure: "blocked" };
   }
   return { ok: true, identity: read.identity };
 }

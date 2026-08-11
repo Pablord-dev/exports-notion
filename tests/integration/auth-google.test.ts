@@ -117,6 +117,51 @@ describe("resolveCallback", () => {
     expect(await call({ env: { ...env, allowedDomains: "" } })).toEqual({ ok: false, failure: "domain" });
   });
 
+  // La lista de bloqueo se consulta DESPUÉS del allowlist de dominio: quien no es
+  // del dominio ni siquiera merece un lookup, y así una base caída no puede
+  // convertir "dominio ajeno" en "bloqueado".
+  it("en la lista de bloqueo: failure=blocked", async () => {
+    googleReturns();
+    expect(await call({ isBlocked: async () => true })).toEqual({ ok: false, failure: "blocked" });
+  });
+
+  it("fuera de la lista de bloqueo entra normal", async () => {
+    googleReturns();
+    const r = await call({ isBlocked: async () => false });
+    expect(r.ok).toBe(true);
+  });
+
+  it("consulta el bloqueo con el correo del token", async () => {
+    googleReturns();
+    let visto = "";
+    await call({ isBlocked: async (e) => { visto = e; return false; } });
+    expect(visto).toBe("pablo@hiuman.edu.mx");
+  });
+
+  it("a un dominio ajeno no se le consulta el bloqueo", async () => {
+    googleReturns({ email: "alguien@gmail.com" });
+    let llamado = false;
+    expect(await call({ isBlocked: async () => { llamado = true; return false; } }))
+      .toEqual({ ok: false, failure: "domain" });
+    expect(llamado).toBe(false);
+  });
+
+  // Sin callback la función sigue andando: es opcional para no obligar a los
+  // tests de las otras ramas a inventar uno.
+  it("sin callback de bloqueo el login pasa igual", async () => {
+    googleReturns();
+    expect((await call()).ok).toBe(true);
+  });
+
+  // Fail-closed: si no se puede saber si está bloqueado, no entra. Al revés que
+  // `users`, esta lista SÍ es una condición de entrada, y tragarse el error
+  // dejaría pasar justo a quien se quiso sacar.
+  it("si el lookup del bloqueo revienta, la excepción sube (no entra)", async () => {
+    googleReturns();
+    await expect(call({ isBlocked: async () => { throw new Error("base caída"); } }))
+      .rejects.toThrow("base caída");
+  });
+
   it("canjea con el MISMO redirect_uri que se usó al autorizar", async () => {
     let body: URLSearchParams | null = null;
     __setTokenFetcher(async (_u, init) => {

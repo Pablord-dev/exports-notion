@@ -3,7 +3,7 @@ import { cookies, headers } from "next/headers";
 import { getIronSession } from "iron-session";
 import { sessionOptions, type SessionData } from "@/lib/session";
 import { resolveCallback, TX_COOKIE, type CallbackEnv } from "@/lib/google-oauth";
-import { rateLimitLogin, recordLogin } from "@/lib/db";
+import { rateLimitLogin, recordLogin, isBlocked } from "@/lib/db";
 
 export async function GET(req: NextRequest) {
   // ⚠️ Dos orígenes distintos a propósito, y confundirlos rompe cosas:
@@ -43,15 +43,27 @@ export async function GET(req: NextRequest) {
   // tenía /api/login.
   const ip = (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   const q = req.nextUrl.searchParams;
-  const r = await resolveCallback({
-    code: q.get("code"),
-    state: q.get("state"),
-    googleError: q.get("error"),
-    sealedTx: jar.get(TX_COOKIE)?.value,
-    env,
-    nowMs: Date.now(),
-    beforeExchange: async () => process.env.E2E_STUBS === "1" || rateLimitLogin(ip),
-  });
+  // ⚠️ El try envuelve a resolveCallback sólo por el lookup de la lista de bloqueo:
+  // es lo único de acá adentro que puede lanzar (el resto devuelve `failure`). Y
+  // termina en un rechazo, no en un "pasá": si no se puede saber si alguien está
+  // bloqueado, no entra. Al revés que `recordLogin` de abajo, que es registro y no
+  // condición de entrada.
+  let r: Awaited<ReturnType<typeof resolveCallback>>;
+  try {
+    r = await resolveCallback({
+      code: q.get("code"),
+      state: q.get("state"),
+      googleError: q.get("error"),
+      sealedTx: jar.get(TX_COOKIE)?.value,
+      env,
+      nowMs: Date.now(),
+      beforeExchange: async () => process.env.E2E_STUBS === "1" || rateLimitLogin(ip),
+      isBlocked: (email) => isBlocked(email),
+    });
+  } catch (e) {
+    console.error("[auth] no se pudo verificar la lista de bloqueo", e);
+    return fail("servidor");
+  }
   if (!r.ok) return fail(r.failure);
 
   // Alta o refresco en `users`. NO puede tumbar el login: para cuando llega acá
