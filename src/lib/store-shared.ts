@@ -2,6 +2,7 @@
 // Postgres (db.ts) y la de memoria (memory-store.ts). Vive aparte para que
 // ninguna de las dos importe valores de la otra (evita el ciclo de módulos).
 import type { FlatRow, CacheMeta, SyncStatus } from "@/lib/types";
+import type { Role } from "@/lib/authz";
 
 // ---- Mapeo de propiedades (setup por proyecto, igual que columns.ts) ----
 export const HOURS_COL = "Registro de horas";
@@ -124,6 +125,14 @@ export interface Store {
   clearFullActive(): Promise<void>;
   /** Rate-limit del login: ventana FIJA por IP (no sliding window). */
   rateLimitLogin(ip: string, limit?: number, windowSec?: number): Promise<boolean>;
+
+  /** Alta o refresco del usuario en el login. La fila nueva nace `viewer`; una
+   *  existente conserva su rol (el upsert deja `role` fuera del do-update). */
+  recordLogin(email: string, name: string): Promise<void>;
+  /** `null` = sin fila. Quien llama lo resuelve con `roleOrDefault`. */
+  getUserRole(email: string): Promise<Role | null>;
+  /** Crea la fila si no existe: permite dejar listo a un admin antes de su primer login. */
+  setUserRole(email: string, role: Role): Promise<void>;
 
   // Reportes (SB-12). Agregación al momento de consultar — sin precálculo.
   reportByPerson(f: ReportFilters): Promise<PersonTotal[]>;

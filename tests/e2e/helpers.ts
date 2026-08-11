@@ -10,14 +10,20 @@ import { expect, type Page } from "@playwright/test";
  * welcome: "skip" (default) siembra el estado del onboarding ANTES de cargar la
  * página, así el modal de bienvenida no aparece y no intercepta los clicks de
  * los tests que no van sobre el onboarding. "expect" lo deja aparecer.
+ *
+ * role: "admin" (default) para que los tests que no van sobre permisos vean la
+ * app completa. "viewer" entra sin poder disparar el full.
  */
-export async function login(page: Page, opts: { welcome?: "skip" | "expect" } = {}): Promise<void> {
+export async function login(
+  page: Page,
+  opts: { welcome?: "skip" | "expect"; role?: "admin" | "viewer" } = {},
+): Promise<void> {
   if ((opts.welcome ?? "skip") === "skip") {
     await page.addInitScript(() => {
       window.localStorage.setItem("onboarding-v1", JSON.stringify({ welcomeSeen: true }));
     });
   }
-  await page.goto("/api/auth/stub-login");
+  await page.goto(`/api/auth/stub-login?role=${opts.role ?? "admin"}`);
   // El stub redirige a / SIN ?bienvenida=1, y es correcto: el aviso de
   // bienvenida sólo debe salir tras un login real (el callback de Google es
   // quien agrega el parámetro). Los tests que sí esperan la bienvenida

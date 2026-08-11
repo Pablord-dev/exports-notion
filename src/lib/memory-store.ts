@@ -14,6 +14,7 @@ import {
   type Store, type ReportFilters, type PersonTotal, type SubprojectTotal,
   type TimelineBucket, type MatrixCell, type DetailPage, type FilterOptions,
 } from "@/lib/store-shared";
+import { normalizeEmail, type Role } from "@/lib/authz";
 
 interface KvEntry { value: unknown; expiresAt: number | null; }
 
@@ -244,6 +245,35 @@ class MemoryStore implements Store {
     }
     cur.count++;
     return cur.count <= limit;
+  }
+
+  // Espejo de la tabla `users`. Guarda los mismos campos que el SQL aunque hoy
+  // sólo se lea `role`: si el stub olvidara last_login_at, un test de la
+  // auditoría pasaría en memoria y fallaría contra Postgres.
+  private users = new Map<string, { role: Role; name: string; createdAt: string; lastLoginAt: string | null }>();
+
+  async recordLogin(email: string, name: string): Promise<void> {
+    const key = normalizeEmail(email);
+    const now = new Date().toISOString();
+    const cur = this.users.get(key);
+    if (cur) {
+      // `role` intacto a propósito: un login no puede degradar a un admin.
+      cur.name = name;
+      cur.lastLoginAt = now;
+      return;
+    }
+    this.users.set(key, { role: "viewer", name, createdAt: now, lastLoginAt: now });
+  }
+
+  async getUserRole(email: string): Promise<Role | null> {
+    return this.users.get(normalizeEmail(email))?.role ?? null;
+  }
+
+  async setUserRole(email: string, role: Role): Promise<void> {
+    const key = normalizeEmail(email);
+    const cur = this.users.get(key);
+    if (cur) { cur.role = role; return; }
+    this.users.set(key, { role, name: "", createdAt: new Date().toISOString(), lastLoginAt: null });
   }
 }
 

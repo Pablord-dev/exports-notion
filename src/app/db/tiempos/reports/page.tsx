@@ -6,7 +6,7 @@
 // Diseño: el snapshot vive en el header como línea de estado; filtros en una
 // toolbar de una fila; KPIs en una tira con divisores; las dos tablas en una
 // tarjeta con tabs y barra de participación; el heat de la matriz en chips.
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { CalendarRange, Download, RefreshCw, X } from "lucide-react";
 import type { FlatRow } from "@/lib/types";
@@ -28,6 +28,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Table,
   TableBody,
@@ -94,6 +95,8 @@ type SyncStatus = {
   meta: { lastFullAt: string | null; lastIncrementalAt: string | null; count: number; };
   // null = ese kind no está croneado en vercel.json (sólo disparo manual).
   next: { incremental: string | null; full: string | null; };
+  // Resueltos en el server contra la tabla `users`. La UI no ve roles.
+  perms: { full: boolean; cancel: boolean };
 };
 
 function fmtAgo(iso: string | null): string {
@@ -112,6 +115,24 @@ function fmtCountdown(iso: string): string {
   const mm = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
   const ss = String(s % 60).padStart(2, "0");
   return `${hh}:${mm}:${ss}`;
+}
+
+/**
+ * Botón vedado por rol.
+ *
+ * ⚠️ El atributo `disabled` NO sirve acá: un botón deshabilitado no emite eventos
+ * de puntero, así que el tooltip de Radix nunca se abriría y el control quedaría
+ * gris y mudo — justo lo que hay que evitar, porque el tooltip es la única
+ * explicación de por qué no se puede. Con `aria-disabled` el botón sigue
+ * anunciándose como deshabilitado, conserva el foco y se llega por teclado.
+ */
+function SinPermiso({ children }: { children: ReactNode }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent>Requiere permisos de administrador</TooltipContent>
+    </Tooltip>
+  );
 }
 
 // Cuenta regresiva autocontenida: su tick por segundo re-renderiza SOLO este
@@ -738,11 +759,19 @@ export default function Reports() {
               </span>
             </p>
             {syncStatus?.status.skipped ? <p className="text-sm font-medium text-warning">Omitidos: {syncStatus.status.skipped}</p> : null}
-            <Button variant="outline" onClick={cancelSync} disabled={cancelling}
-                    className="border-danger text-danger hover:bg-danger hover:text-white">
-              {cancelling && <Spinner className="h-3.5 w-3.5" />}
-              {cancelling ? "Cancelando…" : "Cancelar y guardar lo cargado"}
-            </Button>
+            {syncStatus?.perms.cancel === false ? (
+              <SinPermiso>
+                <Button variant="outline" aria-disabled className="border-danger text-danger opacity-50">
+                  Cancelar y guardar lo cargado
+                </Button>
+              </SinPermiso>
+            ) : (
+              <Button variant="outline" onClick={cancelSync} disabled={cancelling}
+                      className="border-danger text-danger hover:bg-danger hover:text-white">
+                {cancelling && <Spinner className="h-3.5 w-3.5" />}
+                {cancelling ? "Cancelando…" : "Cancelar y guardar lo cargado"}
+              </Button>
+            )}
           </div>
         ) : (
           <div className="space-y-4">
@@ -765,10 +794,18 @@ export default function Reports() {
                 {triggering === "incremental" ? <Spinner className="h-3.5 w-3.5" /> : <RefreshCw className="h-4 w-4" />}
                 {triggering === "incremental" ? "Iniciando…" : "Refrescar incremental"}
               </Button>
-              <Button variant="outline" className="border-border-strong" onClick={() => trigger("full")} disabled={triggering !== null}>
-                {triggering === "full" && <Spinner className="h-3.5 w-3.5" />}
-                {triggering === "full" ? "Iniciando…" : "Full"}
-              </Button>
+              {syncStatus?.perms.full === false ? (
+                <SinPermiso>
+                  <Button variant="outline" aria-disabled className="border-border opacity-50">
+                    Full
+                  </Button>
+                </SinPermiso>
+              ) : (
+                <Button variant="outline" className="border-border-strong" onClick={() => trigger("full")} disabled={triggering !== null}>
+                  {triggering === "full" && <Spinner className="h-3.5 w-3.5" />}
+                  {triggering === "full" ? "Iniciando…" : "Full"}
+                </Button>
+              )}
               <span className="ml-auto text-[11.5px] text-subtle">El full puede tardar varios minutos</span>
             </div>
           </div>

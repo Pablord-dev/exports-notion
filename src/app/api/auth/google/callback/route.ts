@@ -3,7 +3,7 @@ import { cookies, headers } from "next/headers";
 import { getIronSession } from "iron-session";
 import { sessionOptions, type SessionData } from "@/lib/session";
 import { resolveCallback, TX_COOKIE, type CallbackEnv } from "@/lib/google-oauth";
-import { rateLimitLogin } from "@/lib/db";
+import { rateLimitLogin, recordLogin } from "@/lib/db";
 
 export async function GET(req: NextRequest) {
   // ⚠️ Dos orígenes distintos a propósito, y confundirlos rompe cosas:
@@ -53,6 +53,22 @@ export async function GET(req: NextRequest) {
     beforeExchange: async () => process.env.E2E_STUBS === "1" || rateLimitLogin(ip),
   });
   if (!r.ok) return fail(r.failure);
+
+  // Alta o refresco en `users`. NO puede tumbar el login: para cuando llega acá
+  // la autenticación ya está resuelta —Google verificó la identidad y el dominio
+  // pasó el allowlist— y esto es registro de visita, no una condición de entrada.
+  // Bloqueante convertía cualquier problema de la base en "nadie entra": la tabla
+  // faltante dejó a todos afuera con un 500 (2026-08-10).
+  // El modo degradado es seguro en la dirección correcta: sin fila, `getUserRole`
+  // devuelve null y `roleOrDefault` da viewer, así que un fallo quita permisos, no
+  // los regala. El siguiente login exitoso registra la visita.
+  try {
+    await recordLogin(r.identity.email, r.identity.name);
+  } catch (e) {
+    // Se loguea y sigue: en silencio, una base rota se vería como una app sana con
+    // la lista de accesos congelada.
+    console.error("[auth] no se pudo registrar el login", e);
+  }
 
   const session = await getIronSession<SessionData>(jar, sessionOptions);
   session.authenticated = true;
