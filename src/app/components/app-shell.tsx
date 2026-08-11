@@ -16,17 +16,19 @@ import {
   ChevronRight,
   ChevronsUpDown,
   Clock,
+  HelpCircle,
   Home,
   LogOut,
   Menu,
   MessageSquare,
+  Settings,
   Table2,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
   Collapsible,
@@ -34,6 +36,9 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { DATABASES } from "@/lib/databases";
+import { SettingsModal, type SectionId } from "@/app/components/settings/settings-modal";
+import type { Role } from "@/lib/authz";
+import type { CacheMeta } from "@/lib/types";
 import type { SessionUser } from "@/lib/session";
 import { Spinner } from "@/app/components/spinner";
 import { TourLayer, type TourBinding } from "@/app/components/tour/tour-layer";
@@ -124,6 +129,9 @@ export function AppShell({ children, onLogout, tour, justLoggedIn }: {
   const [loggingOut, setLoggingOut] = useState(false);
   const [count, setCount] = useState<number | null>(null);
   const [user, setUser] = useState<SessionUser | null>(null);
+  const [settings, setSettings] = useState<SectionId | null>(null);
+  const [role, setRole] = useState<Role>("viewer");
+  const [meta, setMeta] = useState<CacheMeta | null>(null);
 
   // Contador de registros para el badge de la BD. El shell solo se monta en
   // ramas autenticadas; si el fetch falla, simplemente no hay badge.
@@ -134,7 +142,11 @@ export function AppShell({ children, onLogout, tour, justLoggedIn }: {
         const r = await fetch("/api/sync/status");
         if (!r.ok || !alive) return;
         const s = await r.json();
-        if (alive && typeof s?.meta?.count === "number") setCount(s.meta.count);
+        if (!alive) return;
+        if (typeof s?.meta?.count === "number") setCount(s.meta.count);
+        // Mismo fetch, no uno nuevo: la sección «Acerca de» muestra la fecha del
+        // último sync, que ya viene acá.
+        if (s?.meta) setMeta(s.meta as CacheMeta);
       } catch { /* sin badge */ }
     })();
     return () => { alive = false; };
@@ -149,8 +161,12 @@ export function AppShell({ children, onLogout, tour, justLoggedIn }: {
       try {
         const r = await fetch("/api/auth/session");
         if (!r.ok) return;
-        const j = (await r.json()) as { user?: SessionUser | null };
-        if (alive && j.user) setUser(j.user);
+        const j = (await r.json()) as { user?: SessionUser | null; role?: Role };
+        if (!alive) return;
+        if (j.user) setUser(j.user);
+        // Decorativo: decide si el panel dibuja la sección Usuarios. Quien
+        // autoriza de verdad es /api/admin/users.
+        if (j.role) setRole(j.role);
       } catch { /* sin identidad el footer cae al correo vacío, no rompe */ }
     })();
     return () => { alive = false; };
@@ -369,6 +385,15 @@ export function AppShell({ children, onLogout, tour, justLoggedIn }: {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="top" align="start" className="w-[15.5rem]">
+            <DropdownMenuItem onSelect={() => setSettings("cuenta")}>
+              <Settings className="h-4 w-4" />
+              Configuración
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setSettings("acerca")}>
+              <HelpCircle className="h-4 w-4" />
+              Ayuda
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={logout} disabled={loggingOut}>
               {loggingOut ? <Spinner className="h-3.5 w-3.5" /> : <LogOut className="h-4 w-4" />}
               Cerrar sesión
@@ -390,6 +415,11 @@ export function AppShell({ children, onLogout, tour, justLoggedIn }: {
         {tour && (
           <TourLayer tour={tour} justLoggedIn={justLoggedIn}
                      shellActions={{ openSidebar: () => setOpen(true), closeSidebar: () => setOpen(false) }} />
+        )}
+        {settings && (
+          <SettingsModal section={settings} onSection={setSettings}
+                         onClose={() => setSettings(null)}
+                         user={user} role={role} meta={meta} />
         )}
         {children}
       </div>
