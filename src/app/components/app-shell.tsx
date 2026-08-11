@@ -56,6 +56,11 @@ const PEEK_CLOSE_MS = 150;
 // el navegador nunca registra un enter sobre ella —y sin enter previo tampoco
 // dispara el leave—, y el peek se quedaba pegado para siempre.
 const PEEK_HIT_X = 256 + 32;
+// Cada cuánto se revisa que la sesión siga valiendo. Un minuto es el retardo
+// máximo con el que alguien a quien le quitaron el acceso sigue viendo una
+// pantalla ya cargada; cualquier acción suya lo saca antes, porque el proxy le
+// responde 401.
+const SESSION_POLL_MS = 60_000;
 // Mismo breakpoint que las clases `lg:` de la barra: debajo de él anclar no
 // aplica y el botón abre el overlay de siempre.
 const LG_QUERY = "(min-width: 1024px)";
@@ -129,6 +134,13 @@ export function AppShell({ children, onLogout, tour, justLoggedIn }: {
   const [loggingOut, setLoggingOut] = useState(false);
   const [count, setCount] = useState<number | null>(null);
   const [user, setUser] = useState<SessionUser | null>(null);
+  // Por ref y no por closure: las páginas pasan una lambda inline, y con su
+  // identidad en las deps del efecto de sesión el intervalo se reiniciaría en
+  // cada render.
+  // Se refresca en un efecto y no en render: escribir una ref durante el render
+  // es lo que prohíbe react-hooks/refs, y el tour resuelve lo mismo así.
+  const onLogoutRef = useRef(onLogout);
+  useEffect(() => { onLogoutRef.current = onLogout; });
   const [settings, setSettings] = useState<SectionId | null>(null);
   const [role, setRole] = useState<Role>("viewer");
   const [meta, setMeta] = useState<CacheMeta | null>(null);
@@ -155,21 +167,37 @@ export function AppShell({ children, onLogout, tour, justLoggedIn }: {
   // El shell sólo se monta autenticado, así que esta respuesta siempre trae
   // usuario. Es el único consumidor de la identidad en toda la app: por eso la
   // pide él y no se le pasa por props desde las tres páginas.
+  //
+  // Se repite cada SESSION_POLL_MS porque la sesión puede dejar de valer sin que
+  // esta persona haga nada: un admin le quita el acceso y su cookie —sellada, de
+  // 7 días— deja de servir en el server, pero la pantalla ya renderizada seguiría
+  // ahí hasta que intentara algo. `authenticated:false` la manda a la pantalla de
+  // ingreso. Es el mismo fetch que ya se hacía, sólo que en intervalo.
   useEffect(() => {
     let alive = true;
-    (async () => {
+    const mirar = async () => {
       try {
         const r = await fetch("/api/auth/session");
         if (!r.ok) return;
-        const j = (await r.json()) as { user?: SessionUser | null; role?: Role };
+        const j = (await r.json()) as { authenticated?: boolean; user?: SessionUser | null; role?: Role };
         if (!alive) return;
+        // La sesión dejó de valer (le quitaron el acceso, o expiró). onLogout es
+        // el mismo camino del logout manual: la página vuelve a su rama pública.
+        if (j.authenticated === false) { onLogoutRef.current(); return; }
         if (j.user) setUser(j.user);
         // Decorativo: decide si el panel dibuja la sección Usuarios. Quien
         // autoriza de verdad es /api/admin/users.
         if (j.role) setRole(j.role);
       } catch { /* sin identidad el footer cae al correo vacío, no rompe */ }
-    })();
-    return () => { alive = false; };
+    };
+    void mirar();
+    const id = setInterval(mirar, SESSION_POLL_MS);
+    return () => { alive = false; clearInterval(id); };
+    // Sin `onLogout` en las deps a propósito: las páginas lo pasan como lambda
+    // inline, así que su identidad cambia en cada render y el intervalo se
+    // reiniciaría sin llegar a disparar nunca en la página de reportes, que
+    // re-renderiza mientras polea el sync. Se lee por ref, misma razón que
+    // runAction en el tour.
   }, []);
 
   useEffect(() => {

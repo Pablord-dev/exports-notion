@@ -53,6 +53,86 @@ test("un viewer no tiene la sección Usuarios", async ({ page }) => {
   await expect(panel.getByRole("button", { name: "Usuarios" })).toHaveCount(0);
 });
 
+// El motivo de todo el mecanismo de bloqueo: la sesión es una cookie sellada de
+// 7 días y el server no lleva registro de cuáles existen, así que sin esto
+// quitarle el acceso a alguien no le hacía nada hasta que venciera.
+// Serial y con identidad propia: las dos pruebas bloquean al mismo usuario, y en
+// paralelo una restauraría el acceso mientras la otra lo está comprobando.
+test.describe.serial("quitar el acceso cierra la sesión", () => {
+  const FUERA = "e2e-descartable@hiuman.edu.mx";
+
+  async function quitarleElAcceso(page: import("@playwright/test").Page) {
+    await login(page);
+    await abrirConfiguracion(page);
+    const panel = page.getByRole("dialog", { name: "Configuración" });
+    await panel.getByRole("button", { name: "Usuarios" }).click();
+    await panel.getByRole("button", { name: `Quitar acceso a ${FUERA}`, exact: true }).click();
+    await panel.getByRole("button", { name: "Quitar acceso", exact: true }).click();
+    await expect(panel.getByRole("heading", { name: "Sin acceso" })).toBeVisible();
+  }
+
+  // Si el test se cae a mitad, el bloqueo quedaría puesto y el login de la
+  // siguiente corrida (o del reintento en CI) fallaría antes de empezar.
+  test.afterEach(async ({ browser }) => {
+    const ctx = await browser.newContext();
+    const p = await ctx.newPage();
+    await p.goto("/api/auth/stub-login?role=admin");
+    await p.request.delete(`/api/admin/blocked?email=${encodeURIComponent(FUERA)}`);
+    await ctx.close();
+  });
+
+  test("quien perdió el acceso queda afuera al recargar", async ({ browser }) => {
+    test.skip(process.env.E2E_REAL === "1", "el stub-login no existe contra el server real");
+    const ctxFuera = await browser.newContext();
+    const ctxAdmin = await browser.newContext();
+    const suyo = await ctxFuera.newPage();
+    const admin = await ctxAdmin.newPage();
+
+    await login(suyo, { role: "descartable" });
+    await expect(suyo.getByRole("complementary", { name: "Navegación" })).toBeVisible();
+
+    await quitarleElAcceso(admin);
+
+    // Su cookie sigue siendo válida y bien firmada; lo que cambió es que el
+    // server ya no la acepta.
+    await suyo.reload();
+    await expect(suyo.getByRole("link", { name: "Continuar con Google" })).toBeVisible();
+
+    // Y restaurarlo lo deja entrar de nuevo.
+    const panel = admin.getByRole("dialog", { name: "Configuración" });
+    await panel.getByRole("button", { name: "Restaurar acceso" }).click();
+    await expect(panel.getByRole("heading", { name: "Sin acceso" })).toBeHidden();
+    await login(suyo, { role: "descartable" });
+    await expect(suyo.getByRole("complementary", { name: "Navegación" })).toBeVisible();
+
+    await ctxFuera.close();
+    await ctxAdmin.close();
+  });
+
+  test("y sin tocar nada, la app lo expulsa sola en un minuto", async ({ browser }) => {
+    test.skip(process.env.E2E_REAL === "1", "el stub-login no existe contra el server real");
+    const ctxFuera = await browser.newContext();
+    const ctxAdmin = await browser.newContext();
+    const suyo = await ctxFuera.newPage();
+    const admin = await ctxAdmin.newPage();
+
+    // Reloj falso para no esperar 60s de verdad. Se instala antes de navegar:
+    // después, los timers ya creados no quedan bajo su control.
+    await suyo.clock.install();
+    await login(suyo, { role: "descartable" });
+    await expect(suyo.getByRole("complementary", { name: "Navegación" })).toBeVisible();
+
+    await quitarleElAcceso(admin);
+
+    // Nadie toca esa pestaña: es el poll del shell el que la saca.
+    await suyo.clock.fastForward("01:05");
+    await expect(suyo.getByRole("link", { name: "Continuar con Google" })).toBeVisible();
+
+    await ctxFuera.close();
+    await ctxAdmin.close();
+  });
+});
+
 test("Ayuda abre el mismo panel directo en Acerca de", async ({ page }) => {
   test.skip(process.env.E2E_REAL === "1", "el stub-login no existe contra el server real");
   await login(page);
