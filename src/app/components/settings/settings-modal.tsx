@@ -46,8 +46,8 @@ export function SettingsModal({ section, onSection, onClose, user, role, meta }:
       {/* aria-describedby en undefined: el panel no tiene bajada y sin esto
           Radix avisa por consola en cada apertura. */}
       <DialogContent aria-describedby={undefined}
-                     className="grid-rows-[auto_1fr] gap-0 overflow-hidden p-0 sm:max-w-3xl"
-                     style={{ height: "min(620px, 85vh)" }}>
+                     className="grid-rows-[auto_1fr] gap-0 overflow-hidden p-0 sm:max-w-5xl"
+                     style={{ height: "min(760px, 88vh)" }}>
         <DialogHeader className="border-b border-border px-5 py-3.5">
           <DialogTitle className="font-display text-base font-semibold">Configuración</DialogTitle>
         </DialogHeader>
