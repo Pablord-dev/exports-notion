@@ -36,10 +36,10 @@ test("un admin ve la sección Usuarios y su propia fila va vedada", async ({ pag
   // El nombre sale del correo y no de "Usuario E2E": la fila del admin la crea
   // stub-login con setUserRole, que no guarda nombre (sólo recordLogin lo hace).
   // exact para no capturar también la fila de e2e-viewer@.
-  const propio = panel.getByRole("button", { name: "Borrar a e2e@hiuman.edu.mx", exact: true });
+  const propio = panel.getByRole("button", { name: "Quitar acceso a e2e@hiuman.edu.mx", exact: true });
   await expect(propio).toHaveAttribute("aria-disabled", "true");
   await propio.hover();
-  await expect(page.getByText("No podés borrar tu propio usuario")).toBeVisible();
+  await expect(page.getByText("No podés quitarte el acceso a vos mismo")).toBeVisible();
 });
 
 test("un viewer no tiene la sección Usuarios", async ({ page }) => {

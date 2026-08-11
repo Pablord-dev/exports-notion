@@ -3,13 +3,13 @@
 // Después de cada acción la lista se refetchea entera en vez de mutar el estado
 // local: son decenas de filas y la simplicidad vale más que el ahorro.
 import { useCallback, useEffect, useState } from "react";
-import { Trash2 } from "lucide-react";
+import { RotateCcw, UserMinus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Spinner } from "@/app/components/spinner";
 import { normalizeEmail, type Role } from "@/lib/authz";
-import type { UserRow } from "@/lib/store-shared";
+import type { UserRow, BlockedRow } from "@/lib/store-shared";
 
 function fmtAcceso(iso: string | null): string {
   if (!iso) return "nunca";
@@ -22,6 +22,7 @@ function fmtAcceso(iso: string | null): string {
 
 export function UsersSection({ meEmail }: { meEmail: string }) {
   const [users, setUsers] = useState<UserRow[] | null>(null);
+  const [blocked, setBlocked] = useState<BlockedRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -31,7 +32,10 @@ export function UsersSection({ meEmail }: { meEmail: string }) {
     try {
       const r = await fetch("/api/admin/users");
       if (!r.ok) { setError("No se pudo cargar la lista."); return; }
-      setUsers((await r.json()).users as UserRow[]);
+      // Las dos listas vienen en la misma respuesta.
+      const j = (await r.json()) as { users: UserRow[]; blocked: BlockedRow[] };
+      setUsers(j.users);
+      setBlocked(j.blocked);
       setError(null);
     } catch {
       setError("No se pudo cargar la lista.");
@@ -55,13 +59,23 @@ export function UsersSection({ meEmail }: { meEmail: string }) {
     } finally { setBusy(false); }
   }
 
-  async function borrar(email: string) {
+  async function quitarAcceso(email: string) {
     setBusy(true);
     try {
       const r = await fetch(`/api/admin/users?email=${encodeURIComponent(email)}`, { method: "DELETE" });
-      if (!r.ok) { setError("No se pudo borrar el usuario."); return; }
+      if (!r.ok) { setError("No se pudo quitar el acceso."); return; }
       setError(null);
       setConfirming(null);
+      await load();
+    } finally { setBusy(false); }
+  }
+
+  async function restaurar(email: string) {
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/admin/blocked?email=${encodeURIComponent(email)}`, { method: "DELETE" });
+      if (!r.ok) { setError("No se pudo restaurar el acceso."); return; }
+      setError(null);
       await load();
     } finally { setBusy(false); }
   }
@@ -72,7 +86,8 @@ export function UsersSection({ meEmail }: { meEmail: string }) {
         <h2 className="font-display text-[15px] font-semibold text-foreground">Usuarios</h2>
         <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
           Quienes entraron alguna vez. Un administrador puede reconstruir el snapshot completo;
-          lectura alcanza para reportes, exportación y el Asistente.
+          lectura alcanza para reportes, exportación y el Asistente. Quitarle el acceso a alguien
+          le cierra la sesión al instante.
         </p>
       </div>
 
@@ -104,13 +119,14 @@ export function UsersSection({ meEmail }: { meEmail: string }) {
                   // que no valen la pena por una confirmación de una línea.
                   <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
                     <p className="text-[12px] text-muted-foreground">
-                      Se le quita el rol y sale de la lista. <span className="text-subtle">No pierde el acceso: vuelve como lectura si entra de nuevo.</span>
+                      Se le cierra la sesión al instante y no puede volver a entrar.{" "}
+                      <span className="text-subtle">Podés devolvérselo cuando quieras.</span>
                     </p>
                     <Button size="sm" variant="outline" onClick={() => setConfirming(null)} disabled={busy}>
                       Cancelar
                     </Button>
-                    <Button size="sm" variant="destructive" onClick={() => borrar(u.email)} disabled={busy}>
-                      Borrar
+                    <Button size="sm" variant="destructive" onClick={() => quitarAcceso(u.email)} disabled={busy}>
+                      Quitar acceso
                     </Button>
                   </div>
                 ) : (
@@ -152,20 +168,25 @@ export function UsersSection({ meEmail }: { meEmail: string }) {
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button variant="ghost" size="icon" aria-disabled="true"
-                                  aria-label={`Borrar a ${u.name ?? u.email}`}
+                                  aria-label={`Quitar acceso a ${u.name ?? u.email}`}
                                   className="h-8 w-8 shrink-0 text-muted-foreground opacity-60">
-                            <Trash2 className="h-4 w-4" />
+                            <UserMinus className="h-4 w-4" />
                           </Button>
                         </TooltipTrigger>
-                        <TooltipContent>No podés borrar tu propio usuario</TooltipContent>
+                        <TooltipContent>No podés quitarte el acceso a vos mismo</TooltipContent>
                       </Tooltip>
                     ) : (
-                      <Button variant="ghost" size="icon" disabled={busy}
-                              onClick={() => setConfirming(u.email)}
-                              aria-label={`Borrar a ${u.name ?? u.email}`}
-                              className="h-8 w-8 shrink-0 text-muted-foreground hover:text-danger">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" size="icon" disabled={busy}
+                                  onClick={() => setConfirming(u.email)}
+                                  aria-label={`Quitar acceso a ${u.name ?? u.email}`}
+                                  className="h-8 w-8 shrink-0 text-muted-foreground hover:text-danger">
+                            <UserMinus className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Quitar el acceso</TooltipContent>
+                      </Tooltip>
                     )}
                   </>
                 )}
@@ -173,6 +194,37 @@ export function UsersSection({ meEmail }: { meEmail: string }) {
             );
           })}
         </ul>
+      )}
+
+      {blocked.length > 0 && (
+        <div className="space-y-2 pt-2">
+          <div>
+            <h3 className="text-[13px] font-semibold text-foreground">Sin acceso</h3>
+            <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">
+              No pueden entrar aunque su correo sea del dominio permitido. Al restaurarlos vuelven
+              como lectura: el rol que tenían no se recuerda.
+            </p>
+          </div>
+          <ul className="divide-y divide-border rounded-xl border border-border">
+            {blocked.map((b) => (
+              <li key={b.email} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3.5 py-2.5">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-medium text-muted-foreground">{b.name ?? b.email}</p>
+                  <p className="truncate text-[11.5px] text-subtle">
+                    {b.email}
+                    {b.blockedBy && <> · lo quitó {b.blockedBy}</>}
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" disabled={busy}
+                        onClick={() => restaurar(b.email)}
+                        className="shrink-0">
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Restaurar acceso
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </section>
   );
