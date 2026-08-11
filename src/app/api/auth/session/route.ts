@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { getIronSession } from "iron-session";
 import { sessionOptions, type SessionData } from "@/lib/session";
 import { safeRoleFor } from "@/lib/user-role";
+import { isBlocked } from "@/lib/db";
 
 /**
  * Quién está dentro. NO está en el matcher de proxy.ts a propósito: tiene que
@@ -17,6 +18,22 @@ import { safeRoleFor } from "@/lib/user-role";
 export async function GET() {
   const session = await getIronSession<SessionData>(await cookies(), sessionOptions);
   if (!session.authenticated) return NextResponse.json({ authenticated: false });
+
+  // Esta ruta está fuera del matcher del proxy, así que el bloqueo lo mira ella.
+  // Es lo que el shell polea para expulsar a quien perdió el acceso con una
+  // pantalla abierta. Fail-closed —al revés que el rol de abajo—: si no se puede
+  // saber, se responde "no hay sesión". Un falso negativo manda a la pantalla de
+  // ingreso; un falso positivo dejaría adentro a quien ya no debería estar.
+  const email = session.user?.email;
+  if (email) {
+    try {
+      if (await isBlocked(email)) return NextResponse.json({ authenticated: false });
+    } catch (e) {
+      console.error("[auth] no se pudo verificar la lista de bloqueo", e);
+      return NextResponse.json({ authenticated: false });
+    }
+  }
+
   return NextResponse.json({
     authenticated: true,
     user: session.user ?? null,
