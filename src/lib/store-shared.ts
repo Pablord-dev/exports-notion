@@ -99,6 +99,17 @@ export function decodeDetailCursor(cursor: string | null): DetailCursor | null {
   }
 }
 
+/** Fila de `users` tal como la consume la pantalla de administración. */
+export interface UserRow {
+  email: string;
+  role: Role;
+  /** null = nunca entró, o Google no mandó nombre. */
+  name: string | null;
+  createdAt: string;
+  /** null = tiene fila (la creó setUserRole) pero nunca hizo login. */
+  lastLoginAt: string | null;
+}
+
 // ---- Interfaz del store (la que fakes y stubs deben implementar) ----
 export interface Store {
   upsertRows(rows: { id: string; row: FlatRow }[], target?: "current" | "new"): Promise<void>;
@@ -133,6 +144,11 @@ export interface Store {
   getUserRole(email: string): Promise<Role | null>;
   /** Crea la fila si no existe: permite dejar listo a un admin antes de su primer login. */
   setUserRole(email: string, role: Role): Promise<void>;
+  /** Todas las filas, las más recientes primero y las que nunca entraron al final. */
+  listUsers(): Promise<UserRow[]>;
+  /** No quita el acceso: la puerta es ALLOWED_EMAIL_DOMAINS y recordLogin recrea
+   *  la fila —como viewer— en el próximo login. Sí quita el rol. */
+  deleteUser(email: string): Promise<void>;
 
   // Reportes (SB-12). Agregación al momento de consultar — sin precálculo.
   reportByPerson(f: ReportFilters): Promise<PersonTotal[]>;

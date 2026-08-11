@@ -8,7 +8,7 @@ import type { FlatRow, CacheMeta, SyncStatus } from "@/lib/types";
 import {
   HOURS_COL, REPORT_PROPS, UUID_RE, dateCol, toHours, toTimestamp, toExclusiveEndUtc,
   encodeDetailCursor, decodeDetailCursor,
-  type Store, type ReportFilters,
+  type Store, type ReportFilters, type UserRow,
 } from "@/lib/store-shared";
 import { normalizeEmail, type Role } from "@/lib/authz";
 
@@ -318,6 +318,21 @@ function pgStore(sql: Sql): Store {
         insert into users (email, role) values (${normalizeEmail(email)}, ${role})
         on conflict (email) do update set role = excluded.role`;
     },
+    async listUsers() {
+      const rs = await sql`
+        select email, role, name, created_at, last_login_at from users
+        order by last_login_at desc nulls last, email`;
+      return rs.map((r): UserRow => ({
+        email: r.email as string,
+        role: r.role as Role,
+        name: (r.name as string | null) ?? null,
+        createdAt: (r.created_at as Date).toISOString(),
+        lastLoginAt: r.last_login_at ? (r.last_login_at as Date).toISOString() : null,
+      }));
+    },
+    async deleteUser(email) {
+      await sql`delete from users where email = ${normalizeEmail(email)}`;
+    },
   };
 }
 
@@ -390,6 +405,8 @@ export const rateLimitLogin: Store["rateLimitLogin"] = (ip, limit, win) => s().r
 export const recordLogin: Store["recordLogin"] = (e, n) => s().recordLogin(e, n);
 export const getUserRole: Store["getUserRole"] = (e) => s().getUserRole(e);
 export const setUserRole: Store["setUserRole"] = (e, r) => s().setUserRole(e, r);
+export const listUsers: Store["listUsers"] = () => s().listUsers();
+export const deleteUser: Store["deleteUser"] = (e) => s().deleteUser(e);
 export const reportByPerson: Store["reportByPerson"] = (f) => s().reportByPerson(f);
 export const reportBySubproject: Store["reportBySubproject"] = (f) => s().reportBySubproject(f);
 export const reportTimeline: Store["reportTimeline"] = (f, g) => s().reportTimeline(f, g);

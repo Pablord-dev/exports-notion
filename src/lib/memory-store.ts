@@ -12,7 +12,7 @@ import {
   HOURS_COL, REPORT_PROPS, UUID_RE, dateCol, toHours, toTimestamp, toExclusiveEndUtc,
   encodeDetailCursor, decodeDetailCursor,
   type Store, type ReportFilters, type PersonTotal, type SubprojectTotal,
-  type TimelineBucket, type MatrixCell, type DetailPage, type FilterOptions,
+  type TimelineBucket, type MatrixCell, type DetailPage, type FilterOptions, type UserRow,
 } from "@/lib/store-shared";
 import { normalizeEmail, type Role } from "@/lib/authz";
 
@@ -250,7 +250,7 @@ class MemoryStore implements Store {
   // Espejo de la tabla `users`. Guarda los mismos campos que el SQL aunque hoy
   // sólo se lea `role`: si el stub olvidara last_login_at, un test de la
   // auditoría pasaría en memoria y fallaría contra Postgres.
-  private users = new Map<string, { role: Role; name: string; createdAt: string; lastLoginAt: string | null }>();
+  private users = new Map<string, { role: Role; name: string | null; createdAt: string; lastLoginAt: string | null }>();
 
   async recordLogin(email: string, name: string): Promise<void> {
     const key = normalizeEmail(email);
@@ -273,7 +273,25 @@ class MemoryStore implements Store {
     const key = normalizeEmail(email);
     const cur = this.users.get(key);
     if (cur) { cur.role = role; return; }
-    this.users.set(key, { role, name: "", createdAt: new Date().toISOString(), lastLoginAt: null });
+    // name null y no "": el SQL deja la columna nula cuando la fila no nació de
+    // un login, y el stub tiene que decir lo mismo.
+    this.users.set(key, { role, name: null, createdAt: new Date().toISOString(), lastLoginAt: null });
+  }
+
+  async listUsers(): Promise<UserRow[]> {
+    // Mismo orden que el SQL: last_login_at DESC NULLS LAST, desempate por email.
+    return [...this.users.entries()]
+      .map(([email, u]) => ({ email, ...u }))
+      .sort((a, b) => {
+        if (a.lastLoginAt === b.lastLoginAt) return a.email < b.email ? -1 : 1;
+        if (a.lastLoginAt === null) return 1;
+        if (b.lastLoginAt === null) return -1;
+        return a.lastLoginAt < b.lastLoginAt ? 1 : -1;
+      });
+  }
+
+  async deleteUser(email: string): Promise<void> {
+    this.users.delete(normalizeEmail(email));
   }
 }
 
