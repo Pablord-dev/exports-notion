@@ -384,7 +384,7 @@ export function AppShell({ children, onLogout, tour, justLoggedIn }: {
               <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-subtle" aria-hidden />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="start" className="w-[15.5rem]">
+          <DropdownMenuContent side="right" align="end" className="w-[15.5rem]">
             <DropdownMenuItem onSelect={() => setSettings("cuenta")}>
               <Settings className="h-4 w-4" />
               Configuración
