@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getIronSession } from "iron-session";
 import { sessionOptions, type SessionData } from "@/lib/session";
 
-const PROTECTED = ["/api/export", "/api/sync/status", "/api/reports", "/api/chat"];
+const PROTECTED = ["/api/export", "/api/sync/status", "/api/reports", "/api/chat", "/api/admin"];
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -18,5 +18,5 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/api/export/:path*", "/api/sync/status", "/api/reports/:path*", "/api/chat", "/api/chat/:path*"],
+  matcher: ["/api/export/:path*", "/api/sync/status", "/api/reports/:path*", "/api/chat", "/api/chat/:path*", "/api/admin/:path*"],
 };
