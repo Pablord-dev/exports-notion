@@ -3,7 +3,7 @@
 // la regla, no equivocarse en la tabla de verdad. Mismo molde que sync-authz.
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { NextRequest } from "next/server";
-import { __setStore, setUserRole, recordLogin, getUserRole, listUsers } from "@/lib/db";
+import { __setStore, setUserRole, recordLogin, getUserRole, listUsers, isBlocked, blockUser, listBlocked } from "@/lib/db";
 import { newMemoryStore } from "@/lib/memory-store";
 
 // vi.hoisted es obligatorio: el factory de vi.mock se iza por encima de las
@@ -15,6 +15,7 @@ vi.mock("iron-session", () => ({ getIronSession: async () => h.sesion }));
 vi.mock("next/headers", () => ({ cookies: async () => ({}) }));
 
 const { GET, PATCH, DELETE } = await import("@/app/api/admin/users/route");
+const { DELETE: DELETE_BLOCKED } = await import("@/app/api/admin/blocked/route");
 
 const req = (url: string, init?: RequestInit) => new NextRequest(new Request(url, init));
 const patch = (body: unknown) =>
@@ -98,21 +99,83 @@ describe("PATCH", () => {
   });
 });
 
+describe("GET · bloqueados", () => {
+  it("la lista de bloqueo viaja junto a los usuarios, en la misma respuesta", async () => {
+    comoAdmin();
+    await blockUser("fuera@hiuman.edu.mx", "Fuera", ADMIN);
+    const { users, blocked } = await (await GET()).json();
+    expect(users.map((u: { email: string }) => u.email).sort()).toEqual([ADMIN, OTRO]);
+    expect(blocked).toHaveLength(1);
+    expect(blocked[0]).toMatchObject({ email: "fuera@hiuman.edu.mx", name: "Fuera", blockedBy: ADMIN });
+  });
+});
+
 describe("DELETE", () => {
-  it("admin: borra la fila de otra persona", async () => {
+  it("admin: borra la fila de otra persona Y le quita el acceso", async () => {
     comoAdmin();
     expect((await del(`?email=${OTRO}`)).status).toBe(200);
     expect((await listUsers()).map((u) => u.email)).toEqual([ADMIN]);
+    // Lo que faltaba: sin esto la cookie de esa persona seguía valiendo 7 días.
+    expect(await isBlocked(OTRO)).toBe(true);
   });
 
-  it("sobre uno mismo: 409 y la fila sobrevive", async () => {
+  it("guarda el nombre y quién lo hizo, para poder mostrar la lista", async () => {
+    comoAdmin();
+    await del(`?email=${OTRO}`);
+    const [b] = await listBlocked();
+    expect(b).toMatchObject({ email: OTRO, name: "Otro", blockedBy: ADMIN });
+  });
+
+  it("bloquear a quien nunca tuvo fila igual funciona", async () => {
+    comoAdmin();
+    expect((await del("?email=fantasma@hiuman.edu.mx")).status).toBe(200);
+    expect(await isBlocked("fantasma@hiuman.edu.mx")).toBe(true);
+    expect((await listBlocked())[0].name).toBeNull();
+  });
+
+  it("sobre uno mismo: 409, la fila sobrevive y NO se autobloquea", async () => {
     comoAdmin();
     expect((await del(`?email=${ADMIN}`)).status).toBe(409);
     expect(await getUserRole(ADMIN)).toBe("admin");
+    expect(await isBlocked(ADMIN)).toBe(false);
   });
 
   it("sin email: 400", async () => {
     comoAdmin();
     expect((await del("")).status).toBe(400);
+  });
+});
+
+describe("DELETE /api/admin/blocked · restaurar el acceso", () => {
+  const restaurar = (qs: string) =>
+    DELETE_BLOCKED(req(`http://x/api/admin/blocked${qs}`, { method: "DELETE" }));
+
+  it("admin: lo saca de la lista y puede volver a entrar", async () => {
+    comoAdmin();
+    await blockUser("fuera@hiuman.edu.mx", "Fuera", ADMIN);
+    expect((await restaurar("?email=fuera@hiuman.edu.mx")).status).toBe(200);
+    expect(await isBlocked("fuera@hiuman.edu.mx")).toBe(false);
+  });
+
+  // Restaurar NO devuelve el rol: la fila de users se borró al bloquear, así que
+  // vuelve como lectura en su próximo login. Un admin degradado por un bloqueo
+  // tiene que ser promovido de nuevo a mano.
+  it("restaurar no devuelve el rol que tenía", async () => {
+    comoAdmin();
+    await del(`?email=${OTRO}`);
+    await restaurar(`?email=${OTRO}`);
+    expect(await getUserRole(OTRO)).toBeNull();
+  });
+
+  it("viewer: 403 y sigue bloqueado", async () => {
+    await blockUser("fuera@hiuman.edu.mx", null, null);
+    h.sesion = { authenticated: true, user: { email: OTRO, name: "Otro" } };
+    expect((await restaurar("?email=fuera@hiuman.edu.mx")).status).toBe(403);
+    expect(await isBlocked("fuera@hiuman.edu.mx")).toBe(true);
+  });
+
+  it("sin email: 400", async () => {
+    comoAdmin();
+    expect((await restaurar("")).status).toBe(400);
   });
 });
