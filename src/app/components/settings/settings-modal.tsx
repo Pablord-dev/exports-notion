@@ -7,6 +7,7 @@
 // no hay tour con el que convivir.
 import { Info, User, Users } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { UsersSection } from "@/app/components/settings/users-section";
 import { canManageUsers, type Role } from "@/lib/authz";
 import type { SessionUser } from "@/lib/session";
 import type { CacheMeta } from "@/lib/types";
@@ -71,7 +72,7 @@ export function SettingsModal({ section, onSection, onClose, user, role, meta }:
 
           <div className="min-w-0 flex-1 overflow-y-auto p-5">
             {active === "cuenta" && <Cuenta user={user} role={role} />}
-            {active === "usuarios" && <p className="text-sm text-muted-foreground">Sección de usuarios.</p>}
+            {active === "usuarios" && <UsersSection meEmail={user?.email ?? ""} />}
             {active === "acerca" && <Acerca meta={meta} />}
           </div>
         </div>
