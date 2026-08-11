@@ -13,6 +13,7 @@ import {
   encodeDetailCursor, decodeDetailCursor,
   type Store, type ReportFilters, type PersonTotal, type SubprojectTotal,
   type TimelineBucket, type MatrixCell, type DetailPage, type FilterOptions, type UserRow,
+  type BlockedRow,
 } from "@/lib/store-shared";
 import { normalizeEmail, type Role } from "@/lib/authz";
 
@@ -292,6 +293,33 @@ class MemoryStore implements Store {
 
   async deleteUser(email: string): Promise<void> {
     this.users.delete(normalizeEmail(email));
+  }
+
+  // Espejo de `blocked_users`. Sin TTL: un bloqueo dura hasta que lo levanten.
+  private blocked = new Map<string, { name: string | null; blockedAt: string; blockedBy: string | null }>();
+
+  async blockUser(email: string, name: string | null, by: string | null): Promise<void> {
+    // Pisa el bloqueo previo, igual que el do-update del SQL.
+    this.blocked.set(normalizeEmail(email), {
+      name, blockedBy: by, blockedAt: new Date().toISOString(),
+    });
+  }
+
+  async unblockUser(email: string): Promise<void> {
+    this.blocked.delete(normalizeEmail(email));
+  }
+
+  async listBlocked(): Promise<BlockedRow[]> {
+    // Mismo orden que el SQL: blocked_at DESC, desempate por email.
+    return [...this.blocked.entries()]
+      .map(([email, b]) => ({ email, ...b }))
+      .sort((a, b) => (a.blockedAt === b.blockedAt
+        ? (a.email < b.email ? -1 : 1)
+        : (a.blockedAt < b.blockedAt ? 1 : -1)));
+  }
+
+  async isBlocked(email: string): Promise<boolean> {
+    return this.blocked.has(normalizeEmail(email));
   }
 }
 

@@ -72,7 +72,7 @@ describe.runIf(RUN)("db.ts contra Postgres real", () => {
     }
 
     // Partir de cero: la migración usa `create table` sin IF NOT EXISTS.
-    await sql.unsafe("drop table if exists pages, pages_new, sync_state, login_attempts, users cascade");
+    await sql.unsafe("drop table if exists pages, pages_new, sync_state, login_attempts, users, blocked_users cascade");
     const dir = path.resolve(__dirname, "../../supabase/migrations");
     for (const f of fs.readdirSync(dir).sort()) {
       await sql.unsafe(fs.readFileSync(path.join(dir, f), "utf8"));
@@ -86,7 +86,7 @@ describe.runIf(RUN)("db.ts contra Postgres real", () => {
     await sql.end();
   });
   beforeEach(async () => {
-    await sql`truncate pages, pages_new, sync_state, login_attempts, users`;
+    await sql`truncate pages, pages_new, sync_state, login_attempts, users, blocked_users`;
   });
 
   it("upsert parsea columnas tipadas y el jsonb queda íntegro", async () => {

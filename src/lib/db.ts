@@ -8,7 +8,7 @@ import type { FlatRow, CacheMeta, SyncStatus } from "@/lib/types";
 import {
   HOURS_COL, REPORT_PROPS, UUID_RE, dateCol, toHours, toTimestamp, toExclusiveEndUtc,
   encodeDetailCursor, decodeDetailCursor,
-  type Store, type ReportFilters, type UserRow,
+  type Store, type ReportFilters, type UserRow, type BlockedRow,
 } from "@/lib/store-shared";
 import { normalizeEmail, type Role } from "@/lib/authz";
 
@@ -333,6 +333,31 @@ function pgStore(sql: Sql): Store {
     async deleteUser(email) {
       await sql`delete from users where email = ${normalizeEmail(email)}`;
     },
+    async blockUser(email, name, by) {
+      await sql`
+        insert into blocked_users (email, name, blocked_by)
+        values (${normalizeEmail(email)}, ${name}, ${by})
+        on conflict (email) do update
+          set name = excluded.name, blocked_by = excluded.blocked_by, blocked_at = now()`;
+    },
+    async unblockUser(email) {
+      await sql`delete from blocked_users where email = ${normalizeEmail(email)}`;
+    },
+    async listBlocked() {
+      const rs = await sql`
+        select email, name, blocked_at, blocked_by from blocked_users
+        order by blocked_at desc, email`;
+      return rs.map((r): BlockedRow => ({
+        email: r.email as string,
+        name: (r.name as string | null) ?? null,
+        blockedAt: (r.blocked_at as Date).toISOString(),
+        blockedBy: (r.blocked_by as string | null) ?? null,
+      }));
+    },
+    async isBlocked(email) {
+      const rs = await sql`select 1 from blocked_users where email = ${normalizeEmail(email)}`;
+      return rs.length > 0;
+    },
   };
 }
 
@@ -407,6 +432,10 @@ export const getUserRole: Store["getUserRole"] = (e) => s().getUserRole(e);
 export const setUserRole: Store["setUserRole"] = (e, r) => s().setUserRole(e, r);
 export const listUsers: Store["listUsers"] = () => s().listUsers();
 export const deleteUser: Store["deleteUser"] = (e) => s().deleteUser(e);
+export const blockUser: Store["blockUser"] = (e, n, by) => s().blockUser(e, n, by);
+export const unblockUser: Store["unblockUser"] = (e) => s().unblockUser(e);
+export const listBlocked: Store["listBlocked"] = () => s().listBlocked();
+export const isBlocked: Store["isBlocked"] = (e) => s().isBlocked(e);
 export const reportByPerson: Store["reportByPerson"] = (f) => s().reportByPerson(f);
 export const reportBySubproject: Store["reportBySubproject"] = (f) => s().reportBySubproject(f);
 export const reportTimeline: Store["reportTimeline"] = (f, g) => s().reportTimeline(f, g);
