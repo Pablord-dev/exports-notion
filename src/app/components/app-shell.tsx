@@ -14,6 +14,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ChevronRight,
+  ChevronsUpDown,
   Clock,
   Home,
   LogOut,
@@ -24,6 +25,9 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Collapsible,
   CollapsibleContent,
@@ -116,6 +120,7 @@ export function AppShell({ children, onLogout, tour, justLoggedIn }: {
   const [peek, setPeek] = useState(false);
   const peekTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [dbsOpen, setDbsOpen] = useState(true);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [count, setCount] = useState<number | null>(null);
   const [user, setUser] = useState<SessionUser | null>(null);
@@ -167,7 +172,10 @@ export function AppShell({ children, onLogout, tour, justLoggedIn }: {
   // por los boundary events del <aside> (ver PEEK_HIT_X). Sin las helpers de
   // abajo a propósito: recrearse en cada render re-suscribiría el listener.
   useEffect(() => {
-    if (!peek) return;
+    // Con el menú de sesión abierto la barra se queda: si no, el cursor se va a
+    // un item, cruza la frontera del peek y la barra desaparece dejando el menú
+    // flotando sobre el contenido.
+    if (!peek || menuOpen) return;
     const onMove = (e: PointerEvent) => {
       if (e.clientX <= PEEK_HIT_X) {
         if (peekTimer.current) { clearTimeout(peekTimer.current); peekTimer.current = null; }
@@ -177,7 +185,7 @@ export function AppShell({ children, onLogout, tour, justLoggedIn }: {
     };
     document.addEventListener("pointermove", onMove);
     return () => document.removeEventListener("pointermove", onMove);
-  }, [peek]);
+  }, [peek, menuOpen]);
 
   const clearPeekTimer = () => {
     if (peekTimer.current) clearTimeout(peekTimer.current);
@@ -337,31 +345,36 @@ export function AppShell({ children, onLogout, tour, justLoggedIn }: {
           </Collapsible>
         </nav>
 
-        {/* Footer de sesión: identidad + logout como icono */}
-        <div className="flex items-center gap-2.5 border-t border-sidebar-border px-4 py-2.5">
-          {/* Iniciales en vez de la foto de Google: la imagen vive en
-              lh3.googleusercontent.com, lo que obliga a declarar
-              images.remotePatterns y dispara una petición externa en cada carga.
-              El nombre cae al correo cuando Google no manda `name`. */}
-          <span aria-hidden
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent text-[10px] font-semibold text-accent-foreground">
-            {initials(user?.name ?? user?.email ?? "")}
-          </span>
-          <span className="flex min-w-0 flex-1 flex-col leading-tight">
-            <span className="truncate text-xs text-sidebar-foreground">{user?.name ?? "Sesión activa"}</span>
-            {user?.email && <span className="truncate text-[10.5px] text-subtle">{user.email}</span>}
-          </span>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" onClick={logout} disabled={loggingOut}
-                      aria-label="Cerrar sesión"
-                      className="h-7 w-7 text-muted-foreground hover:text-danger">
-                {loggingOut ? <Spinner className="h-3.5 w-3.5" /> : <LogOut className="h-4 w-4" />}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">Cerrar sesión</TooltipContent>
-          </Tooltip>
-        </div>
+        {/* Footer de sesión: identidad + menú. modal={false} por el mismo motivo
+            que AppModal: el default de Radix vuelve inert todo lo de afuera, y
+            con la barra asomada eso deja el resto del shell muerto mientras el
+            menú está abierto. */}
+        <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen} modal={false}>
+          <DropdownMenuTrigger asChild>
+            <button aria-label="Menú de sesión"
+                    className="flex w-full items-center gap-2.5 border-t border-sidebar-border px-4 py-2.5 text-left transition hover:bg-card">
+              {/* Iniciales en vez de la foto de Google: la imagen vive en
+                  lh3.googleusercontent.com, lo que obliga a declarar
+                  images.remotePatterns y dispara una petición externa en cada
+                  carga. El nombre cae al correo cuando Google no manda `name`. */}
+              <span aria-hidden
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent text-[10px] font-semibold text-accent-foreground">
+                {initials(user?.name ?? user?.email ?? "")}
+              </span>
+              <span className="flex min-w-0 flex-1 flex-col leading-tight">
+                <span className="truncate text-xs text-sidebar-foreground">{user?.name ?? "Sesión activa"}</span>
+                {user?.email && <span className="truncate text-[10.5px] text-subtle">{user.email}</span>}
+              </span>
+              <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-subtle" aria-hidden />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="top" align="start" className="w-[15.5rem]">
+            <DropdownMenuItem onSelect={logout} disabled={loggingOut}>
+              {loggingOut ? <Spinner className="h-3.5 w-3.5" /> : <LogOut className="h-4 w-4" />}
+              Cerrar sesión
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </aside>
 
       {/* --shell-top: aire para la hamburguesa. Sale de globals.css y no de un

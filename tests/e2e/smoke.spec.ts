@@ -11,7 +11,7 @@ test("login shows main menu and sync/export modals work", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "BD Tiempos" })).toBeVisible();
   const sidebar = page.getByRole("complementary", { name: "Navegación" });
   await expect(sidebar).toBeVisible();
-  await expect(sidebar.getByRole("button", { name: "Cerrar sesión" })).toBeVisible();
+  await expect(sidebar.getByRole("button", { name: "Menú de sesión" })).toBeVisible();
   // La página de la BD es la de reportes; sync y export viven en modals.
   await sidebar.getByRole("link", { name: "BD Tiempos" }).click();
   await expect(page.getByRole("heading", { name: "Evolución de horas" })).toBeVisible();
@@ -123,9 +123,11 @@ test("los botones de icono muestran tooltip al pasar el cursor", async ({ page }
   test.skip(process.env.E2E_REAL === "1", "password real desconocido");
   await login(page);
   const sidebar = page.getByRole("complementary", { name: "Navegación" });
-  await sidebar.getByRole("button", { name: "Cerrar sesión" }).hover();
+  // El logout se mudó adentro del menú de sesión y un item de menú no lleva
+  // tooltip; el otro botón de icono de la barra sí lo conserva.
+  await sidebar.getByRole("button", { name: "Ocultar menú" }).hover();
   const tip = page.locator('[data-slot="tooltip-content"]');
-  await expect(tip).toHaveText("Cerrar sesión");
+  await expect(tip).toHaveText("Ocultar menú");
   // Superficie del sistema, no el bg-primary del default de shadcn.
   await expect(tip).toHaveCSS("background-color", "rgb(12, 36, 82)");
   // Se va al alejar el cursor: si quedara pegado taparía la navegación.
@@ -449,6 +451,19 @@ test("el footer del shell identifica a quien inició sesión", async ({ page }) 
   await expect(footer.getByText("e2e@hiuman.edu.mx")).toBeVisible();
   // Ya no dice sólo "Sesión activa".
   await expect(footer.getByText("Sesión activa")).toHaveCount(0);
+});
+
+// La identidad del footer es el disparador del menú de sesión: el logout vive
+// adentro y ya no es un icono suelto.
+test("el footer de la sidebar abre el menú de sesión", async ({ page }) => {
+  test.skip(process.env.E2E_REAL === "1", "password real desconocido");
+  await login(page);
+  const sidebar = page.getByRole("complementary", { name: "Navegación" });
+  await sidebar.getByRole("button", { name: "Menú de sesión" }).click();
+  await expect(page.getByRole("menuitem", { name: "Cerrar sesión" })).toBeVisible();
+  // Y cierra sesión de verdad: vuelve a la pantalla de ingreso.
+  await page.getByRole("menuitem", { name: "Cerrar sesión" }).click();
+  await expect(page.getByRole("link", { name: "Continuar con Google" })).toBeVisible();
 });
 
 test("la ruta de stub-login sólo existe con E2E_STUBS", async ({ request }) => {
