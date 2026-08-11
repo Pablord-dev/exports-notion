@@ -132,4 +132,20 @@ describe("GET /api/sync/status: perms", () => {
     await corriendo("full");
     expect((await get()).perms).toEqual({ full: true, cancel: true });
   });
+
+  // El resto del payload no depende del rol: un lookup roto no puede dejar el
+  // modal de sync en blanco (con la tabla ausente, este endpoint daba 500).
+  it("si el lookup del rol falla, el estado igual responde y veda el full", async () => {
+    const store = newMemoryStore();
+    store.getUserRole = async () => { throw new Error('relation "users" does not exist'); };
+    __setStore(store);
+    h.sesion = { authenticated: true, user: { email: "a@hiuman.edu.mx", name: "A" } };
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const body = await get();
+    expect(body.status.state).toBe("idle");            // el estado llegó
+    expect(body.perms).toEqual({ full: false, cancel: true }); // y vedó, no habilitó
+    expect(err).toHaveBeenCalled();
+    err.mockRestore();
+  });
 });

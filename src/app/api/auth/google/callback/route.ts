@@ -54,11 +54,21 @@ export async function GET(req: NextRequest) {
   });
   if (!r.ok) return fail(r.failure);
 
-  // Alta o refresco en `users`. Va ANTES de sellar la sesión: si la base no
-  // responde, es preferible no emitir una cookie de 7 días para alguien que no
-  // quedó registrado. No agrega un modo de falla nuevo — rateLimitLogin, unas
-  // líneas arriba, ya depende de la misma base.
-  await recordLogin(r.identity.email, r.identity.name);
+  // Alta o refresco en `users`. NO puede tumbar el login: para cuando llega acá
+  // la autenticación ya está resuelta —Google verificó la identidad y el dominio
+  // pasó el allowlist— y esto es registro de visita, no una condición de entrada.
+  // Bloqueante convertía cualquier problema de la base en "nadie entra": la tabla
+  // faltante dejó a todos afuera con un 500 (2026-08-10).
+  // El modo degradado es seguro en la dirección correcta: sin fila, `getUserRole`
+  // devuelve null y `roleOrDefault` da viewer, así que un fallo quita permisos, no
+  // los regala. El siguiente login exitoso registra la visita.
+  try {
+    await recordLogin(r.identity.email, r.identity.name);
+  } catch (e) {
+    // Se loguea y sigue: en silencio, una base rota se vería como una app sana con
+    // la lista de accesos congelada.
+    console.error("[auth] no se pudo registrar el login", e);
+  }
 
   const session = await getIronSession<SessionData>(jar, sessionOptions);
   session.authenticated = true;

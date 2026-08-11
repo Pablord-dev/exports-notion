@@ -50,4 +50,33 @@ describe("callback de Google", () => {
     await llamar();
     expect(await getUserRole("pablo@hiuman.edu.mx")).toBe("admin");
   });
+
+  // Registrar la visita no puede ser la puerta: la autenticación ya está resuelta
+  // (dominio verificado) cuando se escribe la fila. Con la escritura bloqueante,
+  // la tabla ausente dejó a TODOS afuera con un 500 (2026-08-10).
+  it("si la base falla al registrar, el login entra igual", async () => {
+    const store = newMemoryStore();
+    store.recordLogin = async () => { throw new Error('relation "users" does not exist'); };
+    __setStore(store);
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const res = await llamar();
+    expect(res.status).toBe(307);       // redirect normal, no 500
+    expect(h.guardada).toBe(true);      // y la sesión quedó sellada
+    expect(err).toHaveBeenCalled();     // pero el fallo no pasa en silencio
+    err.mockRestore();
+  });
+
+  // Quien no llegó a registrarse no tiene fila, y sin fila roleOrDefault da
+  // viewer: el modo degradado da MENOS permisos, nunca más.
+  it("el que entra sin quedar registrado cae a viewer", async () => {
+    const store = newMemoryStore();
+    store.recordLogin = async () => { throw new Error("base caída"); };
+    __setStore(store);
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await llamar();
+    expect(await getUserRole("pablo@hiuman.edu.mx")).toBeNull();
+    err.mockRestore();
+  });
 });
