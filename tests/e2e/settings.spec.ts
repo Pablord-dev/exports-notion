@@ -154,8 +154,9 @@ test("un admin puede bloquear un correo que nunca entró", async ({ page }) => {
   const campo = panel.getByRole("textbox", { name: "Correos a bloquear" });
   await campo.fill(NUNCA);
   await panel.getByRole("button", { name: "Bloquear" }).click();
-  await expect(panel.getByRole("heading", { name: "Sin acceso" })).toBeVisible();
-  await expect(panel.getByText(NUNCA)).toBeVisible();
+  // Por el botón y no por el texto: sin fila en `users` no hay nombre, así que el
+  // correo se dibuja dos veces en la misma fila (como nombre y como subtítulo).
+  await expect(panel.getByRole("button", { name: `Restaurar acceso a ${NUNCA}` })).toBeVisible();
 
   // Un typo no escribe nada y lo dice: la lista decide quién entra y nadie
   // revisa después qué quedó anotado ahí.
@@ -165,7 +166,7 @@ test("un admin puede bloquear un correo que nunca entró", async ({ page }) => {
 
   // Restaurarlo deja el store como estaba para la próxima corrida.
   await panel.getByRole("button", { name: `Restaurar acceso a ${NUNCA}` }).click();
-  await expect(panel.getByText(NUNCA)).toHaveCount(0);
+  await expect(panel.getByRole("button", { name: `Restaurar acceso a ${NUNCA}` })).toHaveCount(0);
 });
 
 test("Ayuda abre el mismo panel directo en Acerca de", async ({ page }) => {
