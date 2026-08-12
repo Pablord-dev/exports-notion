@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { RotateCcw, UserMinus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Spinner } from "@/app/components/spinner";
@@ -20,12 +21,21 @@ function fmtAcceso(iso: string | null): string {
   return `hace ${Math.floor(h / 24)} días`;
 }
 
+/** Separadores tolerados al pegar una lista: coma, punto y coma, espacio o salto
+ *  de línea. Quien copia correos de un correo o de una planilla no debería tener
+ *  que reformatearlos. */
+function parsearCorreos(texto: string): string[] {
+  return texto.split(/[\s,;]+/).filter((s) => s !== "");
+}
+
 export function UsersSection({ meEmail }: { meEmail: string }) {
   const [users, setUsers] = useState<UserRow[] | null>(null);
   const [blocked, setBlocked] = useState<BlockedRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [nuevos, setNuevos] = useState("");
+  const [errorBloqueo, setErrorBloqueo] = useState<string | null>(null);
   const yo = normalizeEmail(meEmail);
 
   const load = useCallback(async () => {
@@ -66,6 +76,35 @@ export function UsersSection({ meEmail }: { meEmail: string }) {
       if (!r.ok) { setError("No se pudo quitar el acceso."); return; }
       setError(null);
       setConfirming(null);
+      await load();
+    } finally { setBusy(false); }
+  }
+
+  /** Los mensajes salen del código de error del server y no de una validación
+   *  propia: duplicar acá el formato de correo o el tope daría dos verdades que
+   *  se separan con el tiempo. */
+  async function bloquear() {
+    const emails = parsearCorreos(nuevos);
+    if (emails.length === 0) return;
+    setBusy(true);
+    try {
+      const r = await fetch("/api/admin/blocked", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ emails }),
+      });
+      if (!r.ok) {
+        const j = (await r.json().catch(() => null)) as { error?: string; invalid?: string[]; max?: number } | null;
+        setErrorBloqueo(
+          j?.error === "bad_email" ? `No parecen correos: ${j.invalid?.join(", ")}`
+          : j?.error === "self" ? "No podés quitarte el acceso a vos mismo."
+          : j?.error === "too_many" ? `Máximo ${j.max} por vez.`
+          : "No se pudo bloquear.",
+        );
+        return;
+      }
+      setErrorBloqueo(null);
+      setNuevos("");
       await load();
     } finally { setBusy(false); }
   }
@@ -196,15 +235,35 @@ export function UsersSection({ meEmail }: { meEmail: string }) {
         </ul>
       )}
 
-      {blocked.length > 0 && (
-        <div className="space-y-2 pt-2">
-          <div>
-            <h3 className="text-[13px] font-semibold text-foreground">Sin acceso</h3>
-            <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">
-              No pueden entrar aunque su correo sea del dominio permitido. Al restaurarlos vuelven
-              como lectura: el rol que tenían no se recuerda.
-            </p>
+      {/* La sección se dibuja siempre, con lista o sin ella: el campo de abajo es
+          la única vía para cerrarle la puerta a alguien que todavía no entró, y
+          escondiéndola con la lista vacía no habría dónde escribir. */}
+      <div className="space-y-2 pt-2">
+        <div>
+          <h3 className="text-[13px] font-semibold text-foreground">Sin acceso</h3>
+          <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">
+            No pueden entrar aunque su correo sea del dominio permitido. Podés anotar a alguien
+            antes de su primer ingreso. Al restaurarlos vuelven como lectura: el rol que tenían
+            no se recuerda.
+          </p>
+        </div>
+
+        <form className="flex flex-wrap items-start gap-2"
+              onSubmit={(e) => { e.preventDefault(); void bloquear(); }}>
+          <div className="min-w-[16rem] flex-1">
+            <Input value={nuevos} disabled={busy}
+                   onChange={(e) => setNuevos(e.target.value)}
+                   aria-label="Correos a bloquear"
+                   placeholder="correo@dominio.com, otro@dominio.com" />
+            {errorBloqueo && <p role="alert" className="mt-1 text-[12px] font-medium text-danger">{errorBloqueo}</p>}
           </div>
+          <Button type="submit" variant="outline" size="sm" disabled={busy || nuevos.trim() === ""}
+                  className="h-9 shrink-0">
+            Bloquear
+          </Button>
+        </form>
+
+        {blocked.length > 0 && (
           <ul className="divide-y divide-border rounded-xl border border-border">
             {blocked.map((b) => (
               <li key={b.email} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3.5 py-2.5">
@@ -215,8 +274,11 @@ export function UsersSection({ meEmail }: { meEmail: string }) {
                     {b.blockedBy && <> · lo quitó {b.blockedBy}</>}
                   </p>
                 </div>
+                {/* El correo va en el aria-label: con dos filas, "Restaurar
+                    acceso" a secas no distingue a quién se le devuelve. */}
                 <Button variant="outline" size="sm" disabled={busy}
                         onClick={() => restaurar(b.email)}
+                        aria-label={`Restaurar acceso a ${b.email}`}
                         className="shrink-0">
                   <RotateCcw className="h-3.5 w-3.5" />
                   Restaurar acceso
@@ -224,8 +286,8 @@ export function UsersSection({ meEmail }: { meEmail: string }) {
               </li>
             ))}
           </ul>
-        </div>
-      )}
+        )}
+      </div>
     </section>
   );
 }

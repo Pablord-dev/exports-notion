@@ -68,7 +68,10 @@ test.describe.serial("quitar el acceso cierra la sesión", () => {
     await panel.getByRole("button", { name: "Usuarios" }).click();
     await panel.getByRole("button", { name: `Quitar acceso a ${FUERA}`, exact: true }).click();
     await panel.getByRole("button", { name: "Quitar acceso", exact: true }).click();
-    await expect(panel.getByRole("heading", { name: "Sin acceso" })).toBeVisible();
+    // Su fila, no el encabezado: la sección se dibuja siempre (abajo tiene el
+    // campo para bloquear a alguien que todavía no entró) y otro test en paralelo
+    // puede tener a otra persona en la misma lista.
+    await expect(panel.getByRole("button", { name: `Restaurar acceso a ${FUERA}` })).toBeVisible();
   }
 
   // Si el test se cae a mitad, el bloqueo quedaría puesto y el login de la
@@ -98,10 +101,12 @@ test.describe.serial("quitar el acceso cierra la sesión", () => {
     await suyo.reload();
     await expect(suyo.getByRole("link", { name: "Continuar con Google" })).toBeVisible();
 
-    // Y restaurarlo lo deja entrar de nuevo.
+    // Y restaurarlo lo deja entrar de nuevo. Se mira que desaparezca la FILA y no
+    // el encabezado: la sección se dibuja siempre, porque abajo tiene el campo
+    // para bloquear a alguien que todavía no entró.
     const panel = admin.getByRole("dialog", { name: "Configuración" });
-    await panel.getByRole("button", { name: "Restaurar acceso" }).click();
-    await expect(panel.getByRole("heading", { name: "Sin acceso" })).toBeHidden();
+    await panel.getByRole("button", { name: `Restaurar acceso a ${FUERA}` }).click();
+    await expect(panel.getByRole("button", { name: `Restaurar acceso a ${FUERA}` })).toHaveCount(0);
     await login(suyo, { role: "descartable" });
     await expect(suyo.getByRole("complementary", { name: "Navegación" })).toBeVisible();
 
@@ -131,6 +136,36 @@ test.describe.serial("quitar el acceso cierra la sesión", () => {
     await ctxFuera.close();
     await ctxAdmin.close();
   });
+});
+
+// Cerrarle la puerta a alguien ANTES de su primer ingreso: hasta acá la única vía
+// era quitarle el acceso a una fila ya existente.
+test("un admin puede bloquear un correo que nunca entró", async ({ page }) => {
+  test.skip(process.env.E2E_REAL === "1", "el stub-login no existe contra el server real");
+  // Correo propio de este test: no lo usa ningún login, así que bloquearlo no
+  // tumba a nadie que corra en paralelo contra el memory-store singleton.
+  const NUNCA = "nunca-entro-e2e@hiuman.edu.mx";
+
+  await login(page);
+  await abrirConfiguracion(page);
+  const panel = page.getByRole("dialog", { name: "Configuración" });
+  await panel.getByRole("button", { name: "Usuarios" }).click();
+
+  const campo = panel.getByRole("textbox", { name: "Correos a bloquear" });
+  await campo.fill(NUNCA);
+  await panel.getByRole("button", { name: "Bloquear" }).click();
+  await expect(panel.getByRole("heading", { name: "Sin acceso" })).toBeVisible();
+  await expect(panel.getByText(NUNCA)).toBeVisible();
+
+  // Un typo no escribe nada y lo dice: la lista decide quién entra y nadie
+  // revisa después qué quedó anotado ahí.
+  await campo.fill("sin-arroba");
+  await panel.getByRole("button", { name: "Bloquear" }).click();
+  await expect(panel.getByText("No parecen correos: sin-arroba")).toBeVisible();
+
+  // Restaurarlo deja el store como estaba para la próxima corrida.
+  await panel.getByRole("button", { name: `Restaurar acceso a ${NUNCA}` }).click();
+  await expect(panel.getByText(NUNCA)).toHaveCount(0);
 });
 
 test("Ayuda abre el mismo panel directo en Acerca de", async ({ page }) => {
