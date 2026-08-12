@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeEmail, roleOrDefault, canTrigger, canCancel } from "@/lib/authz";
+import { normalizeEmail, roleOrDefault, canTrigger, canCancel, canManageUsers, canEditUser } from "@/lib/authz";
 
 describe("normalizeEmail", () => {
   it("baja a minúsculas y recorta espacios", () => {
@@ -47,5 +47,27 @@ describe("canCancel", () => {
   it("sin nada corriendo cancela cualquiera (el DELETE es un no-op)", () => {
     expect(canCancel("viewer", null)).toBe(true);
     expect(canCancel("admin", null)).toBe(true);
+  });
+});
+
+describe("canManageUsers", () => {
+  it("administrar usuarios es de admin", () => {
+    expect(canManageUsers("admin")).toBe(true);
+    expect(canManageUsers("viewer")).toBe(false);
+  });
+});
+
+describe("canEditUser", () => {
+  it("sobre otra persona se puede", () => {
+    expect(canEditUser("a@hiuman.edu.mx", "b@hiuman.edu.mx")).toBe(true);
+  });
+  // Nadie se degrada ni se borra a sí mismo. De ahí sale, gratis, que nunca
+  // pueda quedar la app sin ningún admin: quien administra siempre sobrevive.
+  it("sobre uno mismo no", () => {
+    expect(canEditUser("a@hiuman.edu.mx", "a@hiuman.edu.mx")).toBe(false);
+  });
+  // Sin normalizar, un admin se degradaría escribiendo su correo en mayúsculas.
+  it("tampoco con otra grafía del mismo correo", () => {
+    expect(canEditUser("Pablo@Hiuman.edu.mx", " pablo@hiuman.edu.mx ")).toBe(false);
   });
 });

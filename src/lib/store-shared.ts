@@ -99,6 +99,27 @@ export function decodeDetailCursor(cursor: string | null): DetailCursor | null {
   }
 }
 
+/** Fila de `users` tal como la consume la pantalla de administración. */
+export interface UserRow {
+  email: string;
+  role: Role;
+  /** null = nunca entró, o Google no mandó nombre. */
+  name: string | null;
+  createdAt: string;
+  /** null = tiene fila (la creó setUserRole) pero nunca hizo login. */
+  lastLoginAt: string | null;
+}
+
+/** Fila de `blocked_users`: a quién se le quitó el acceso y quién lo hizo. */
+export interface BlockedRow {
+  email: string;
+  /** Copiado de `users` al bloquear; null si esa persona no tenía nombre. */
+  name: string | null;
+  blockedAt: string;
+  /** Correo del admin que lo bloqueó. null en bloqueos hechos fuera de la UI. */
+  blockedBy: string | null;
+}
+
 // ---- Interfaz del store (la que fakes y stubs deben implementar) ----
 export interface Store {
   upsertRows(rows: { id: string; row: FlatRow }[], target?: "current" | "new"): Promise<void>;
@@ -133,6 +154,19 @@ export interface Store {
   getUserRole(email: string): Promise<Role | null>;
   /** Crea la fila si no existe: permite dejar listo a un admin antes de su primer login. */
   setUserRole(email: string, role: Role): Promise<void>;
+  /** Todas las filas, las más recientes primero y las que nunca entraron al final. */
+  listUsers(): Promise<UserRow[]>;
+  /** Sólo borra la fila (rol y registro de visita). Por sí solo NO quita el
+   *  acceso: quien administra llama después a `blockUser`. */
+  deleteUser(email: string): Promise<void>;
+
+  /** Le quita el acceso a alguien. A diferencia de `users`, esta lista SÍ es una
+   *  condición de entrada: la miran el callback de Google y el proxy. */
+  blockUser(email: string, name: string | null, by: string | null): Promise<void>;
+  /** Levanta el bloqueo. Sobre alguien que no está bloqueado es un no-op. */
+  unblockUser(email: string): Promise<void>;
+  listBlocked(): Promise<BlockedRow[]>;
+  isBlocked(email: string): Promise<boolean>;
 
   // Reportes (SB-12). Agregación al momento de consultar — sin precálculo.
   reportByPerson(f: ReportFilters): Promise<PersonTotal[]>;

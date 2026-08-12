@@ -31,3 +31,17 @@ export function canTrigger(role: Role, kind: SyncKind): boolean {
 export function canCancel(role: Role, runningKind: SyncKind | null): boolean {
   return runningKind !== "full" || role === "admin";
 }
+
+/** La pantalla de usuarios es de admin. La misma función decide si la sección se
+ *  dibuja (cliente) y si el endpoint responde (server): una sola regla, dos usos. */
+export function canManageUsers(role: Role): boolean {
+  return role === "admin";
+}
+
+/** Nadie opera sobre su propia fila —ni el rol ni el borrado—. La consecuencia
+ *  buscada es que NUNCA pueda quedar cero admins: quien administra no puede
+ *  sacarse a sí mismo, así que no hace falta contar admins ni una regla de
+ *  "último admin". Compara normalizado: si no, `Pablo@` se degradaría a sí mismo. */
+export function canEditUser(actorEmail: string, targetEmail: string): boolean {
+  return normalizeEmail(actorEmail) !== normalizeEmail(targetEmail);
+}

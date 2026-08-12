@@ -2,28 +2,15 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getIronSession } from "iron-session";
 import { sessionOptions, type SessionData } from "@/lib/session";
-import { getStatus, getMeta, getUserRole } from "@/lib/db";
-import { canCancel, canTrigger, roleOrDefault, type Role } from "@/lib/authz";
+import { getStatus, getMeta } from "@/lib/db";
+import { canCancel, canTrigger } from "@/lib/authz";
+import { safeRoleFor } from "@/lib/user-role";
 import { nextRun, cronSchedule } from "@/lib/cron";
 
 export const dynamic = "force-dynamic";
 
 const CRON_INCREMENTAL = cronSchedule("incremental");
 const CRON_FULL = cronSchedule("full");
-
-/** El rol es un adorno de este payload: el estado del snapshot no depende de él.
- *  Si el lookup falla, cae a `viewer` en vez de tumbar la respuesta entera —el
- *  modal de sync quedaría en blanco por una tabla ausente— y el default va hacia
- *  el lado seguro: veda el full, no lo habilita. */
-async function roleFor(email: string | undefined): Promise<Role> {
-  if (!email) return "viewer";
-  try {
-    return roleOrDefault(await getUserRole(email));
-  } catch (e) {
-    console.error("[auth] no se pudo leer el rol", e);
-    return "viewer";
-  }
-}
 
 export async function GET() {
   const now = new Date();
@@ -36,7 +23,10 @@ export async function GET() {
   // clave primaria sobre una tabla de decenas de filas.
   // Esta ruta está en el matcher de proxy.ts, así que acá siempre hay sesión.
   const session = await getIronSession<SessionData>(await cookies(), sessionOptions);
-  const role = await roleFor(session.user?.email);
+  // Lectura tolerante a propósito: el estado del snapshot no depende del rol, y
+  // una tabla ausente dejaría el modal de sync en blanco. El default cae a
+  // `viewer`, o sea hacia el lado seguro: veda el full, no lo habilita.
+  const role = await safeRoleFor(session.user?.email);
   const runningKind = status.state === "running" ? status.kind : null;
 
   return NextResponse.json({

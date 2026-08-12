@@ -72,7 +72,7 @@ describe.runIf(RUN)("db.ts contra Postgres real", () => {
     }
 
     // Partir de cero: la migración usa `create table` sin IF NOT EXISTS.
-    await sql.unsafe("drop table if exists pages, pages_new, sync_state, login_attempts, users cascade");
+    await sql.unsafe("drop table if exists pages, pages_new, sync_state, login_attempts, users, blocked_users cascade");
     const dir = path.resolve(__dirname, "../../supabase/migrations");
     for (const f of fs.readdirSync(dir).sort()) {
       await sql.unsafe(fs.readFileSync(path.join(dir, f), "utf8"));
@@ -86,7 +86,7 @@ describe.runIf(RUN)("db.ts contra Postgres real", () => {
     await sql.end();
   });
   beforeEach(async () => {
-    await sql`truncate pages, pages_new, sync_state, login_attempts, users`;
+    await sql`truncate pages, pages_new, sync_state, login_attempts, users, blocked_users`;
   });
 
   it("upsert parsea columnas tipadas y el jsonb queda íntegro", async () => {
@@ -190,20 +190,16 @@ describe.runIf(RUN)("db.ts contra Postgres real", () => {
     expect(await db.rateLimitLogin("1.2.3.4")).toBe(true);
   });
 
-  it("users: los casos compartidos pasan contra el SQL real, sin duplicar filas", async () => {
+  it("users: los casos compartidos pasan contra el SQL real", async () => {
     await runUserAssertions(db);
-    // Dos personas distintas, no cuatro: la prueba escribió el mismo correo con
-    // tres grafías y el upsert tiene que haberlas colapsado en una fila.
-    const [{ n }] = await sql`select count(*)::int as n from users`;
-    expect(n).toBe(2);
-    // last_login_at se llenó en el login y created_at nació con la fila.
-    const [u] = await sql`select * from users where email = 'pablo@hiuman.edu.mx'`;
-    expect(u.name).toBe("Pablo Sánchez");        // el segundo login refrescó el nombre
-    expect(u.last_login_at).not.toBeNull();
-    expect(u.created_at).not.toBeNull();
-    // Quien nunca entró tiene fila (la creó setUserRole) pero sin visita.
-    const [f] = await sql`select * from users where email = 'futuro@hiuman.edu.mx'`;
-    expect(f.last_login_at).toBeNull();
+    // Que las tres grafías del correo colapsaran en UNA fila ya lo afirma el
+    // listUsers de userCases (dos filas, no cuatro) antes del borrado; acá sólo
+    // se verifica que el DELETE real dejó exactamente lo que debía quedar.
+    const rs = await sql`select * from users`;
+    expect(rs).toHaveLength(1);
+    expect(rs[0].email).toBe("futuro@hiuman.edu.mx");
+    expect(rs[0].last_login_at).toBeNull();   // tiene fila, nunca entró
+    expect(rs[0].created_at).not.toBeNull();
   });
 
   it("users: el check rechaza un rol inventado", async () => {

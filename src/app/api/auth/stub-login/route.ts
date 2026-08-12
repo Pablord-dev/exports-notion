@@ -22,21 +22,26 @@ import { setUserRole } from "@/lib/db";
  * al viewer de otro a mitad de camino (rojo intermitente, visto 2026-08-10).
  */
 const STUB_USERS = {
-  admin: { email: "e2e@hiuman.edu.mx", name: "Usuario E2E" },
-  viewer: { email: "e2e-viewer@hiuman.edu.mx", name: "Usuario E2E (viewer)" },
+  admin: { email: "e2e@hiuman.edu.mx", name: "Usuario E2E", role: "admin" },
+  viewer: { email: "e2e-viewer@hiuman.edu.mx", name: "Usuario E2E (viewer)", role: "viewer" },
+  // Identidad descartable, por el mismo motivo de paralelismo de arriba: el test
+  // que le quita el acceso a alguien deja a esa persona afuera del store hasta
+  // que se lo restauren, y si bloqueara a `viewer` tumbaría a cualquier otro test
+  // que entre con ese perfil mientras tanto.
+  descartable: { email: "e2e-descartable@hiuman.edu.mx", name: "Usuario E2E (descartable)", role: "viewer" },
 } as const;
 
 export async function GET(req: NextRequest) {
   if (process.env.E2E_STUBS !== "1") {
     return new NextResponse(null, { status: 404 });
   }
-  const role = req.nextUrl.searchParams.get("role") ?? "admin";
-  if (role !== "admin" && role !== "viewer") {
+  const perfil = req.nextUrl.searchParams.get("role") ?? "admin";
+  if (!Object.hasOwn(STUB_USERS, perfil)) {
     // 400 y no un default silencioso: un typo en un test tiene que doler acá y no
     // convertirse en un E2E que prueba el rol equivocado y pasa igual.
     return NextResponse.json({ error: "invalid_role" }, { status: 400 });
   }
-  const user = STUB_USERS[role];
+  const { role, ...user } = STUB_USERS[perfil as keyof typeof STUB_USERS];
   // Se escribe ANTES de sellar la sesión: el parámetro es la autoridad, así que no
   // compite con lo que haya quedado de una corrida anterior en el store singleton.
   await setUserRole(user.email, role);

@@ -123,7 +123,8 @@ test("el segundo login muestra la tira discreta, no el modal", async ({ page }) 
   await page.getByTestId("welcome-modal").getByRole("button", { name: "Ahora no" }).click();
   // Cerrar sesión y volver a entrar en el mismo contexto (mismo localStorage).
   await page.getByRole("complementary", { name: "Navegación" })
-            .getByRole("button", { name: "Cerrar sesión" }).click();
+            .getByRole("button", { name: "Menú de sesión" }).click();
+  await page.getByRole("menuitem", { name: "Cerrar sesión" }).click();
   await relogin(page);
 
   await expect(page.getByTestId("welcome-modal")).toBeHidden();
@@ -144,7 +145,8 @@ test("el aviso del tutorial se queda hasta cerrarlo o cambiar de página", async
   await login(page, { welcome: "expect" });
   await page.getByTestId("welcome-modal").getByRole("button", { name: "Ahora no" }).click();
   await page.getByRole("complementary", { name: "Navegación" })
-            .getByRole("button", { name: "Cerrar sesión" }).click();
+            .getByRole("button", { name: "Menú de sesión" }).click();
+  await page.getByRole("menuitem", { name: "Cerrar sesión" }).click();
   await relogin(page);
 
   const banner = page.getByTestId("welcome-banner");

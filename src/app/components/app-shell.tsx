@@ -14,22 +14,31 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ChevronRight,
+  ChevronsUpDown,
   Clock,
+  HelpCircle,
   Home,
   LogOut,
   Menu,
   MessageSquare,
+  Settings,
   Table2,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { DATABASES } from "@/lib/databases";
+import { SettingsModal, type SectionId } from "@/app/components/settings/settings-modal";
+import type { Role } from "@/lib/authz";
+import type { CacheMeta } from "@/lib/types";
 import type { SessionUser } from "@/lib/session";
 import { Spinner } from "@/app/components/spinner";
 import { TourLayer, type TourBinding } from "@/app/components/tour/tour-layer";
@@ -47,6 +56,11 @@ const PEEK_CLOSE_MS = 150;
 // el navegador nunca registra un enter sobre ella —y sin enter previo tampoco
 // dispara el leave—, y el peek se quedaba pegado para siempre.
 const PEEK_HIT_X = 256 + 32;
+// Cada cuánto se revisa que la sesión siga valiendo. Un minuto es el retardo
+// máximo con el que alguien a quien le quitaron el acceso sigue viendo una
+// pantalla ya cargada; cualquier acción suya lo saca antes, porque el proxy le
+// responde 401.
+const SESSION_POLL_MS = 60_000;
 // Mismo breakpoint que las clases `lg:` de la barra: debajo de él anclar no
 // aplica y el botón abre el overlay de siempre.
 const LG_QUERY = "(min-width: 1024px)";
@@ -116,9 +130,20 @@ export function AppShell({ children, onLogout, tour, justLoggedIn }: {
   const [peek, setPeek] = useState(false);
   const peekTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [dbsOpen, setDbsOpen] = useState(true);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [count, setCount] = useState<number | null>(null);
   const [user, setUser] = useState<SessionUser | null>(null);
+  // Por ref y no por closure: las páginas pasan una lambda inline, y con su
+  // identidad en las deps del efecto de sesión el intervalo se reiniciaría en
+  // cada render.
+  // Se refresca en un efecto y no en render: escribir una ref durante el render
+  // es lo que prohíbe react-hooks/refs, y el tour resuelve lo mismo así.
+  const onLogoutRef = useRef(onLogout);
+  useEffect(() => { onLogoutRef.current = onLogout; });
+  const [settings, setSettings] = useState<SectionId | null>(null);
+  const [role, setRole] = useState<Role>("viewer");
+  const [meta, setMeta] = useState<CacheMeta | null>(null);
 
   // Contador de registros para el badge de la BD. El shell solo se monta en
   // ramas autenticadas; si el fetch falla, simplemente no hay badge.
@@ -129,7 +154,11 @@ export function AppShell({ children, onLogout, tour, justLoggedIn }: {
         const r = await fetch("/api/sync/status");
         if (!r.ok || !alive) return;
         const s = await r.json();
-        if (alive && typeof s?.meta?.count === "number") setCount(s.meta.count);
+        if (!alive) return;
+        if (typeof s?.meta?.count === "number") setCount(s.meta.count);
+        // Mismo fetch, no uno nuevo: la sección «Acerca de» muestra la fecha del
+        // último sync, que ya viene acá.
+        if (s?.meta) setMeta(s.meta as CacheMeta);
       } catch { /* sin badge */ }
     })();
     return () => { alive = false; };
@@ -138,17 +167,37 @@ export function AppShell({ children, onLogout, tour, justLoggedIn }: {
   // El shell sólo se monta autenticado, así que esta respuesta siempre trae
   // usuario. Es el único consumidor de la identidad en toda la app: por eso la
   // pide él y no se le pasa por props desde las tres páginas.
+  //
+  // Se repite cada SESSION_POLL_MS porque la sesión puede dejar de valer sin que
+  // esta persona haga nada: un admin le quita el acceso y su cookie —sellada, de
+  // 7 días— deja de servir en el server, pero la pantalla ya renderizada seguiría
+  // ahí hasta que intentara algo. `authenticated:false` la manda a la pantalla de
+  // ingreso. Es el mismo fetch que ya se hacía, sólo que en intervalo.
   useEffect(() => {
     let alive = true;
-    (async () => {
+    const mirar = async () => {
       try {
         const r = await fetch("/api/auth/session");
         if (!r.ok) return;
-        const j = (await r.json()) as { user?: SessionUser | null };
-        if (alive && j.user) setUser(j.user);
+        const j = (await r.json()) as { authenticated?: boolean; user?: SessionUser | null; role?: Role };
+        if (!alive) return;
+        // La sesión dejó de valer (le quitaron el acceso, o expiró). onLogout es
+        // el mismo camino del logout manual: la página vuelve a su rama pública.
+        if (j.authenticated === false) { onLogoutRef.current(); return; }
+        if (j.user) setUser(j.user);
+        // Decorativo: decide si el panel dibuja la sección Usuarios. Quien
+        // autoriza de verdad es /api/admin/users.
+        if (j.role) setRole(j.role);
       } catch { /* sin identidad el footer cae al correo vacío, no rompe */ }
-    })();
-    return () => { alive = false; };
+    };
+    void mirar();
+    const id = setInterval(mirar, SESSION_POLL_MS);
+    return () => { alive = false; clearInterval(id); };
+    // Sin `onLogout` en las deps a propósito: las páginas lo pasan como lambda
+    // inline, así que su identidad cambia en cada render y el intervalo se
+    // reiniciaría sin llegar a disparar nunca en la página de reportes, que
+    // re-renderiza mientras polea el sync. Se lee por ref, misma razón que
+    // runAction en el tour.
   }, []);
 
   useEffect(() => {
@@ -167,7 +216,10 @@ export function AppShell({ children, onLogout, tour, justLoggedIn }: {
   // por los boundary events del <aside> (ver PEEK_HIT_X). Sin las helpers de
   // abajo a propósito: recrearse en cada render re-suscribiría el listener.
   useEffect(() => {
-    if (!peek) return;
+    // Con el menú de sesión abierto la barra se queda: si no, el cursor se va a
+    // un item, cruza la frontera del peek y la barra desaparece dejando el menú
+    // flotando sobre el contenido.
+    if (!peek || menuOpen) return;
     const onMove = (e: PointerEvent) => {
       if (e.clientX <= PEEK_HIT_X) {
         if (peekTimer.current) { clearTimeout(peekTimer.current); peekTimer.current = null; }
@@ -177,7 +229,7 @@ export function AppShell({ children, onLogout, tour, justLoggedIn }: {
     };
     document.addEventListener("pointermove", onMove);
     return () => document.removeEventListener("pointermove", onMove);
-  }, [peek]);
+  }, [peek, menuOpen]);
 
   const clearPeekTimer = () => {
     if (peekTimer.current) clearTimeout(peekTimer.current);
@@ -337,31 +389,45 @@ export function AppShell({ children, onLogout, tour, justLoggedIn }: {
           </Collapsible>
         </nav>
 
-        {/* Footer de sesión: identidad + logout como icono */}
-        <div className="flex items-center gap-2.5 border-t border-sidebar-border px-4 py-2.5">
-          {/* Iniciales en vez de la foto de Google: la imagen vive en
-              lh3.googleusercontent.com, lo que obliga a declarar
-              images.remotePatterns y dispara una petición externa en cada carga.
-              El nombre cae al correo cuando Google no manda `name`. */}
-          <span aria-hidden
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent text-[10px] font-semibold text-accent-foreground">
-            {initials(user?.name ?? user?.email ?? "")}
-          </span>
-          <span className="flex min-w-0 flex-1 flex-col leading-tight">
-            <span className="truncate text-xs text-sidebar-foreground">{user?.name ?? "Sesión activa"}</span>
-            {user?.email && <span className="truncate text-[10.5px] text-subtle">{user.email}</span>}
-          </span>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" onClick={logout} disabled={loggingOut}
-                      aria-label="Cerrar sesión"
-                      className="h-7 w-7 text-muted-foreground hover:text-danger">
-                {loggingOut ? <Spinner className="h-3.5 w-3.5" /> : <LogOut className="h-4 w-4" />}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">Cerrar sesión</TooltipContent>
-          </Tooltip>
-        </div>
+        {/* Footer de sesión: identidad + menú. modal={false} por el mismo motivo
+            que AppModal: el default de Radix vuelve inert todo lo de afuera, y
+            con la barra asomada eso deja el resto del shell muerto mientras el
+            menú está abierto. */}
+        <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen} modal={false}>
+          <DropdownMenuTrigger asChild>
+            <button aria-label="Menú de sesión"
+                    className="flex w-full items-center gap-2.5 border-t border-sidebar-border px-4 py-2.5 text-left transition hover:bg-card">
+              {/* Iniciales en vez de la foto de Google: la imagen vive en
+                  lh3.googleusercontent.com, lo que obliga a declarar
+                  images.remotePatterns y dispara una petición externa en cada
+                  carga. El nombre cae al correo cuando Google no manda `name`. */}
+              <span aria-hidden
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent text-[10px] font-semibold text-accent-foreground">
+                {initials(user?.name ?? user?.email ?? "")}
+              </span>
+              <span className="flex min-w-0 flex-1 flex-col leading-tight">
+                <span className="truncate text-xs text-sidebar-foreground">{user?.name ?? "Sesión activa"}</span>
+                {user?.email && <span className="truncate text-[10.5px] text-subtle">{user.email}</span>}
+              </span>
+              <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-subtle" aria-hidden />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="top" align="start" className="w-[15.5rem]">
+            <DropdownMenuItem onSelect={() => setSettings("cuenta")}>
+              <Settings className="h-4 w-4" />
+              Configuración
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setSettings("acerca")}>
+              <HelpCircle className="h-4 w-4" />
+              Ayuda
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={logout} disabled={loggingOut}>
+              {loggingOut ? <Spinner className="h-3.5 w-3.5" /> : <LogOut className="h-4 w-4" />}
+              Cerrar sesión
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </aside>
 
       {/* --shell-top: aire para la hamburguesa. Sale de globals.css y no de un
@@ -377,6 +443,11 @@ export function AppShell({ children, onLogout, tour, justLoggedIn }: {
         {tour && (
           <TourLayer tour={tour} justLoggedIn={justLoggedIn}
                      shellActions={{ openSidebar: () => setOpen(true), closeSidebar: () => setOpen(false) }} />
+        )}
+        {settings && (
+          <SettingsModal section={settings} onSection={setSettings}
+                         onClose={() => setSettings(null)}
+                         user={user} role={role} meta={meta} />
         )}
         {children}
       </div>

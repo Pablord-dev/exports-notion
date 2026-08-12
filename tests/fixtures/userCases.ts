@@ -28,4 +28,59 @@ export async function runUserAssertions(db: Db) {
   // listo a un admin antes de su primer login.
   await db.setUserRole("Futuro@hiuman.edu.mx", "admin");
   expect(await db.getUserRole("futuro@hiuman.edu.mx")).toBe("admin");
+
+  // listUsers: dos filas, no cuatro. El correo se escribió con tres grafías
+  // distintas y el upsert las colapsó; si esto diera 3 o 4, la normalización de
+  // la frontera se habría roto.
+  const list = await db.listUsers();
+  expect(list.map((u) => u.email)).toEqual(["pablo@hiuman.edu.mx", "futuro@hiuman.edu.mx"]);
+  // Orden: primero quien entró, al final quien nunca lo hizo (nulls last).
+  expect(list[0].lastLoginAt).not.toBeNull();
+  expect(list[1].lastLoginAt).toBeNull();
+  // El segundo login refrescó el nombre; el rol es el que dejó la degradación.
+  expect(list[0]).toMatchObject({ role: "viewer", name: "Pablo Sánchez" });
+  expect(list[0].createdAt).not.toBeNull();
+  // Quien nunca entró no tiene nombre: null, no "". El SQL guarda null y el
+  // stub tiene que decir lo mismo o la tabla de la UI mostraría comillas vacías.
+  expect(list[1]).toMatchObject({ role: "admin", name: null });
+
+  // deleteUser normaliza igual que el resto de la frontera…
+  await db.deleteUser("PABLO@hiuman.edu.mx");
+  expect(await db.getUserRole("pablo@hiuman.edu.mx")).toBeNull();
+  // …borra sólo a quien se le pide…
+  expect((await db.listUsers()).map((u) => u.email)).toEqual(["futuro@hiuman.edu.mx"]);
+  // …y borrar a alguien que ya no está es un no-op, no un error.
+  await db.deleteUser("pablo@hiuman.edu.mx");
+
+  // ---- Lista de bloqueo ----
+  // Quien no está bloqueado, no está bloqueado: el default no puede ser "sí".
+  expect(await db.isBlocked("futuro@hiuman.edu.mx")).toBe(false);
+  expect(await db.listBlocked()).toEqual([]);
+
+  // Bloquear normaliza en la frontera igual que el resto.
+  await db.blockUser("Futuro@Hiuman.edu.mx", "Futuro", "jefa@hiuman.edu.mx");
+  expect(await db.isBlocked("futuro@hiuman.edu.mx")).toBe(true);
+  // Y la consulta también normaliza: si no, bastaría escribir el correo en
+  // mayúsculas para pasar por la puerta.
+  expect(await db.isBlocked("FUTURO@hiuman.edu.mx")).toBe(true);
+
+  const bloqueados = await db.listBlocked();
+  expect(bloqueados).toHaveLength(1);
+  expect(bloqueados[0]).toMatchObject({
+    email: "futuro@hiuman.edu.mx", name: "Futuro", blockedBy: "jefa@hiuman.edu.mx",
+  });
+  expect(bloqueados[0].blockedAt).not.toBeNull();
+
+  // Bloquear dos veces no duplica ni explota: el segundo pisa al primero.
+  await db.blockUser("futuro@hiuman.edu.mx", "Futuro (otra vez)", "otra@hiuman.edu.mx");
+  const otraVez = await db.listBlocked();
+  expect(otraVez).toHaveLength(1);
+  expect(otraVez[0].blockedBy).toBe("otra@hiuman.edu.mx");
+
+  // Restaurar el acceso lo saca de la lista…
+  await db.unblockUser("FUTURO@hiuman.edu.mx");
+  expect(await db.isBlocked("futuro@hiuman.edu.mx")).toBe(false);
+  expect(await db.listBlocked()).toEqual([]);
+  // …y restaurar a quien no está bloqueado es un no-op, no un error.
+  await db.unblockUser("futuro@hiuman.edu.mx");
 }

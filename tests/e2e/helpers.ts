@@ -12,11 +12,14 @@ import { expect, type Page } from "@playwright/test";
  * los tests que no van sobre el onboarding. "expect" lo deja aparecer.
  *
  * role: "admin" (default) para que los tests que no van sobre permisos vean la
- * app completa. "viewer" entra sin poder disparar el full.
+ * app completa. "viewer" entra sin poder disparar el full. "descartable" es un
+ * viewer con identidad propia, para el test que le quita el acceso a alguien:
+ * bloquear a "viewer" dejaría afuera a cualquier otro test que corra en paralelo
+ * con ese perfil (el memory-store es un singleton de proceso).
  */
 export async function login(
   page: Page,
-  opts: { welcome?: "skip" | "expect"; role?: "admin" | "viewer" } = {},
+  opts: { welcome?: "skip" | "expect"; role?: "admin" | "viewer" | "descartable" } = {},
 ): Promise<void> {
   if ((opts.welcome ?? "skip") === "skip") {
     await page.addInitScript(() => {
